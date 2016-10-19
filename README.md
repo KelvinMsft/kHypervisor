@@ -1,6 +1,6 @@
 # kHypervisor
 kHypervisor is a open source light-weighted Nested-Virtual Machine Monitor in Windows x64 platform. 
-which is using a VT framework from Hyper-platform by Tandasat :-)
+which is using a VT framework from Hyper-platform :-)
 
 #Environment
 - Visual Studio 2015 update 3 

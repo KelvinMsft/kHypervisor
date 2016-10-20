@@ -265,6 +265,26 @@ extern "C" {
 #pragma warning(pop)
 	BOOLEAN nested = FALSE;
 
+	VOID SaveGuestFieldFromVmcs02(ULONG_PTR vpid)
+	{
+		int i = 0; 
+		for (i = 0; i < sizeof(g_vcpus) / sizeof(NestedVmm); i++)
+		{
+			if (g_vcpus[i]->kVirtualProcessorId == vpid)
+			{ 
+				break;
+			}
+		}
+		ULONG64 guest_vmcs_va = (ULONG64)UtilVaFromPa(g_vcpus[i]->guest_vmcs); 
+		//all nested vm-exit should record 
+		VmWrite64(VmcsField::kGuestRip, guest_vmcs_va, UtilVmRead(VmcsField::kGuestRip));
+		VmWrite64(VmcsField::kGuestRsp, guest_vmcs_va, UtilVmRead(VmcsField::kGuestRsp));
+		VmWrite64(VmcsField::kGuestCr3, guest_vmcs_va, UtilVmRead(VmcsField::kGuestCr3));
+		VmWrite64(VmcsField::kGuestCr0, guest_vmcs_va, UtilVmRead(VmcsField::kGuestCr0));
+		VmWrite64(VmcsField::kGuestCr4, guest_vmcs_va, UtilVmRead(VmcsField::kGuestCr4));
+		VmWrite64(VmcsField::kGuestDr7, guest_vmcs_va, UtilVmRead(VmcsField::kGuestDr7)); 
+	}
+	
 	//Nested breakpoint dispatcher
 	VOID NestedBreakpointHandler(GuestContext* guest_context)
 	{
@@ -325,11 +345,7 @@ extern "C" {
 			VmWrite32(VmcsField::kIdtVectoringInfoField, guest_vmcs_va, UtilVmRead(VmcsField::kIdtVectoringInfoField));
 			VmWrite32(VmcsField::kIdtVectoringErrorCode, guest_vmcs_va, UtilVmRead(VmcsField::kIdtVectoringErrorCode));
 			VmWrite32(VmcsField::kVmxInstructionInfo, guest_vmcs_va, UtilVmRead(VmcsField::kVmxInstructionInfo));
-
-			VmWrite64(VmcsField::kGuestRip, guest_vmcs_va, UtilVmRead(VmcsField::kGuestRip));
-			VmWrite64(VmcsField::kGuestRsp, guest_vmcs_va, UtilVmRead(VmcsField::kGuestRsp));
-
-			ULONG64 rsp = 0;
+			SaveGuestFieldFromVmcs02(vpid);
 			VmRead64(VmcsField::kGuestRsp, guest_vmcs_va, &rsp);
 			VmWrite64(VmcsField::kPleGap, guest_vmcs_va, guest_context->irql);
 			HYPERPLATFORM_LOG_DEBUG("VMCS12: kGuestRsp %I64x irql: %X", rsp, guest_context->irql);
@@ -385,7 +401,14 @@ extern "C" {
 	_Use_decl_annotations_ static void VmmpHandleVmExit(GuestContext *guest_context) {
 		//HYPERPLATFORM_PERFORMANCE_MEASURE_THIS_SCOPE();
 		const VmExitInformation exit_reason = { static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitReason)) };
-
+		
+		//Trapped by VMCS02 - L2, and we redirect a interrupt information to L1 vm exit handler
+		//TODO: We should check about if L2 want received this information
+		if (vpid)
+		{
+			SaveGuestFieldFromVmcs02(vpid);
+		}
+		
 		if (kVmmpEnableRecordVmExit)
 		{
 			// Save them for ease of trouble shooting
@@ -631,7 +654,7 @@ extern "C" {
 			HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 0, 0,
 				0);
 		}
-	}//VMM®³£²¶?º¯”µÍê
+	}//VMMç•°å¸¸æ•?å‡½æ•¸å®Œ
 
 	 // CPUID
 	_Use_decl_annotations_ static void VmmpHandleCpuid(
@@ -1099,12 +1122,12 @@ extern "C" {
 	//-----------------------------------------------------------------------------------------------------------------//
 	/*
 	VMsucceed:
-	CF ¡û 0;
-	PF ¡û 0;
-	AF ¡û 0;
-	ZF ¡û 0;
-	SF ¡û 0;
-	OF ¡û 0;
+	CF â† 0;
+	PF â† 0;
+	AF â† 0;
+	ZF â† 0;
+	SF â† 0;
+	OF â† 0;
 	*/
 	VOID VMSucceed(FlagRegister *reg)
 	{
@@ -1118,12 +1141,12 @@ extern "C" {
 	//-----------------------------------------------------------------------------------------------------------------------------------------------------//
 	/*
 	VMfailInvalid:
-	CF ¡û 1;
-	PF ¡û 0;
-	AF ¡û 0;
-	ZF ¡û 0;
-	SF ¡û 0;
-	OF ¡û 0;
+	CF â† 1;
+	PF â† 0;
+	AF â† 0;
+	ZF â† 0;
+	SF â† 0;
+	OF â† 0;
 	*/
 	VOID VMfailInvalid(FlagRegister *reg)
 	{
@@ -1138,12 +1161,12 @@ extern "C" {
 	//-----------------------------------------------------------------------------------------------------------------------------------------------------//
 	/*
 	VMfailValid(ErrorNumber):// executed only if there is a current VMCS
-	CF ¡û 0;
-	PF ¡û 0;
-	AF ¡û 0;
-	ZF ¡û 1;
-	SF ¡û 0;
-	OF ¡û 0;
+	CF â† 0;
+	PF â† 0;
+	AF â† 0;
+	ZF â† 1;
+	SF â† 0;
+	OF â† 0;
 	Set the VM-instruction error field to ErrorNumber;
 	*/
 	VOID VMfailValid(FlagRegister *reg, VmxInstructionError err)
@@ -1993,7 +2016,7 @@ extern "C" {
 				break;
 			}
 
-			//²Ù×÷”µ´óÐ¡
+			//æ“ä½œæ•¸å¤§å°
 			if (!g_vcpus[vcpu_index]->inRoot)
 			{
 				///TODO: Should INJECT vmexit to L1
@@ -2255,7 +2278,7 @@ extern "C" {
 				break;
 			}
 
-			//²Ù×÷”µ´óÐ¡
+			//æ“ä½œæ•¸å¤§å°
 			if (!g_vcpus[vcpu_index]->inRoot)
 			{
 				///TODO: Should INJECT vmexit to L1
@@ -3702,7 +3725,7 @@ extern "C" {
 
 	}
 	// VMCALL
-	// ÖØ?vmcallÖ¸Áî
+	// é‡?vmcallæŒ‡ä»¤
 	_Use_decl_annotations_ static void VmmpHandleVmCall(
 		GuestContext *guest_context)
 	{
@@ -3757,13 +3780,13 @@ extern "C" {
 		}
 		else if (hypercall_number == HypercallNumber::kShEnablePageShadowing)
 		{
-			//1. Œ¤ÕÒŒ¦‘ªµÄept±íí—
-			//2. ÔOÖÃ±íí—žé²»¿É×x/Œ‘
-			//3. EPT-Violation handlerÖÐÌŽÀí
+			//1. å°‹æ‰¾å°æ‡‰çš„eptè¡¨é …
+			//2. è¨­ç½®è¡¨é …ç‚ºä¸å¯è®€/å¯«
+			//3. EPT-Violation handlerä¸­è™•ç†
 			ShEnablePageShadowing(
 				guest_context->stack->processor_data->ept_data,
 				guest_context->stack->processor_data->shared_data->shared_sh_data);
-			//ÔOÖÃRIP/EIP
+			//è¨­ç½®RIP/EIP
 			VmmpAdjustGuestInstructionPointer(guest_context->ip);
 
 			// Indicates successful VMCALL

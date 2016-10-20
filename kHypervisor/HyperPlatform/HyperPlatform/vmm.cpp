@@ -206,8 +206,7 @@ extern "C" {
 
 	// Those variables are all for diagnostic purpose
 	static ULONG		 g_vmmp_next_history_index[kVmmpNumberOfProcessors];
-	static VmExitHistory g_vmmp_vm_exit_history[kVmmpNumberOfProcessors]
-		[kVmmpNumberOfRecords];
+	static VmExitHistory g_vmmp_vm_exit_history[kVmmpNumberOfProcessors][kVmmpNumberOfRecords];
 	volatile LONG		 g_vpid = 1;
 	volatile LONG	     g_VM_Core_Count = 0;
 	NestedVmm*	         g_vcpus[64] = {};

@@ -263,19 +263,22 @@ extern "C" {
 		return guest_context.vm_continue;
 	}
 #pragma warning(pop)
-	BOOLEAN nested = FALSE;
-
-	VOID SaveGuestFieldFromVmcs02(ULONG_PTR vpid)
+		BOOLEAN nested = FALSE;
+	ULONG64 SearchVmcsByVpid(ULONG_PTR vpid)
 	{
-		int i = 0; 
+		int i = 0;
 		for (i = 0; i < sizeof(g_vcpus) / sizeof(NestedVmm); i++)
 		{
 			if (g_vcpus[i]->kVirtualProcessorId == vpid)
-			{ 
+			{
 				break;
 			}
 		}
-		ULONG64 guest_vmcs_va = (ULONG64)UtilVaFromPa(g_vcpus[i]->guest_vmcs); 
+		return (ULONG64)UtilVaFromPa(g_vcpus[i]->guest_vmcs);  
+	}
+	VOID SaveGuestFieldFromVmcs02(ULONG_PTR vpid)
+	{
+		ULONG64 guest_vmcs_va = SearchVmcsByVpid(vpid);
 		//all nested vm-exit should record 
 		VmWrite64(VmcsField::kGuestRip, guest_vmcs_va, UtilVmRead(VmcsField::kGuestRip));
 		VmWrite64(VmcsField::kGuestRsp, guest_vmcs_va, UtilVmRead(VmcsField::kGuestRsp));
@@ -284,7 +287,84 @@ extern "C" {
 		VmWrite64(VmcsField::kGuestCr4, guest_vmcs_va, UtilVmRead(VmcsField::kGuestCr4));
 		VmWrite64(VmcsField::kGuestDr7, guest_vmcs_va, UtilVmRead(VmcsField::kGuestDr7)); 
 	}
-	
+	VOID SaveExceptionInformationFromVmcs02(LONG_PTR vpid, VmExitInformation exit_reason)
+	{ 
+		int i = 0;
+		for (i = 0; i < sizeof(g_vcpus) / sizeof(NestedVmm); i++)
+		{
+			if (g_vcpus[i]->kVirtualProcessorId == vpid)
+			{
+				HYPERPLATFORM_LOG_DEBUG("Vpid Found: %x", vpid);
+				break;
+			}
+		}
+
+		//VMCS12
+		ULONG64 guest_vmcs_va = (ULONG64)UtilVaFromPa(g_vcpus[i]->guest_vmcs);
+
+		const VmExitInterruptionInformationField exception = {
+			static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrInfo))
+		};
+
+		HYPERPLATFORM_LOG_DEBUG("exit_reason %I64X", exit_reason.all);
+		HYPERPLATFORM_LOG_DEBUG("interruption_type: %I64X", static_cast<interruption_type>(exception.fields.interruption_type));
+		HYPERPLATFORM_LOG_DEBUG("InterruptionVector: %I64X", static_cast<InterruptionVector>(exception.fields.vector));
+
+
+		//Write to VMCS12 for vmread
+		VmWrite32(VmcsField::kVmExitIntrInfo, guest_vmcs_va, exception.all);
+		VmWrite32(VmcsField::kVmExitReason, guest_vmcs_va, exit_reason.all);
+		ULONG32 exception2, exit_reason2;
+
+		//Write to VMCS12 for vmread
+		VmRead32(VmcsField::kVmExitIntrInfo, guest_vmcs_va, &exception2);
+		VmRead32(VmcsField::kVmExitReason, guest_vmcs_va, &exit_reason2);
+
+		const VmExitInterruptionInformationField exception3 = { exception2 };
+
+		HYPERPLATFORM_LOG_DEBUG("VMCS id %x", UtilVmRead(VmcsField::kVirtualProcessorId));
+		HYPERPLATFORM_LOG_DEBUG("Trapped by %I64X ", UtilVmRead(VmcsField::kGuestRip));
+		HYPERPLATFORM_LOG_DEBUG("Trapped Reason: %I64X ", exit_reason.fields.reason);
+		HYPERPLATFORM_LOG_DEBUG("Trapped Intrreupt: %I64X ", exception.fields.interruption_type);
+		HYPERPLATFORM_LOG_DEBUG("Trapped Intrreupt vector: %I64X ", exception.fields.vector);
+		HYPERPLATFORM_LOG_DEBUG("Trapped kVmExitInstructionLen: %I64X ", UtilVmRead(VmcsField::kVmExitInstructionLen));
+
+		VmWrite32(VmcsField::kVmExitInstructionLen, guest_vmcs_va, UtilVmRead(VmcsField::kVmExitInstructionLen));
+		VmWrite32(VmcsField::kVmInstructionError, guest_vmcs_va, UtilVmRead(VmcsField::kVmInstructionError));
+		VmWrite32(VmcsField::kVmExitIntrErrorCode, guest_vmcs_va, UtilVmRead(VmcsField::kVmExitIntrErrorCode));
+		VmWrite32(VmcsField::kIdtVectoringInfoField, guest_vmcs_va, UtilVmRead(VmcsField::kIdtVectoringInfoField));
+		VmWrite32(VmcsField::kIdtVectoringErrorCode, guest_vmcs_va, UtilVmRead(VmcsField::kIdtVectoringErrorCode));
+		VmWrite32(VmcsField::kVmxInstructionInfo, guest_vmcs_va, UtilVmRead(VmcsField::kVmxInstructionInfo));
+
+	}
+
+	VOID EmulateVmExit(ULONG_PTR vpid, ULONG64 vmcs01)
+	{
+
+		VmxStatus status; 
+		ULONG64   vmcs12			  = SearchVmcsByVpid(vpid);
+		ULONG64   VMCS_VMEXIT_HANDLER = 0;
+		ULONG64   VMCS_VMEXIT_STACK   = 0; 
+		if (VmxStatus::kOk != (status = static_cast<VmxStatus>(__vmx_vmptrld(&vmcs01))))
+		{
+			VmxInstructionError error = static_cast<VmxInstructionError>(UtilVmRead(VmcsField::kVmInstructionError));
+			HYPERPLATFORM_LOG_DEBUG("Error vmptrld error code :%x , %x", status, error); 
+		}
+
+		//Read from VMCS12 get it host vmexit handler
+		VmRead64(VmcsField::kHostRip, vmcs12, &VMCS_VMEXIT_HANDLER);
+		VmRead64(VmcsField::kHostRsp, vmcs12, &VMCS_VMEXIT_STACK);
+		HYPERPLATFORM_COMMON_DBG_BREAK();
+
+		//Write VMCS01 for L1's VMExit handler
+		UtilVmWrite(VmcsField::kGuestRip, VMCS_VMEXIT_HANDLER);
+		UtilVmWrite(VmcsField::kGuestRsp, VMCS_VMEXIT_STACK);
+		 
+		//VMCS01 guest rip == VMCS12 host rip (should be)
+		HYPERPLATFORM_LOG_DEBUG("VMCS01: kGuestRip :%I64x , kGuestRsp %I64x ", UtilVmRead(VmcsField::kGuestRip), UtilVmRead(VmcsField::kGuestRsp));
+		HYPERPLATFORM_LOG_DEBUG("VMCS01: kHostRip :%I64x , kHostRsp %I64x ", UtilVmRead(VmcsField::kHostRip), UtilVmRead(VmcsField::kHostRsp)); 
+	 
+	}
 	//Nested breakpoint dispatcher
 	VOID NestedBreakpointHandler(GuestContext* guest_context)
 	{
@@ -294,95 +374,25 @@ extern "C" {
 		//Trapped by VMCS02 - L2, and we redirect a interrupt information to L1 vm exit handler
 		//TODO: We should check about if L2 want received this information
 		if (vpid)
-		{
-			ULONG64   VMCS_VMEXIT_HANDLER = 0;
-			ULONG64   vmcs01 = UtilPaFromVa((void*)guest_context->stack->processor_data->vmcs_region);
-			VmxStatus status;
-
-			int i = 0;
-			for (i = 0; i < sizeof(g_vcpus) / sizeof(NestedVmm); i++)
-			{
-				if (g_vcpus[i]->kVirtualProcessorId == vpid)
-				{
-					HYPERPLATFORM_LOG_DEBUG("Vpid Found: %x", vpid);
-					break;
-				}
-			}
-
-			//VMCS12
-			ULONG64 guest_vmcs_va = (ULONG64)UtilVaFromPa(g_vcpus[i]->guest_vmcs);
-
-			const VmExitInterruptionInformationField exception = {
-				static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrInfo))
-			};
-
-			HYPERPLATFORM_LOG_DEBUG("exit_reason %I64X", exit_reason.all);
-			HYPERPLATFORM_LOG_DEBUG("interruption_type: %I64X", static_cast<interruption_type>(exception.fields.interruption_type));
-			HYPERPLATFORM_LOG_DEBUG("InterruptionVector: %I64X", static_cast<InterruptionVector>(exception.fields.vector));
-
-
-			//Write to VMCS12 for vmread
-			VmWrite32(VmcsField::kVmExitIntrInfo, guest_vmcs_va, exception.all);
-			VmWrite32(VmcsField::kVmExitReason, guest_vmcs_va, exit_reason.all);
-			ULONG32 exception2, exit_reason2;
-
-			//Write to VMCS12 for vmread
-			VmRead32(VmcsField::kVmExitIntrInfo, guest_vmcs_va, &exception2);
-			VmRead32(VmcsField::kVmExitReason, guest_vmcs_va, &exit_reason2);
-
-			const VmExitInterruptionInformationField exception3 = { exception2 };
-
-			HYPERPLATFORM_LOG_DEBUG("VMCS id %x", UtilVmRead(VmcsField::kVirtualProcessorId));
-			HYPERPLATFORM_LOG_DEBUG("Trapped by %I64X ", UtilVmRead(VmcsField::kGuestRip));
-			HYPERPLATFORM_LOG_DEBUG("Trapped Reason: %I64X ", exit_reason.fields.reason);
-			HYPERPLATFORM_LOG_DEBUG("Trapped Intrreupt: %I64X ", exception.fields.interruption_type);
-			HYPERPLATFORM_LOG_DEBUG("Trapped Intrreupt vector: %I64X ", exception.fields.vector);
-			HYPERPLATFORM_LOG_DEBUG("Trapped kVmExitInstructionLen: %I64X ", UtilVmRead(VmcsField::kVmExitInstructionLen));
-
-			VmWrite32(VmcsField::kVmExitInstructionLen, guest_vmcs_va, UtilVmRead(VmcsField::kVmExitInstructionLen));
-			VmWrite32(VmcsField::kVmInstructionError, guest_vmcs_va, UtilVmRead(VmcsField::kVmInstructionError));
-			VmWrite32(VmcsField::kVmExitIntrErrorCode, guest_vmcs_va, UtilVmRead(VmcsField::kVmExitIntrErrorCode));
-			VmWrite32(VmcsField::kIdtVectoringInfoField, guest_vmcs_va, UtilVmRead(VmcsField::kIdtVectoringInfoField));
-			VmWrite32(VmcsField::kIdtVectoringErrorCode, guest_vmcs_va, UtilVmRead(VmcsField::kIdtVectoringErrorCode));
-			VmWrite32(VmcsField::kVmxInstructionInfo, guest_vmcs_va, UtilVmRead(VmcsField::kVmxInstructionInfo));
-			SaveGuestFieldFromVmcs02(vpid);
-			VmRead64(VmcsField::kGuestRsp, guest_vmcs_va, &rsp);
-			VmWrite64(VmcsField::kPleGap, guest_vmcs_va, guest_context->irql);
-			HYPERPLATFORM_LOG_DEBUG("VMCS12: kGuestRsp %I64x irql: %X", rsp, guest_context->irql);
-
-			ULONG64 VMCS_VMEXIT_STACK = 0;
-			if (VmxStatus::kOk != (status = static_cast<VmxStatus>(__vmx_vmptrld(&vmcs01))))
-			{
-				VmxInstructionError error = static_cast<VmxInstructionError>(UtilVmRead(VmcsField::kVmInstructionError));
-				HYPERPLATFORM_LOG_DEBUG("Error vmptrld error code :%x , %x", status, error);
-				HYPERPLATFORM_COMMON_DBG_BREAK();
-			}
-
-			//Read from VMCS12 get it host vmexit handler
-			VmRead64(VmcsField::kHostRip, guest_vmcs_va, &VMCS_VMEXIT_HANDLER);
-			VmRead64(VmcsField::kHostRsp, guest_vmcs_va, &VMCS_VMEXIT_STACK);
-			HYPERPLATFORM_COMMON_DBG_BREAK();
-
-			//Write VMCS01 for L1's VMExit handler
-			UtilVmWrite(VmcsField::kGuestRip, VMCS_VMEXIT_HANDLER);
-			UtilVmWrite(VmcsField::kGuestRsp, VMCS_VMEXIT_STACK);
-
-			HYPERPLATFORM_LOG_DEBUG("VMCS01: kGuestRip :%I64x , kGuestRsp %I64x ", UtilVmRead(VmcsField::kGuestRip), UtilVmRead(VmcsField::kGuestRsp));
-			HYPERPLATFORM_LOG_DEBUG("VMCS01: kHostRip :%I64x , kHostRsp %I64x ", UtilVmRead(VmcsField::kHostRip), UtilVmRead(VmcsField::kHostRsp));
-
+		{ 
+		 	ULONG64   vmcs01 = UtilPaFromVa((void*)guest_context->stack->processor_data->vmcs_region);
+			SaveExceptionInformationFromVmcs02(vpid, exit_reason);
+			SaveGuestFieldFromVmcs02(vpid);  
+			EmulateVmExit(vpid, vmcs01);
 			VMSucceed(&guest_context->flag_reg);
 			UtilVmWrite(VmcsField::kGuestRflags, guest_context->flag_reg.all);
-			HYPERPLATFORM_COMMON_DBG_BREAK();
-			HYPERPLATFORM_LOG_DEBUG("Return Nested Vt \r\n ");
+			HYPERPLATFORM_COMMON_DBG_BREAK(); 
 			nested = TRUE;
 			return;
 		}
+
 		//Trapped by VMCS01 / L1 , normally handle it
 		if (!vpid)
 		{
 			const VmExitInterruptionInformationField exception = {
 				static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrInfo))
 			};
+
 			HYPERPLATFORM_LOG_DEBUG("VMCS id %x", UtilVmRead(VmcsField::kVirtualProcessorId));
 			HYPERPLATFORM_LOG_DEBUG("Trapped by %I64X ", UtilVmRead(VmcsField::kGuestRip));
 			HYPERPLATFORM_LOG_DEBUG("Trapped Reason: %I64X ", exit_reason.fields.reason);

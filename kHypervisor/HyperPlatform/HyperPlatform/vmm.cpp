@@ -665,8 +665,7 @@ extern "C" {
 			HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 0, 0,
 				0);
 		}
-	}//VMM異常捕?函數完
-
+	} 
 	 // CPUID
 	_Use_decl_annotations_ static void VmmpHandleCpuid(
 		GuestContext *guest_context) {
@@ -2027,7 +2026,7 @@ extern "C" {
 				break;
 			}
 
-			//操作數大小
+
 			if (!g_vcpus[vcpu_index]->inRoot)
 			{
 				///TODO: Should INJECT vmexit to L1
@@ -2289,7 +2288,7 @@ extern "C" {
 				break;
 			}
 
-			//操作數大小
+
 			if (!g_vcpus[vcpu_index]->inRoot)
 			{
 				///TODO: Should INJECT vmexit to L1
@@ -3736,7 +3735,6 @@ extern "C" {
 
 	}
 	// VMCALL
-	// 重?vmcall指令
 	_Use_decl_annotations_ static void VmmpHandleVmCall(
 		GuestContext *guest_context)
 	{
@@ -3791,13 +3789,11 @@ extern "C" {
 		}
 		else if (hypercall_number == HypercallNumber::kShEnablePageShadowing)
 		{
-			//1. 尋找對應的ept表項
-			//2. 設置表項為不可讀/寫
-			//3. EPT-Violation handler中處理
+
 			ShEnablePageShadowing(
 				guest_context->stack->processor_data->ept_data,
 				guest_context->stack->processor_data->shared_data->shared_sh_data);
-			//設置RIP/EIP
+
 			VmmpAdjustGuestInstructionPointer(guest_context->ip);
 
 			// Indicates successful VMCALL

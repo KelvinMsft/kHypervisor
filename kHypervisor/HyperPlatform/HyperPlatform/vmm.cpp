@@ -412,6 +412,8 @@ extern "C" {
 		//HYPERPLATFORM_PERFORMANCE_MEASURE_THIS_SCOPE();
 		const VmExitInformation exit_reason = { static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitReason)) };
 		
+		ULONG_PTR vpid = UtilVmRead(VmcsField::kVirtualProcessorId);
+		
 		//Trapped by VMCS02 - L2, and we redirect a interrupt information to L1 vm exit handler
 		//TODO: We should check about if L2 want received this information
 		if (vpid)

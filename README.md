@@ -14,3 +14,4 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress:
 2016-10-19 :  First commit, Supporting nested itself only, and nested software breakpoint exception from Level 2. And the nested-Vmm is able to dispatch this exception to L1 and help L1 to resume to L2.
 
 
+2016-10-21 : Fixed Ring-3 vm-exit emulation error. 

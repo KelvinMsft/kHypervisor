@@ -46,9 +46,10 @@ extern "C"
 		ULONG_PTR* RegIndex = NULL, 
 		ULONG_PTR* MemAddr = NULL
 	);
-
-	VOID FillGuestFieldFromVMCS12(ULONG_PTR guest_vmcs_va, USHORT guest_interrupt_status, USHORT pml_index);
-	VOID FillHostStateFieldByPhysicalCpu(ULONG_PTR host_rip, ULONG_PTR host_rsp);
+	ULONG64 GetControlValue(Msr msr, ULONG32* highpart, ULONG32* lowpart);
+	VOID MixControlFieldWithVmcs01AndVmcs12(ULONG_PTR vmcs12_va, ULONG_PTR vmcs02_va, BOOLEAN isLaunch);
+	VOID FillGuestFieldFromVMCS12(ULONG_PTR guest_vmcs_va);
+	VOID FillHostStateFieldByPhysicalCpu(ULONG_PTR vmcs01_rip, ULONG_PTR vmcs01_rsp);
 
 	VOID PrintControlField();
 	VOID PrintHostStateField();

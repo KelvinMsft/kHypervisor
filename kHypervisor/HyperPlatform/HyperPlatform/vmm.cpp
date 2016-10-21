@@ -275,25 +275,14 @@ extern "C" {
 		}
 		return (ULONG64)UtilVaFromPa(g_vcpus[i]->guest_vmcs);  
 	}
-	VOID SaveGuestFieldFromVmcs02(ULONG_PTR vpid)
-	{
-		ULONG64 guest_vmcs_va = SearchVmcsByVpid(vpid);
-		//all nested vm-exit should record 
-		VmWrite64(VmcsField::kGuestRip, guest_vmcs_va, UtilVmRead(VmcsField::kGuestRip));
-		VmWrite64(VmcsField::kGuestRsp, guest_vmcs_va, UtilVmRead(VmcsField::kGuestRsp));
-		VmWrite64(VmcsField::kGuestCr3, guest_vmcs_va, UtilVmRead(VmcsField::kGuestCr3));
-		VmWrite64(VmcsField::kGuestCr0, guest_vmcs_va, UtilVmRead(VmcsField::kGuestCr0));
-		VmWrite64(VmcsField::kGuestCr4, guest_vmcs_va, UtilVmRead(VmcsField::kGuestCr4));
-		VmWrite64(VmcsField::kGuestDr7, guest_vmcs_va, UtilVmRead(VmcsField::kGuestDr7)); 
-	}
 	VOID SaveExceptionInformationFromVmcs02(LONG_PTR vpid, VmExitInformation exit_reason)
-	{ 
+	{
 		int i = 0;
 		for (i = 0; i < sizeof(g_vcpus) / sizeof(NestedVmm); i++)
 		{
 			if (g_vcpus[i]->kVirtualProcessorId == vpid)
 			{
-				HYPERPLATFORM_LOG_DEBUG("Vpid Found: %x", vpid);
+				//HYPERPLATFORM_LOG_DEBUG("Vpid Found: %x", vpid);
 				break;
 			}
 		}
@@ -304,39 +293,104 @@ extern "C" {
 		const VmExitInterruptionInformationField exception = {
 			static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrInfo))
 		};
-
+		/*
 		HYPERPLATFORM_LOG_DEBUG("exit_reason %I64X", exit_reason.all);
 		HYPERPLATFORM_LOG_DEBUG("interruption_type: %I64X", static_cast<interruption_type>(exception.fields.interruption_type));
 		HYPERPLATFORM_LOG_DEBUG("InterruptionVector: %I64X", static_cast<InterruptionVector>(exception.fields.vector));
-
+		*/
 
 		//Write to VMCS12 for vmread
-		VmWrite32(VmcsField::kVmExitIntrInfo, guest_vmcs_va, exception.all);
-		VmWrite32(VmcsField::kVmExitReason, guest_vmcs_va, exit_reason.all);
 		ULONG32 exception2, exit_reason2;
 
 		//Write to VMCS12 for vmread
 		VmRead32(VmcsField::kVmExitIntrInfo, guest_vmcs_va, &exception2);
 		VmRead32(VmcsField::kVmExitReason, guest_vmcs_va, &exit_reason2);
-
-		const VmExitInterruptionInformationField exception3 = { exception2 };
-
+		/*
 		HYPERPLATFORM_LOG_DEBUG("VMCS id %x", UtilVmRead(VmcsField::kVirtualProcessorId));
 		HYPERPLATFORM_LOG_DEBUG("Trapped by %I64X ", UtilVmRead(VmcsField::kGuestRip));
 		HYPERPLATFORM_LOG_DEBUG("Trapped Reason: %I64X ", exit_reason.fields.reason);
 		HYPERPLATFORM_LOG_DEBUG("Trapped Intrreupt: %I64X ", exception.fields.interruption_type);
 		HYPERPLATFORM_LOG_DEBUG("Trapped Intrreupt vector: %I64X ", exception.fields.vector);
 		HYPERPLATFORM_LOG_DEBUG("Trapped kVmExitInstructionLen: %I64X ", UtilVmRead(VmcsField::kVmExitInstructionLen));
-
+		*/
+		VmWrite32(VmcsField::kVmExitIntrInfo, guest_vmcs_va, exception.all);
+		VmWrite32(VmcsField::kVmExitReason, guest_vmcs_va, exit_reason.all);
 		VmWrite32(VmcsField::kVmExitInstructionLen, guest_vmcs_va, UtilVmRead(VmcsField::kVmExitInstructionLen));
 		VmWrite32(VmcsField::kVmInstructionError, guest_vmcs_va, UtilVmRead(VmcsField::kVmInstructionError));
 		VmWrite32(VmcsField::kVmExitIntrErrorCode, guest_vmcs_va, UtilVmRead(VmcsField::kVmExitIntrErrorCode));
 		VmWrite32(VmcsField::kIdtVectoringInfoField, guest_vmcs_va, UtilVmRead(VmcsField::kIdtVectoringInfoField));
 		VmWrite32(VmcsField::kIdtVectoringErrorCode, guest_vmcs_va, UtilVmRead(VmcsField::kIdtVectoringErrorCode));
 		VmWrite32(VmcsField::kVmxInstructionInfo, guest_vmcs_va, UtilVmRead(VmcsField::kVmxInstructionInfo));
-
 	}
 
+
+	VOID SaveGuestFieldFromVmcs02(ULONG_PTR vpid)
+	{
+		ULONG64 guest_vmcs_va = SearchVmcsByVpid(vpid);
+		//all nested vm-exit should record 
+		VmWrite64(VmcsField::kGuestRip, guest_vmcs_va, UtilVmRead(VmcsField::kGuestRip));
+		VmWrite64(VmcsField::kGuestRsp, guest_vmcs_va, UtilVmRead(VmcsField::kGuestRsp));
+		VmWrite64(VmcsField::kGuestCr3, guest_vmcs_va, UtilVmRead(VmcsField::kGuestCr3));
+		VmWrite64(VmcsField::kGuestCr0, guest_vmcs_va, UtilVmRead(VmcsField::kGuestCr0));
+		VmWrite64(VmcsField::kGuestCr4, guest_vmcs_va, UtilVmRead(VmcsField::kGuestCr4));
+		VmWrite64(VmcsField::kGuestDr7, guest_vmcs_va, UtilVmRead(VmcsField::kGuestDr7)); 
+		VmWrite64(VmcsField::kGuestRflags, guest_vmcs_va, UtilVmRead(VmcsField::kGuestRflags));
+
+
+		VmWrite16(VmcsField::kGuestEsSelector,   guest_vmcs_va, UtilVmRead(VmcsField::kGuestEsSelector));
+		VmWrite16(VmcsField::kGuestCsSelector,   guest_vmcs_va, UtilVmRead(VmcsField::kGuestCsSelector));
+		VmWrite16(VmcsField::kGuestSsSelector,   guest_vmcs_va, UtilVmRead(VmcsField::kGuestSsSelector));
+		VmWrite16(VmcsField::kGuestDsSelector,   guest_vmcs_va, UtilVmRead(VmcsField::kGuestDsSelector));
+		VmWrite16(VmcsField::kGuestFsSelector,   guest_vmcs_va, UtilVmRead(VmcsField::kGuestFsSelector));
+		VmWrite16(VmcsField::kGuestGsSelector,   guest_vmcs_va, UtilVmRead(VmcsField::kGuestGsSelector));
+		VmWrite16(VmcsField::kGuestLdtrSelector, guest_vmcs_va, UtilVmRead(VmcsField::kGuestLdtrSelector));
+		VmWrite16(VmcsField::kGuestTrSelector,   guest_vmcs_va, UtilVmRead(VmcsField::kGuestTrSelector));
+
+		VmWrite32(VmcsField::kGuestEsLimit, guest_vmcs_va, UtilVmRead(VmcsField::kGuestEsLimit));
+		VmWrite32(VmcsField::kGuestCsLimit, guest_vmcs_va, UtilVmRead(VmcsField::kGuestCsLimit));
+		VmWrite32(VmcsField::kGuestSsLimit, guest_vmcs_va, UtilVmRead(VmcsField::kGuestSsLimit));
+		VmWrite32(VmcsField::kGuestDsLimit, guest_vmcs_va, UtilVmRead(VmcsField::kGuestDsLimit));
+		VmWrite32(VmcsField::kGuestFsLimit, guest_vmcs_va, UtilVmRead(VmcsField::kGuestFsLimit));
+		VmWrite32(VmcsField::kGuestGsLimit, guest_vmcs_va,   UtilVmRead(VmcsField::kGuestGsLimit));
+		VmWrite32(VmcsField::kGuestLdtrLimit, guest_vmcs_va, UtilVmRead(VmcsField::kGuestLdtrLimit));
+		VmWrite32(VmcsField::kGuestTrLimit,   guest_vmcs_va, UtilVmRead(VmcsField::kGuestTrLimit));
+		VmWrite32(VmcsField::kGuestGdtrLimit, guest_vmcs_va, UtilVmRead(VmcsField::kGuestGdtrLimit));
+		VmWrite32(VmcsField::kGuestIdtrLimit, guest_vmcs_va, UtilVmRead(VmcsField::kGuestIdtrLimit));
+		VmWrite32(VmcsField::kGuestEsArBytes, guest_vmcs_va, UtilVmRead(VmcsField::kGuestEsArBytes));
+		VmWrite32(VmcsField::kGuestCsArBytes, guest_vmcs_va, UtilVmRead(VmcsField::kGuestCsArBytes));
+		VmWrite32(VmcsField::kGuestSsArBytes, guest_vmcs_va, UtilVmRead(VmcsField::kGuestSsArBytes));
+		VmWrite32(VmcsField::kGuestDsArBytes, guest_vmcs_va, UtilVmRead(VmcsField::kGuestDsArBytes));
+		VmWrite32(VmcsField::kGuestFsArBytes, guest_vmcs_va, UtilVmRead(VmcsField::kGuestFsArBytes));
+		VmWrite32(VmcsField::kGuestGsArBytes, guest_vmcs_va, UtilVmRead(VmcsField::kGuestGsArBytes));
+		VmWrite32(VmcsField::kGuestLdtrArBytes, guest_vmcs_va, UtilVmRead(VmcsField::kGuestLdtrArBytes));
+		VmWrite32(VmcsField::kGuestTrArBytes, guest_vmcs_va, UtilVmRead(VmcsField::kGuestTrArBytes));
+		VmWrite32(VmcsField::kGuestInterruptibilityInfo, guest_vmcs_va, UtilVmRead(VmcsField::kGuestInterruptibilityInfo));
+		VmWrite32(VmcsField::kGuestActivityState, guest_vmcs_va, UtilVmRead(VmcsField::kGuestActivityState));
+		VmWrite32(VmcsField::kGuestSysenterCs, guest_vmcs_va, UtilVmRead(VmcsField::kGuestSysenterCs));  
+
+		VmWrite64(VmcsField::kGuestSysenterEsp, guest_vmcs_va, UtilVmRead(VmcsField::kGuestSysenterEsp));
+		VmWrite64(VmcsField::kGuestSysenterEip, guest_vmcs_va, UtilVmRead(VmcsField::kGuestSysenterEip));
+		VmWrite64(VmcsField::kGuestPendingDbgExceptions, guest_vmcs_va, UtilVmRead(VmcsField::kGuestPendingDbgExceptions));
+		VmWrite64(VmcsField::kGuestEsBase, guest_vmcs_va, UtilVmRead(VmcsField::kGuestEsBase));
+		VmWrite64(VmcsField::kGuestCsBase, guest_vmcs_va, UtilVmRead(VmcsField::kGuestCsBase));
+		VmWrite64(VmcsField::kGuestSsBase, guest_vmcs_va, UtilVmRead(VmcsField::kGuestSsBase));
+		VmWrite64(VmcsField::kGuestDsBase, guest_vmcs_va, UtilVmRead(VmcsField::kGuestDsBase));
+		VmWrite64(VmcsField::kGuestFsBase, guest_vmcs_va, UtilVmRead(VmcsField::kGuestFsBase));
+		VmWrite64(VmcsField::kGuestGsBase, guest_vmcs_va, UtilVmRead(VmcsField::kGuestGsBase));
+		VmWrite64(VmcsField::kGuestLdtrBase, guest_vmcs_va, UtilVmRead(VmcsField::kGuestLdtrBase));
+		VmWrite64(VmcsField::kGuestTrBase, guest_vmcs_va, UtilVmRead(VmcsField::kGuestTrBase));
+		VmWrite64(VmcsField::kGuestGdtrBase, guest_vmcs_va, UtilVmRead(VmcsField::kGuestGdtrBase));
+		VmWrite64(VmcsField::kGuestIdtrBase, guest_vmcs_va, UtilVmRead(VmcsField::kGuestIdtrBase)); 
+
+		//Read - only field
+		//Write to VMCS12 for vmread
+		const VmExitInformation exit_reason = { static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitReason)) };
+		const VmExitInterruptionInformationField exception = {static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrInfo))};
+
+		SaveExceptionInformationFromVmcs02(vpid, exit_reason);
+
+	}
+	
 	VOID EmulateVmExit(ULONG_PTR vpid, ULONG64 vmcs01)
 	{
 
@@ -344,6 +398,44 @@ extern "C" {
 		ULONG64   vmcs12			  = SearchVmcsByVpid(vpid);
 		ULONG64   VMCS_VMEXIT_HANDLER = 0;
 		ULONG64   VMCS_VMEXIT_STACK   = 0; 
+		ULONG64   VMCS_VMEXIT_RFLAGs = 0;
+		ULONG64   VMCS_VMEXIT_CR4 = 0;
+		ULONG64   VMCS_VMEXIT_CR3 = 0;
+		ULONG64   VMCS_VMEXIT_CR0 = 0;
+
+
+		ULONG64   VMCS_VMEXIT_CS = 0;
+		ULONG64   VMCS_VMEXIT_SS = 0;
+		ULONG64   VMCS_VMEXIT_DS = 0;
+		ULONG64   VMCS_VMEXIT_ES = 0;
+		ULONG64   VMCS_VMEXIT_FS = 0;
+		ULONG64   VMCS_VMEXIT_GS = 0;
+		ULONG64   VMCS_VMEXIT_TR = 0;
+
+		ULONG32   VMCS_VMEXIT_SYSENTER_CS = 0;
+		ULONG64   VMCS_VMEXIT_SYSENTER_RIP = 0;
+		ULONG64   VMCS_VMEXIT_SYSENTER_RSP = 0;
+
+
+		ULONG_PTR  VMCS_VMEXIT_HOST_FS = 0;
+		ULONG_PTR  VMCS_VMEXIT_HOST_GS = 0;
+		ULONG_PTR  VMCS_VMEXIT_HOST_TR = 0;
+
+		//VMCS01 guest rip == VMCS12 host rip (should be)
+		const VmExitInformation exit_reason = { static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitReason)) };
+
+		const VmExitInterruptionInformationField exception = {
+			static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrInfo))
+		};
+		PrintVMCS();
+
+		HYPERPLATFORM_LOG_DEBUG("[EmulateVmExit]VMCS id %x", UtilVmRead(VmcsField::kVirtualProcessorId));
+		HYPERPLATFORM_LOG_DEBUG("[EmulateVmExit]Trapped by %I64X ", UtilVmRead(VmcsField::kGuestRip));
+		HYPERPLATFORM_LOG_DEBUG("[EmulateVmExit]Trapped Reason: %I64X ", exit_reason.fields.reason);
+		HYPERPLATFORM_LOG_DEBUG("[EmulateVmExit]Trapped Intrreupt: %I64X ", exception.fields.interruption_type);
+		HYPERPLATFORM_LOG_DEBUG("[EmulateVmExit]Trapped Intrreupt vector: %I64X ", exception.fields.vector);
+		HYPERPLATFORM_LOG_DEBUG("[EmulateVmExit]Trapped kVmExitInstructionLen: %I64X ", UtilVmRead(VmcsField::kVmExitInstructionLen));
+
 		if (VmxStatus::kOk != (status = static_cast<VmxStatus>(__vmx_vmptrld(&vmcs01))))
 		{
 			VmxInstructionError error = static_cast<VmxInstructionError>(UtilVmRead(VmcsField::kVmInstructionError));
@@ -353,15 +445,59 @@ extern "C" {
 		//Read from VMCS12 get it host vmexit handler
 		VmRead64(VmcsField::kHostRip, vmcs12, &VMCS_VMEXIT_HANDLER);
 		VmRead64(VmcsField::kHostRsp, vmcs12, &VMCS_VMEXIT_STACK);
-		HYPERPLATFORM_COMMON_DBG_BREAK();
+		VmRead64(VmcsField::kHostCr0, vmcs12, &VMCS_VMEXIT_CR0);
+		VmRead64(VmcsField::kHostCr3, vmcs12, &VMCS_VMEXIT_CR3);
+		VmRead64(VmcsField::kHostCr4, vmcs12, &VMCS_VMEXIT_CR4);
+
+
+		VmRead64(VmcsField::kHostCsSelector, vmcs12, &VMCS_VMEXIT_CS);
+		VmRead64(VmcsField::kHostSsSelector, vmcs12, &VMCS_VMEXIT_SS);
+		VmRead64(VmcsField::kHostDsSelector, vmcs12, &VMCS_VMEXIT_DS);
+		VmRead64(VmcsField::kHostEsSelector, vmcs12, &VMCS_VMEXIT_ES);
+		VmRead64(VmcsField::kHostFsSelector, vmcs12, &VMCS_VMEXIT_FS);
+		VmRead64(VmcsField::kHostGsSelector, vmcs12, &VMCS_VMEXIT_GS);
+		VmRead64(VmcsField::kHostTrSelector, vmcs12, &VMCS_VMEXIT_TR);
+
+
+		VmRead32(VmcsField::kHostIa32SysenterCs,  vmcs12, &VMCS_VMEXIT_SYSENTER_CS);
+		VmRead64(VmcsField::kHostIa32SysenterEip, vmcs12, &VMCS_VMEXIT_SYSENTER_RSP);
+		VmRead64(VmcsField::kHostIa32SysenterEsp, vmcs12, &VMCS_VMEXIT_SYSENTER_RIP);
+
+		
+		VmRead64(VmcsField::kHostFsBase, vmcs12, &VMCS_VMEXIT_HOST_FS);
+		VmRead64(VmcsField::kHostGsBase, vmcs12, &VMCS_VMEXIT_HOST_GS);
+		VmRead64(VmcsField::kHostTrBase, vmcs12, &VMCS_VMEXIT_HOST_TR);
+
+		VmRead64(VmcsField::kGuestRflags,vmcs12, &VMCS_VMEXIT_RFLAGs);
 
 		//Write VMCS01 for L1's VMExit handler
+		UtilVmWrite(VmcsField::kGuestRflags, VMCS_VMEXIT_RFLAGs);
 		UtilVmWrite(VmcsField::kGuestRip, VMCS_VMEXIT_HANDLER);
-		UtilVmWrite(VmcsField::kGuestRsp, VMCS_VMEXIT_STACK);
+		UtilVmWrite(VmcsField::kGuestRsp, VMCS_VMEXIT_STACK);	
+		UtilVmWrite(VmcsField::kGuestCr0, VMCS_VMEXIT_CR0);
+		UtilVmWrite(VmcsField::kGuestCr3, VMCS_VMEXIT_CR3);
+		UtilVmWrite(VmcsField::kGuestCr4, VMCS_VMEXIT_CR4);
+		UtilVmWrite(VmcsField::kGuestDr7, 0x400);
+
+		UtilVmWrite(VmcsField::kGuestCsSelector, VMCS_VMEXIT_CS);
+		UtilVmWrite(VmcsField::kGuestSsSelector, VMCS_VMEXIT_SS);
+		UtilVmWrite(VmcsField::kGuestDsSelector, VMCS_VMEXIT_DS);
+		UtilVmWrite(VmcsField::kGuestEsSelector, VMCS_VMEXIT_ES);
+		UtilVmWrite(VmcsField::kGuestFsSelector, VMCS_VMEXIT_FS);
+		UtilVmWrite(VmcsField::kGuestGsSelector, VMCS_VMEXIT_GS);
+
+		UtilVmWrite(VmcsField::kGuestSysenterCs,  VMCS_VMEXIT_SYSENTER_CS);
+		UtilVmWrite(VmcsField::kGuestSysenterEsp, VMCS_VMEXIT_SYSENTER_RSP);
+		UtilVmWrite(VmcsField::kGuestSysenterEip, VMCS_VMEXIT_SYSENTER_RIP);
+		
+		UtilVmWrite(VmcsField::kGuestFsBase, VMCS_VMEXIT_HOST_FS);
+		UtilVmWrite(VmcsField::kGuestGsBase, VMCS_VMEXIT_HOST_GS);
+		UtilVmWrite(VmcsField::kGuestTrBase, VMCS_VMEXIT_HOST_TR);
+		
+		PrintVMCS();
 		 
-		//VMCS01 guest rip == VMCS12 host rip (should be)
-		HYPERPLATFORM_LOG_DEBUG("VMCS01: kGuestRip :%I64x , kGuestRsp %I64x ", UtilVmRead(VmcsField::kGuestRip), UtilVmRead(VmcsField::kGuestRsp));
-		HYPERPLATFORM_LOG_DEBUG("VMCS01: kHostRip :%I64x , kHostRsp %I64x ", UtilVmRead(VmcsField::kHostRip), UtilVmRead(VmcsField::kHostRsp)); 
+		HYPERPLATFORM_LOG_DEBUG("[EmulateVmExit]VMCS01: kGuestRip :%I64x , kGuestRsp %I64x ", UtilVmRead(VmcsField::kGuestRip), UtilVmRead(VmcsField::kGuestRsp));
+		HYPERPLATFORM_LOG_DEBUG("[EmulateVmExit]VMCS01: kHostRip :%I64x , kHostRsp %I64x ", UtilVmRead(VmcsField::kHostRip), UtilVmRead(VmcsField::kHostRsp)); 
 	 
 	}
 	//Nested breakpoint dispatcher
@@ -375,13 +511,7 @@ extern "C" {
 		if (vpid)
 		{ 
 		 	ULONG64   vmcs01 = UtilPaFromVa((void*)guest_context->stack->processor_data->vmcs_region);
-			SaveExceptionInformationFromVmcs02(vpid, exit_reason);
-			SaveGuestFieldFromVmcs02(vpid);  
-			EmulateVmExit(vpid, vmcs01);
-			VMSucceed(&guest_context->flag_reg);
-			UtilVmWrite(VmcsField::kGuestRflags, guest_context->flag_reg.all);
-			HYPERPLATFORM_COMMON_DBG_BREAK(); 
-			nested = TRUE;
+ 			EmulateVmExit(vpid, vmcs01);  
 			return;
 		}
 
@@ -400,9 +530,8 @@ extern "C" {
 			HYPERPLATFORM_LOG_DEBUG("Trapped kVmExitInstructionLen: %I64X ", UtilVmRead(VmcsField::kVmExitInstructionLen));
 
 			VMSucceed(&guest_context->flag_reg);
-			UtilVmWrite(VmcsField::kGuestRip, UtilVmRead(VmcsField::kGuestRip) + 1);
-			UtilVmWrite(VmcsField::kGuestRflags, guest_context->flag_reg.all);
-			HYPERPLATFORM_COMMON_DBG_BREAK();
+			UtilVmWrite(VmcsField::kGuestRip, UtilVmRead(VmcsField::kGuestRip) + UtilVmRead(VmcsField::kVmExitInstructionLen));
+			UtilVmWrite(VmcsField::kGuestRflags, guest_context->flag_reg.all); 
 			return;
 		}
 	}
@@ -418,6 +547,12 @@ extern "C" {
 		if (vpid)
 		{
 			SaveGuestFieldFromVmcs02(vpid);
+			ULONG64 proc = (ULONG64)PsGetCurrentProcess();
+			CHAR*   name = (char*)proc + 0x2D8;
+			if (strstr(name, "od.exe"))
+			{
+				PrintVMCS();
+			}
 		}
 		
 		if (kVmmpEnableRecordVmExit)
@@ -608,16 +743,9 @@ extern "C" {
 			}
 			else
 			{
-				//InterruptionVector EXIT = static_cast<InterruptionVector>(exception.fields.vector);
-				VmEntryInterruptionInformationField inject = {};
-				inject.fields.interruption_type = exception.fields.interruption_type;
-				inject.fields.vector = exception.fields.vector;
-				inject.fields.deliver_error_code = false;
-				inject.fields.valid = true;
-				UtilVmWrite(VmcsField::kVmEntryIntrInfoField, inject.all);
-				UtilVmWrite(VmcsField::kVmEntryInstructionLen, 1);
-				//HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 0, 0,
-				//                               0);
+				//InterruptionVector EXIT = static_cast<InterruptionVector>(exception.fields.vector); 
+				HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 0, 0,
+				                               0);
 			}
 		}
 		else if (static_cast<interruption_type>(exception.fields.interruption_type) == interruption_type::kSoftwareException)
@@ -644,16 +772,8 @@ extern "C" {
 
 			}
 			else if (static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kTrapFlags)
-			{
-				VmEntryInterruptionInformationField inject = {};
-				inject.fields.interruption_type = exception.fields.interruption_type;
-				inject.fields.vector = exception.fields.vector;
-				inject.fields.deliver_error_code = false;
-				inject.fields.valid = true;
-				UtilVmWrite(VmcsField::kVmEntryIntrInfoField, inject.all);
-				UtilVmWrite(VmcsField::kVmEntryInstructionLen, 1);
-
-				HYPERPLATFORM_LOG_DEBUG("L0 GuestIp= %p, #BP vmcs no.: %d ", guest_context->ip, UtilVmRead(VmcsField::kVirtualProcessorId));
+			{  
+				HYPERPLATFORM_LOG_DEBUG("L0 GuestIp= %p, #DB vmcs no.: %d ", guest_context->ip, UtilVmRead(VmcsField::kVirtualProcessorId));
 
 			}
 			else {
@@ -2843,15 +2963,15 @@ extern "C" {
 			UtilVmWrite(VmcsField::kCr3TargetCount, guest_cr3_target_count | my_cr3_target_count);
 			UtilVmWrite(VmcsField::kVmExitControls, exit_control | my_exit_control);
 			UtilVmWrite(VmcsField::kVmExitMsrStoreCount, vmexit_msr_store_cnt | my_vmexit_msr_store_cnt);
-			UtilVmWrite(VmcsField::kVmExitMsrLoadCount, vmexit_msr_load_cnt | my_vmexit_msr_load_cnt);
+			UtilVmWrite(VmcsField::kVmExitMsrLoadCount, vmexit_msr_load_cnt );
 			UtilVmWrite(VmcsField::kVmEntryControls, vmentry_ctrls | my_vmentry_ctrls);
-			UtilVmWrite(VmcsField::kVmEntryMsrLoadCount, vmentry_msr_load_cnt | my_vmentry_msr_load_cnt);
-			UtilVmWrite(VmcsField::kVmEntryIntrInfoField, vmentry_interr_info | my_vmentry_interr_info);
-			UtilVmWrite(VmcsField::kVmEntryExceptionErrorCode, vmentry_except_Err_code | my_vmentry_except_Err_code);
-			UtilVmWrite(VmcsField::kVmEntryInstructionLen, vmentry_instr_length | my_vmentry_instr_length);
+			UtilVmWrite(VmcsField::kVmEntryMsrLoadCount, vmentry_msr_load_cnt );
+			UtilVmWrite(VmcsField::kVmEntryIntrInfoField,   my_vmentry_interr_info);
+			UtilVmWrite(VmcsField::kVmEntryExceptionErrorCode,  my_vmentry_except_Err_code);
+			UtilVmWrite(VmcsField::kVmEntryInstructionLen,  my_vmentry_instr_length);
 			UtilVmWrite(VmcsField::kTprThreshold, guest_tpr_threshold | my_guest_tpr_threshold);
-			UtilVmWrite(VmcsField::kPleGap, pause_loop_exiting_gap | my_pause_loop_exiting_gap);
-			UtilVmWrite(VmcsField::kPleWindow, pause_loop_exiting_window | my_pause_loop_exiting_window);
+			UtilVmWrite(VmcsField::kPleGap, 0);
+			UtilVmWrite(VmcsField::kPleWindow, 0);
 			UtilVmWrite(VmcsField::kSecondaryVmExecControl, guest_secondary_processor_base_ctls | my_guest_secondary_processor_base_ctls);
 
 			/*
@@ -2902,16 +3022,17 @@ extern "C" {
 
 			//--------------------------------------------------------------------------------------//
 
-			ULONG64 rip, rsp;
+			ULONG64 rip, rsp, rflags;
 			//Get VMCS 1-2 Guest Rip & Rsp , means where is it trapped by 
 			//Get Vmlaunch return address from VMCS12 (it supposed provided by L1 already), there's no way to verify it 
 			VmRead64(VmcsField::kGuestRip, guest_vmcs_va, &rip);
 			VmRead64(VmcsField::kGuestRsp, guest_vmcs_va, &rsp);
+			VmRead64(VmcsField::kGuestRflags, guest_vmcs_va, &rflags);
+
 			UtilVmWrite(VmcsField::kGuestRsp, rsp);
 			UtilVmWrite(VmcsField::kGuestRip, rip);
-
+			UtilVmWrite(VmcsField::kGuestRflags, rflags);
 			PrintVMCS();
-			VMSucceed(&guest_context->flag_reg);
 
 			if (guest_context->irql < DISPATCH_LEVEL)
 			{
@@ -2941,7 +3062,7 @@ extern "C" {
 		{
 			PROCESSOR_NUMBER  procnumber = { 0 };
 			ULONG			  vcpu_index = KeGetCurrentProcessorNumberEx(&procnumber);
-
+			HYPERPLATFORM_LOG_DEBUG("----Start Emulate VMRESUME---");
 			//not in vmx mode
 			if (!g_vcpus[vcpu_index]->inVMX)
 			{
@@ -3483,7 +3604,7 @@ extern "C" {
 			*/
 			USHORT my_guest_vpid = 0;
 			VmRead16(VmcsField::kVirtualProcessorId, guest_vmcs_va, &my_guest_vpid);
-			UtilVmWrite(VmcsField::kVirtualProcessorId, guest_vpid | my_guest_vpid);
+			UtilVmWrite(VmcsField::kVirtualProcessorId, my_guest_vpid);
 
 			/*
 			32 bit Control Field
@@ -3526,24 +3647,27 @@ extern "C" {
 			VmRead32(VmcsField::kPleWindow, guest_vmcs_va, &my_pause_loop_exiting_window);
 			VmRead32(VmcsField::kSecondaryVmExecControl, guest_vmcs_va, &my_guest_secondary_processor_base_ctls);
 
-			UtilVmWrite(VmcsField::kPinBasedVmExecControl, guest_pin_base_ctls | my_pin_base_ctls);
-			UtilVmWrite(VmcsField::kCpuBasedVmExecControl, guest_primary_processor_base_ctls | my_primary_processor_base_ctls);
-			UtilVmWrite(VmcsField::kExceptionBitmap, guest_exception_bitmap | my_exception_bitmap);
-			UtilVmWrite(VmcsField::kPageFaultErrorCodeMask, guest_page_fault_mask | my_guest_page_fault_mask);
-			UtilVmWrite(VmcsField::kPageFaultErrorCodeMatch, guest_page_fault_error_code_match | my_page_fault_error_code_match);
-			UtilVmWrite(VmcsField::kCr3TargetCount, guest_cr3_target_count | my_cr3_target_count);
-			UtilVmWrite(VmcsField::kVmExitControls, exit_control | my_exit_control);
-			UtilVmWrite(VmcsField::kVmExitMsrStoreCount, vmexit_msr_store_cnt | my_vmexit_msr_store_cnt);
-			UtilVmWrite(VmcsField::kVmExitMsrLoadCount, vmexit_msr_load_cnt | my_vmexit_msr_load_cnt);
-			UtilVmWrite(VmcsField::kVmEntryControls, vmentry_ctrls | my_vmentry_ctrls);
-			UtilVmWrite(VmcsField::kVmEntryMsrLoadCount, vmentry_msr_load_cnt | my_vmentry_msr_load_cnt);
-			UtilVmWrite(VmcsField::kVmEntryIntrInfoField, vmentry_interr_info | my_vmentry_interr_info);
-			UtilVmWrite(VmcsField::kVmEntryExceptionErrorCode, vmentry_except_Err_code | my_vmentry_except_Err_code);
-			UtilVmWrite(VmcsField::kVmEntryInstructionLen, vmentry_instr_length | my_vmentry_instr_length);
-			UtilVmWrite(VmcsField::kTprThreshold, guest_tpr_threshold | my_guest_tpr_threshold);
-			UtilVmWrite(VmcsField::kPleGap, pause_loop_exiting_gap | my_pause_loop_exiting_gap);
-			UtilVmWrite(VmcsField::kPleWindow, pause_loop_exiting_window | my_pause_loop_exiting_window);
+			UtilVmWrite(VmcsField::kPageFaultErrorCodeMask,  my_guest_page_fault_mask);
+			UtilVmWrite(VmcsField::kPageFaultErrorCodeMatch, my_page_fault_error_code_match);
+			UtilVmWrite(VmcsField::kCr3TargetCount,			 my_cr3_target_count);
+
+			UtilVmWrite(VmcsField::kPinBasedVmExecControl,  my_pin_base_ctls | guest_pin_base_ctls);
+			UtilVmWrite(VmcsField::kVmExitControls,			exit_control | my_exit_control);
 			UtilVmWrite(VmcsField::kSecondaryVmExecControl, guest_secondary_processor_base_ctls | my_guest_secondary_processor_base_ctls);
+			UtilVmWrite(VmcsField::kCpuBasedVmExecControl,  guest_primary_processor_base_ctls | my_primary_processor_base_ctls);
+			UtilVmWrite(VmcsField::kExceptionBitmap,		guest_exception_bitmap | my_exception_bitmap);
+
+			UtilVmWrite(VmcsField::kVmExitMsrStoreCount, my_vmexit_msr_store_cnt);
+			UtilVmWrite(VmcsField::kVmExitMsrLoadCount,  my_vmexit_msr_load_cnt);
+			UtilVmWrite(VmcsField::kVmEntryControls,  my_vmentry_ctrls);
+			UtilVmWrite(VmcsField::kVmEntryMsrLoadCount,  my_vmentry_msr_load_cnt);
+			UtilVmWrite(VmcsField::kVmEntryIntrInfoField, my_vmentry_interr_info);
+			UtilVmWrite(VmcsField::kVmEntryExceptionErrorCode, my_vmentry_except_Err_code);
+			UtilVmWrite(VmcsField::kVmEntryInstructionLen,  my_vmentry_instr_length);
+			UtilVmWrite(VmcsField::kTprThreshold,  my_guest_tpr_threshold);
+			UtilVmWrite(VmcsField::kPleGap,  0);
+			UtilVmWrite(VmcsField::kPleWindow,  0);
+
 
 			/*
 			64bit control field
@@ -3610,24 +3734,25 @@ extern "C" {
 			ULONG64   rsp = 0;
 			VmRead64(VmcsField::kGuestRsp, guest_vmcs_va, &rsp);
 			HYPERPLATFORM_LOG_DEBUG("VMCS12 Guest rsp : %I64x ", rsp);
-
+			ULONG64   rflags = 0;
+			VmRead64(VmcsField::kGuestRflags, guest_vmcs_va, &rflags);
+			HYPERPLATFORM_LOG_DEBUG("VMCS12 Guest rsp : %I64x ", rflags);
 
 
 			UtilVmWrite(VmcsField::kGuestRip, rip);
 			UtilVmWrite(VmcsField::kGuestRsp, rsp);
-
-			VMSucceed(&guest_context->flag_reg);
-			UtilVmWrite(VmcsField::kGuestRflags, guest_context->flag_reg.all);
+			UtilVmWrite(VmcsField::kGuestRflags, rflags);
 
 			PrintVMCS();
+			
+			HYPERPLATFORM_LOG_DEBUG("VMCS02: kGuestRip :%I64x , kGuestRsp %I64x ", UtilVmRead(VmcsField::kGuestRip), UtilVmRead(VmcsField::kGuestRsp));
+			HYPERPLATFORM_LOG_DEBUG("VMCS02: kHostRip :%I64x  , kHostRsp  %I64x ", UtilVmRead(VmcsField::kHostRip), UtilVmRead(VmcsField::kHostRsp));
 
 			if (guest_context->irql < DISPATCH_LEVEL)
 			{
 				KeLowerIrql(guest_context->irql);
 			}
-
-			HYPERPLATFORM_LOG_DEBUG("VMCS02: kGuestRip :%I64x , kGuestRsp %I64x ", UtilVmRead(VmcsField::kGuestRip), UtilVmRead(VmcsField::kGuestRsp));
-			HYPERPLATFORM_LOG_DEBUG("VMCS02: kHostRip :%I64x  , kHostRsp  %I64x ", UtilVmRead(VmcsField::kHostRip), UtilVmRead(VmcsField::kHostRsp));
+			 
 			HYPERPLATFORM_COMMON_DBG_BREAK();
 		} while (FALSE);
 	}

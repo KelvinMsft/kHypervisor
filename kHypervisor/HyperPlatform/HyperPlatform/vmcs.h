@@ -17,6 +17,10 @@
 
 
 #define MY_SUPPORT_VMX							   2
+
+
+#define PrintVMCS(){ PrintAllField(__func__);}
+
 extern "C" 
 {
 	VOID    BuildGernericVMCSMap();
@@ -49,7 +53,6 @@ extern "C"
 	VOID PrintControlField();
 	VOID PrintHostStateField();
 	VOID PrintGuestStateField();
-	VOID PrintVMCS();
-
-
+	VOID PrintReadOnlyField();
+	VOID PrintAllField(const char* func);
 }

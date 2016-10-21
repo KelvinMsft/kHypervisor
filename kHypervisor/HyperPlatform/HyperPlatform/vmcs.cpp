@@ -5,20 +5,26 @@
 #include "common.h"
 #include "..\HyperPlatform\HyperPlatform\asm.h"
 #include "..\HyperPlatform\HyperPlatform\log.h"  
-extern "C" {
-
-	unsigned	g_vmcs_map[16][1 + VMX_HIGHEST_VMCS_ENCODING];
-	VOID PrintVMCS()
+ 
+    
+	VOID PrintAllField(const char* func)
 	{
+		HYPERPLATFORM_LOG_DEBUG("------------------------- Start Printed by %s -----------------------------", func);
 		PrintControlField();
 		PrintHostStateField();
 		PrintGuestStateField();
+		VOID PrintReadOnlyField();
+		HYPERPLATFORM_LOG_DEBUG("------------------------- End Printed by %s -----------------------------", func);
+
 	}
+extern "C" {
+
+	unsigned	g_vmcs_map[16][1 + VMX_HIGHEST_VMCS_ENCODING];
+
 	VOID PrintHostStateField()
 	{
 
 		HYPERPLATFORM_LOG_DEBUG("###################### 16bit Host State #############################");
-
 		HYPERPLATFORM_LOG_DEBUG("kHostCsSelector : %X", UtilVmRead(VmcsField::kHostCsSelector));
 		HYPERPLATFORM_LOG_DEBUG("kHostDsSelector : %X", UtilVmRead(VmcsField::kHostDsSelector));
 		HYPERPLATFORM_LOG_DEBUG("kHostEsSelector : %X", UtilVmRead(VmcsField::kHostEsSelector));
@@ -189,7 +195,22 @@ extern "C" {
 	}
 
 
+	VOID PrintReadOnlyField()
+	{
 
+		HYPERPLATFORM_LOG_DEBUG("###################### Natural Read-only data field #############################");
+		HYPERPLATFORM_LOG_DEBUG("kGuestPhysicalAddress: %I64X  ",  UtilVmRead(VmcsField::kGuestPhysicalAddress));		
+		HYPERPLATFORM_LOG_DEBUG("###################### 64bit Read-only data field #############################");
+		HYPERPLATFORM_LOG_DEBUG("kVmInstructionError	:%I64X  ", UtilVmRead(VmcsField::kVmInstructionError));
+		HYPERPLATFORM_LOG_DEBUG("kVmExitReason			:%I64X  ", UtilVmRead(VmcsField::kVmExitReason));
+		HYPERPLATFORM_LOG_DEBUG("kVmExitIntrInfo		:%I64X  ", UtilVmRead(VmcsField::kVmExitIntrInfo));
+		HYPERPLATFORM_LOG_DEBUG("kVmExitIntrErrorCode	:%I64X  ", UtilVmRead(VmcsField::kVmExitIntrErrorCode));
+		HYPERPLATFORM_LOG_DEBUG("kIdtVectoringInfoField	:%I64X  ", UtilVmRead(VmcsField::kIdtVectoringInfoField));
+		HYPERPLATFORM_LOG_DEBUG("kIdtVectoringErrorCode	:%I64X  ", UtilVmRead(VmcsField::kIdtVectoringErrorCode));
+		HYPERPLATFORM_LOG_DEBUG("kVmExitInstructionLen	:%I64X  ", UtilVmRead(VmcsField::kVmExitInstructionLen));
+		HYPERPLATFORM_LOG_DEBUG("kVmxInstructionInfo	:%I64X  ", UtilVmRead(VmcsField::kVmxInstructionInfo));
+
+	}
 
 	ULONG_PTR* SelectRegister(ULONG index, GpRegisters *gp_regs)
 	{
@@ -843,7 +864,7 @@ extern "C" {
 		*/
 		ULONG64 kIa32Debugctl;
 		VmRead64(VmcsField::kGuestIa32Debugctl, guest_vmcs_va, &kIa32Debugctl);
-		UtilVmWrite64(VmcsField::kVmcsLinkPointer, MAXULONG64);//不使用影子VMCS
+		UtilVmWrite64(VmcsField::kVmcsLinkPointer, MAXULONG64);//涓嶄娇鐢ㄥ奖瀛怴MCS
 		UtilVmWrite64(VmcsField::kGuestIa32Debugctl, kIa32Debugctl);
 
 		/*
@@ -868,6 +889,9 @@ extern "C" {
 		ULONG64	kGuestCr3;
 		ULONG64	kGuestCr4;
 
+
+
+
 		VmRead64(VmcsField::kGuestSysenterEsp, guest_vmcs_va, &kGuestSysenterEsp);
 		VmRead64(VmcsField::kGuestSysenterEip, guest_vmcs_va, &kGuestSysenterEip);
 		VmRead64(VmcsField::kGuestPendingDbgExceptions, guest_vmcs_va, &guest_Pending_dbg_exception);
@@ -886,6 +910,8 @@ extern "C" {
 		VmRead64(VmcsField::kGuestCr0, guest_vmcs_va, &kGuestCr0);
 		VmRead64(VmcsField::kGuestCr3, guest_vmcs_va, &kGuestCr3);
 		VmRead64(VmcsField::kGuestCr4, guest_vmcs_va, &kGuestCr4);
+
+		HYPERPLATFORM_LOG_DEBUG("Vmcs12 GuestCr3: %I64X  Vmcs02 GuestCr3: %I64X", kGuestCr3, UtilVmRead64(VmcsField::kGuestCr3));
 
 		UtilVmWrite(VmcsField::kGuestSysenterEsp, kGuestSysenterEsp);
 		UtilVmWrite(VmcsField::kGuestSysenterEip, kGuestSysenterEip);

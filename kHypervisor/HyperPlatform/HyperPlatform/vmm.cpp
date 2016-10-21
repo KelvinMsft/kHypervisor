@@ -1530,32 +1530,7 @@ extern "C" {
 	//----------------------------------------------------------------------------------------------------------------//
 
 
-	//IF (register operand) or (CR0.PE = 0) or (CR4.VMXE = 0) or (RFLAGS.VM = 1) or (IA32_EFER.LMA = 1 and CS.L = 0) 
-	//if and only if compatibility mode is on 
-	/*
-	//https://en.wikipedia.org/wiki/Control_register about MSR.EFER structure
-	*/
 
-	/*
-	See: Code Segment Descriptor in 64-bit Mode
-
-	if IA32_EFER.LMA = 1	(IA-32e mode is active)
-	if CS.D = 1
-	32bit mode or compatibility mode
-	if CS.D = 0
-	64bit mode
-	*/
-	_Use_decl_annotations_ static ULONG64 GetControlValue(Msr msr, ULONG32* highpart, ULONG32* lowpart)
-	{
-		LARGE_INTEGER msr_value = {};
-
-		msr_value.QuadPart = UtilReadMsr64(msr);
-		// bit == 0 in high word ==> must be zero  
-		*highpart = msr_value.HighPart;
-		// bit == 1 in low word  ==> must be one
-		*lowpart = msr_value.LowPart;
-		return msr_value.QuadPart;
-	}
 
 	//What functions we support for nested 
 	void init_vmx_extensions_bitmask(void)
@@ -1924,11 +1899,11 @@ extern "C" {
 	VOID VmptrldEmulate(GuestContext* guest_context)
 	{
 		do
-		{
-			ULONG64			  InstructionPointer = { UtilVmRead64(VmcsField::kGuestRip) };
-			ULONG64			  StackPointer = { UtilVmRead64(VmcsField::kGuestRsp) };
-			ULONG64			  vmcs_region_pa = *(PULONG64)DecodeOrVmclearOrVmptrldOrVmptrstOrVmxon(guest_context);
-			PROCESSOR_NUMBER	  procnumber = {};
+		{			
+			PROCESSOR_NUMBER	procnumber = {};
+			ULONG64				InstructionPointer = { UtilVmRead64(VmcsField::kGuestRip) };
+			ULONG64				StackPointer = { UtilVmRead64(VmcsField::kGuestRsp) };
+			ULONG64				vmcs_region_pa = *(PULONG64)DecodeOrVmclearOrVmptrldOrVmptrstOrVmxon(guest_context);
 			VmControlStructure* vmcs_region_va = (VmControlStructure*)UtilVaFromPa(vmcs_region_pa);
 			ULONG				vcpu_index = KeGetCurrentProcessorNumberEx(&procnumber);
 			// if vmcs region is NULL
@@ -2043,8 +2018,8 @@ extern "C" {
 			}
 			VmRead16(VmcsField::kVirtualProcessorId, (ULONG_PTR)vmcs_region_rw_va, &vpid);
 
-			g_vcpus[vcpu_index]->current_vmcs = vmcs_region_rw_pa;		//vmcs02 - we will control its structure in Vmread/Vmwrite 
-			g_vcpus[vcpu_index]->guest_vmcs = vmcs_region_pa;		    //vmcs12 - we will control its structure in Vmread/Vmwrite
+			g_vcpus[vcpu_index]->current_vmcs = vmcs_region_rw_pa;		//vmcs02' physical address - we will control its structure in Vmread/Vmwrite 
+			g_vcpus[vcpu_index]->guest_vmcs = vmcs_region_pa;		    //vmcs12' physical address - we will control its structure in Vmread/Vmwrite
 			g_vcpus[vcpu_index]->kVirtualProcessorId = vpid;
 
 			HYPERPLATFORM_LOG_DEBUG("VMPTRLD: Guest Instruction Pointer %I64X Guest Stack Pointer: %I64X  Guest VMCS PA: %I64X Guest VMCS VA : %I64X Run VMCS PA : %I64X Run VMCS VA : %I64X \r\n",
@@ -2069,8 +2044,8 @@ extern "C" {
 		{
 			PROCESSOR_NUMBER  procnumber = { 0 };
 			ULONG			  vcpu_index = KeGetCurrentProcessorNumberEx(&procnumber);
-			ULONG64			  guest_vmcs_pa = g_vcpus[vcpu_index]->guest_vmcs;
-			ULONG64			  guest_vmcs_va = (ULONG64)UtilVaFromPa(guest_vmcs_pa);
+			ULONG64			  vmcs12_pa = g_vcpus[vcpu_index]->guest_vmcs;
+			ULONG64			  vmcs12_va = (ULONG64)UtilVaFromPa(vmcs12_pa);
 
 			// if vCPU not run in VMX mode
 			if (!g_vcpus[vcpu_index]->inVMX)
@@ -2115,7 +2090,7 @@ extern "C" {
 
 			///TODO: If in VMX non-root operation, should be VM Exit
 
-			//Get Guest CPL
+			//Get Guest CPLvm
 			if (GetGuestCPL() > 0)
 			{
 				HYPERPLATFORM_LOG_DEBUG(("VMREAD: Need running in Ring - 0 ! \r\n")); 	  //#gp
@@ -2139,7 +2114,7 @@ extern "C" {
 				break;
 			}
 
-			if ((ULONG64)guest_vmcs_va == 0xFFFFFFFFFFFFFFFF)
+			if ((ULONG64)vmcs12_va == 0xFFFFFFFFFFFFFFFF)
 			{
 				HYPERPLATFORM_LOG_DEBUG(("VMREAD: 0xFFFFFFFFFFFFFFFF		 ! \r\n")); 	  //#gp
 				VMfailInvalid(&guest_context->flag_reg);
@@ -2162,19 +2137,19 @@ extern "C" {
 				auto reg = VmmpSelectRegister((ULONG)regIndex, guest_context);
 				if (operand_size == VMCS_FIELD_WIDTH_16BIT)
 				{
-					VmRead16(field, guest_vmcs_va, (PUSHORT)reg);
-					HYPERPLATFORM_LOG_DEBUG("VMREAD16: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, guest_vmcs_va, offset, *(PUSHORT)reg);
+					VmRead16(field, vmcs12_va, (PUSHORT)reg);
+					HYPERPLATFORM_LOG_DEBUG("VMREAD16: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PUSHORT)reg);
 
 				}
 				if (operand_size == VMCS_FIELD_WIDTH_32BIT)
 				{
-					VmRead32(field, guest_vmcs_va, (PULONG32)reg);
-					HYPERPLATFORM_LOG_DEBUG("VMREAD32: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, guest_vmcs_va, offset, *(PULONG32)reg);
+					VmRead32(field, vmcs12_va, (PULONG32)reg);
+					HYPERPLATFORM_LOG_DEBUG("VMREAD32: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PULONG32)reg);
 				}
 				if (operand_size == VMCS_FIELD_WIDTH_64BIT || operand_size == VMCS_FIELD_WIDTH_NATURAL_WIDTH)
 				{
-					VmRead64(field, guest_vmcs_va, (PULONG64)reg);
-					HYPERPLATFORM_LOG_DEBUG("VMREAD64: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, guest_vmcs_va, offset, *(PULONG64)reg);
+					VmRead64(field, vmcs12_va, (PULONG64)reg);
+					HYPERPLATFORM_LOG_DEBUG("VMREAD64: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PULONG64)reg);
 				}
 
 			}
@@ -2182,18 +2157,18 @@ extern "C" {
 			{
 				if (operand_size == VMCS_FIELD_WIDTH_16BIT)
 				{
-					VmRead16(field, guest_vmcs_va, (PUSHORT)memAddress);
-					HYPERPLATFORM_LOG_DEBUG("VMREAD16: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, guest_vmcs_va, offset, *(PUSHORT)memAddress);
+					VmRead16(field, vmcs12_va, (PUSHORT)memAddress);
+					HYPERPLATFORM_LOG_DEBUG("VMREAD16: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PUSHORT)memAddress);
 				}
 				if (operand_size == VMCS_FIELD_WIDTH_32BIT)
 				{
-					VmRead32(field, guest_vmcs_va, (PULONG32)memAddress);
-					HYPERPLATFORM_LOG_DEBUG("VMREAD32: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, guest_vmcs_va, offset, *(PULONG32)memAddress);
+					VmRead32(field, vmcs12_va, (PULONG32)memAddress);
+					HYPERPLATFORM_LOG_DEBUG("VMREAD32: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PULONG32)memAddress);
 				}
 				if (operand_size == VMCS_FIELD_WIDTH_64BIT || operand_size == VMCS_FIELD_WIDTH_NATURAL_WIDTH)
 				{
-					VmRead64(field, guest_vmcs_va, (PULONG64)memAddress);
-					HYPERPLATFORM_LOG_DEBUG("VMREAD64: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, guest_vmcs_va, offset, *(PULONG64)memAddress);
+					VmRead64(field, vmcs12_va, (PULONG64)memAddress);
+					HYPERPLATFORM_LOG_DEBUG("VMREAD64: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PULONG64)memAddress);
 				}
 			}
 			VMSucceed(&guest_context->flag_reg);
@@ -2208,10 +2183,8 @@ extern "C" {
 		{
 			PROCESSOR_NUMBER  procnumber = { 0 };
 			ULONG			  vcpu_index = KeGetCurrentProcessorNumberEx(&procnumber);
-			ULONG64			  guest_vmcs_pa = (ULONG64)g_vcpus[vcpu_index]->guest_vmcs;
-			ULONG64			  guest_vmcs_va = (ULONG64)UtilVaFromPa(guest_vmcs_pa);
-			ULONG64			  run_vmcs_pa = (ULONG64)g_vcpus[vcpu_index]->current_vmcs;
-			ULONG64			  run_vmcs_va = (ULONG64)UtilVaFromPa(run_vmcs_pa);
+			ULONG64			  vmcs12_pa = (ULONG64)g_vcpus[vcpu_index]->guest_vmcs;
+			ULONG64			  vmcs12_va = (ULONG64)UtilVaFromPa(vmcs12_pa);
 			// if vCPU not run in VMX mode
 			if (!g_vcpus[vcpu_index]->inVMX)
 			{
@@ -2286,22 +2259,19 @@ extern "C" {
 			auto operand_size = VMCS_FIELD_WIDTH((int)field);
 			if (operand_size == VMCS_FIELD_WIDTH_16BIT)
 			{
-				VmWrite16(field, guest_vmcs_va, Value);
-				VmWrite16(field, run_vmcs_va, Value);
-				HYPERPLATFORM_LOG_DEBUG("VMWRITE: field: %I64X base: %I64X Offset: %I64X Value: %I64X  \r\n", field, guest_vmcs_va, offset, (USHORT)Value);
+				VmWrite16(field, vmcs12_va, Value);
+				HYPERPLATFORM_LOG_DEBUG("VMWRITE: field: %I64X base: %I64X Offset: %I64X Value: %I64X  \r\n", field, vmcs12_va, offset, (USHORT)Value);
 			}
 
 			if (operand_size == VMCS_FIELD_WIDTH_32BIT)
 			{
-				VmWrite32(field, guest_vmcs_va, Value);
-				VmWrite32(field, run_vmcs_va, Value);
-				HYPERPLATFORM_LOG_DEBUG("VMWRITE: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, guest_vmcs_va, offset, (ULONG32)Value);
+				VmWrite32(field, vmcs12_va, Value);
+				HYPERPLATFORM_LOG_DEBUG("VMWRITE: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, (ULONG32)Value);
 			}
 			if (operand_size == VMCS_FIELD_WIDTH_64BIT || operand_size == VMCS_FIELD_WIDTH_NATURAL_WIDTH)
 			{
-				VmWrite64(field, guest_vmcs_va, Value);
-				VmWrite64(field, run_vmcs_va, Value);
-				HYPERPLATFORM_LOG_DEBUG("VMWRITE: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, guest_vmcs_va, offset, (ULONG64)Value);
+				VmWrite64(field, vmcs12_va, Value);
+				HYPERPLATFORM_LOG_DEBUG("VMWRITE: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, (ULONG64)Value);
 			}
 
 			VMSucceed(&guest_context->flag_reg);
@@ -2358,6 +2328,7 @@ extern "C" {
 	{
 		PROCESSOR_NUMBER  procnumber = { 0 };
 		ULONG			  vcpu_index = KeGetCurrentProcessorNumberEx(&procnumber);
+		VmxStatus		  status;
 		do {
 			//not in vmx mode
 			if (!g_vcpus[vcpu_index]->inVMX)
@@ -2415,10 +2386,10 @@ extern "C" {
 				///	   And Handle it well
 				break;
 			}
-
-			auto current_vmcs = g_vcpus[vcpu_index]->current_vmcs;
-			auto current_vmcs_va = (ULONG64)UtilVaFromPa(current_vmcs);
-			if (current_vmcs == 0xFFFFFFFFFFFFFFFF)
+			//vmcs02
+			auto vmcs02_pa = g_vcpus[vcpu_index]->current_vmcs;
+			auto vmcs02_va = (ULONG64)UtilVaFromPa(vmcs02_pa);
+			if (vmcs02_pa == 0xFFFFFFFFFFFFFFFF)
 			{
 				HYPERPLATFORM_LOG_DEBUG(("VMLAUNCH: VMCS still not loaded ! \r\n"));
 				VMfailInvalid(&guest_context->flag_reg);
@@ -2432,589 +2403,31 @@ extern "C" {
 			///5. VM Entry success
 
 
-			///Guest passed it to us, and read/write it  VMCS 1-2 
-			auto  guest_vmcs = g_vcpus[vcpu_index]->guest_vmcs;
-			auto  guest_vmcs_va = (ULONG64)UtilVaFromPa(guest_vmcs);
-			UCHAR svi; /* Servicing Virtual Interrupt */
-			UCHAR rvi; /* Requesting Virtual Interrupt */
-
-					   //16bit control field
-			USHORT guest_interrupt_status = 0;
-			USHORT guest_vpid = 0;
-			USHORT	pml_index = 0;
-
-			//32bit control field
-			ULONG32 guest_pin_base_ctls = 0;
-			ULONG32 guest_primary_processor_base_ctls = 0;
-			ULONG32 guest_exception_bitmap = 0;
-			ULONG32 guest_page_fault_mask = 0;
-			ULONG32 guest_page_fault_error_code_match = 0;
-			ULONG32 guest_cr3_target_count = 0;
-			ULONG32 vmexit_ctrls;
-			ULONG32 vmexit_msr_store_cnt;
-			ULONG32 vmexit_msr_load_cnt;
-			ULONG32 vmentry_ctrls;
-			ULONG32 vmentry_msr_load_cnt;
-			ULONG32 vmentry_interr_info;
-			ULONG32 vmentry_except_Err_code;
-			ULONG32 vmentry_instr_length;
-			ULONG32 guest_tpr_threshold = 0;
-			ULONG32 guest_secondary_processor_base_ctls = 0;
-			ULONG32 pause_loop_exiting_gap = 0;
-			ULONG32 pause_loop_exiting_window = 0;
-
-			//natural-width control field
-			ULONG_PTR guest_cr0_mask = 0;
-			ULONG_PTR guest_cr4_mask = 0;
-			ULONG_PTR guest_cr0_read_shadow = 0;
-			ULONG_PTR guest_cr4_read_shadow = 0;
-			ULONG_PTR guest_cr3_target_value[4] = { 0 };
-
-			//64bit control field
-			ULONG_PTR guest_io_bitmap[2];
-			ULONG_PTR guest_msr_bitmap = 0;
-			ULONG_PTR guest_eoi_exit_bitmap[8] = {};
-			ULONG_PTR guest_apic_access_address = 0;
-			ULONG_PTR guest_ept_pointer = 0;
-			ULONG_PTR vmfunc_ctrls = 0;
-			ULONG_PTR pml_address = 0;
-			ULONG_PTR eptp_list_address = 0;
-
-
-			guest_pin_base_ctls = (ULONG32)UtilVmRead(VmcsField::kPinBasedVmExecControl);
-			guest_primary_processor_base_ctls = (ULONG32)UtilVmRead(VmcsField::kCpuBasedVmExecControl);
-			guest_secondary_processor_base_ctls = (ULONG32)UtilVmRead(VmcsField::kSecondaryVmExecControl);
-
-			ULONG_PTR guest_vmreadBitmapAddress = 0;
-			ULONG_PTR guest_vmwriteBitMapAddress = 0;
-			ULONG_PTR guest_vmexceptionAddress = 0;
-			ULONG_PTR guest_virtual_apicpage = 0;
-
-			vmexit_ctrls = (ULONG32)UtilVmRead(VmcsField::kVmExitControls);
-			vmexit_msr_store_cnt = (ULONG32)UtilVmRead(VmcsField::kVmExitMsrStoreCount);
-			vmexit_msr_load_cnt = (ULONG32)UtilVmRead(VmcsField::kVmExitMsrLoadCount);
-
-			vmentry_interr_info = (ULONG32)UtilVmRead(VmcsField::kVmEntryIntrInfoField);
-			vmentry_except_Err_code = (ULONG32)UtilVmRead(VmcsField::kVmEntryExceptionErrorCode);
-			vmentry_instr_length = (ULONG32)UtilVmRead(VmcsField::kVmEntryInstructionLen);
-			vmentry_ctrls = (ULONG32)UtilVmRead(VmcsField::kVmEntryControls);
-			vmentry_msr_load_cnt = (ULONG32)UtilVmRead(VmcsField::kVmEntryMsrLoadCount);
-
-			guest_exception_bitmap = (ULONG32)UtilVmRead(VmcsField::kExceptionBitmap);
-			guest_page_fault_mask = (ULONG32)UtilVmRead(VmcsField::kPageFaultErrorCodeMask);
-			guest_page_fault_error_code_match = (ULONG32)UtilVmRead(VmcsField::kPageFaultErrorCodeMatch);
-			guest_cr3_target_count = (ULONG32)UtilVmRead(VmcsField::kCr3TargetCount);
-
-			guest_cr0_mask = UtilVmRead64(VmcsField::kCr0GuestHostMask);
-			guest_cr4_mask = UtilVmRead64(VmcsField::kCr4GuestHostMask);
-			guest_cr0_read_shadow = UtilVmRead64(VmcsField::kCr0ReadShadow);
-			guest_cr4_read_shadow = UtilVmRead64(VmcsField::kCr4ReadShadow);
-			guest_cr3_target_value[0] = UtilVmRead64(VmcsField::kCr3TargetValue0);
-			guest_cr3_target_value[1] = UtilVmRead64(VmcsField::kCr3TargetValue1);
-			guest_cr3_target_value[2] = UtilVmRead64(VmcsField::kCr3TargetValue2);
-			guest_cr3_target_value[3] = UtilVmRead64(VmcsField::kCr3TargetValue3);
-			//VmRead32(VmcsField::kPinBasedVmExecControl, guest_vmcs_va, &guest_pin_base_ctls);
-			{
-				//reverse bit
-			}
-
-
-			//Checking start  
-			ULONG32 highpart, lowpart = 0;
-			const auto use_true_msrs = Ia32VmxBasicMsr{ UtilReadMsr64(Msr::kIa32VmxBasic) }.fields.vmx_capability_hint;
-
-			GetControlValue((use_true_msrs) ? Msr::kIa32VmxTruePinbasedCtls
-				: Msr::kIa32VmxPinbasedCtls,
-				&highpart, &lowpart);
-
-			// check if bit should be 1 but we set 0
-			// For example:
-			// lowpart : 10110  msr given
-			// ourpart : 01001  bit4 bit2 bit1 should be 1
-			// (~01001) & 10110 = 10110 & 10110 = 10110 it is VM Fail
-
-			// lowpart : 10110  msr given
-			// ourpart : 10110  bit4 bit2 bit1 should be 1
-			// 01001 & 10110 = 0 it is success
-			if (~guest_pin_base_ctls & lowpart)
-			{
-				VMfailInvalid(&guest_context->flag_reg);
-				HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: pin base low part error \r\n");
-				break;
-			}
-
-			// check if bit should be zero but we set 1
-			// For example:
-			// highpart : 00000 msr given
-			// ourpart  : 01001 all bit should be 0
-			// we can't use above method since always == 0 , so reverse highpart 
-			if (guest_pin_base_ctls & ~highpart)
-			{
-				VMfailInvalid(&guest_context->flag_reg);
-				HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: pin base high part error \r\n");
-				break;
-			}
-
-			if (!(guest_pin_base_ctls & VMX_PIN_BASED_NMI_EXITING))
-			{
-				if (guest_pin_base_ctls & VMX_PIN_BASED_VIRTUAL_NMI)
-				{
-					VMfailInvalid(&guest_context->flag_reg);
-					HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: Virtual NMI without set NMI EXITING\r\n");
-					break;
-				}
-			}
-
-			if (!(guest_pin_base_ctls & VMX_PIN_BASED_VIRTUAL_NMI))
-			{
-				if (guest_primary_processor_base_ctls & VMX_PRCESSOR_BASED_NMI_WINDOW_EXITING)
-				{
-					VMfailInvalid(&guest_context->flag_reg);
-					HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: NMI Windows exit without set Virtual NMI in pin base control field\r\n");
-					break;
-				}
-			}
-
-			GetControlValue(Msr::kIa32VmxProcBasedCtls, &highpart, &lowpart);
-
-			if (~guest_primary_processor_base_ctls & lowpart)
-			{
-				VMfailInvalid(&guest_context->flag_reg);
-				HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: processor base low part error \r\n");
-				break;
-			}
-
-			if (guest_primary_processor_base_ctls & ~highpart)
-			{
-				VMfailInvalid(&guest_context->flag_reg);
-				HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: processor base high part error \r\n");
-				break;
-			}
-			if (guest_secondary_processor_base_ctls)
-			{
-				GetControlValue(Msr::kIa32VmxProcBasedCtls2, &highpart, &lowpart);
-				if (~guest_secondary_processor_base_ctls & lowpart)
-				{
-					VMfailInvalid(&guest_context->flag_reg);
-					HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: processor base2 low part error \r\n");
-					break;
-				}
-				if (guest_secondary_processor_base_ctls & ~highpart)
-				{
-					VMfailInvalid(&guest_context->flag_reg);
-					HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: processor base2 high part error \r\n");
-					break;
-				}
-			}
-
-			if (guest_cr3_target_count > 4)
-			{
-				VMfailInvalid(&guest_context->flag_reg);
-				HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: dose not support cr3 target count > 4 \r\n");
-				break;
-			}
-
-			if (guest_secondary_processor_base_ctls & VMX_PRCESSOR_BASED_IO_BITMAPS)
-			{
-				//Read From VMCS0
-				guest_io_bitmap[0] = UtilVmRead64(VmcsField::kIoBitmapA);
-				guest_io_bitmap[1] = UtilVmRead64(VmcsField::kIoBitmapB);
-
-				if (!CheckPhysicalAddress(guest_io_bitmap[0]) ||
-					!CheckPhysicalAddress(guest_io_bitmap[1]))
-				{
-					VMfailInvalid(&guest_context->flag_reg);
-					HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: IO_BITMAP invalid physical address \r\n");
-					break;
-				}
-
-			}
-			if (guest_secondary_processor_base_ctls & VMX_PRCESSOR_BASED_MSR_BITMAPS)
-			{
-				//VmRead64(VmcsField::kMsrBitmap, guest_vmcs_va, &guest_msr_bitmap);
-				guest_msr_bitmap = UtilVmRead64(VmcsField::kMsrBitmap);
-				if (!CheckPhysicalAddress(guest_msr_bitmap))
-				{
-					VMfailInvalid(&guest_context->flag_reg);
-					HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: msr bitmap invalid physical address \r\n");
-					break;
-				}
-
-			}
-			if (guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_VMCS_SHADOWING)
-			{
-
-				//VmRead64(VmcsField::kVmreadBitmapAddress, guest_vmcs_va, &guest_vmreadBitmapAddress);
-				guest_vmreadBitmapAddress = UtilVmRead64(VmcsField::kVmreadBitmapAddress);
-
-				if (!CheckPhysicalAddress(guest_vmreadBitmapAddress))
-				{
-					HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: VMCS EXEC CTRL: VMREAD bitmap phy addr malformed");
-					VMfailInvalid(&guest_context->flag_reg);
-					break;
-				}
-
-				//VmRead64(VmcsField::kVmwriteBitmapAddress, guest_vmcs_va, &guest_vmwriteBitMapAddress);
-				guest_vmwriteBitMapAddress = UtilVmRead64(VmcsField::kVmwriteBitmapAddress);
-				if (!CheckPhysicalAddress(guest_vmwriteBitMapAddress))
-				{
-					HYPERPLATFORM_LOG_DEBUG(("VMLAUNCH: VMCS EXEC CTRL: VMWRITE bitmap phy addr malformed"));
-					VMfailInvalid(&guest_context->flag_reg);
-					break;
-				}
-			}
-
-			if (guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_EPT_VIOLATION_EXCEPTION)
-			{
-				//VmRead64(VmcsField::kVirtualizationExceptionInfoAddress,guest_vmcs_va, &guest_vmexceptionAddress);
-				guest_vmexceptionAddress = UtilVmRead64(VmcsField::kVirtualizationExceptionInfoAddress);
-				if (!CheckPhysicalAddress(guest_vmexceptionAddress))
-				{
-					HYPERPLATFORM_LOG_DEBUG(("VMLAUNCH: VMCS EXEC CTRL: broken #VE information address"));
-					VMfailInvalid(&guest_context->flag_reg);
-					break;
-				}
-
-			}
-
-			if (guest_primary_processor_base_ctls & VMX_PRCESSOR_BASED_TPR_SHADOW)
-			{
-				//VmRead64(VmcsField::kVirtualApicPageAddr, guest_vmcs_va, &guest_virtual_apicpage);
-				guest_virtual_apicpage = UtilVmRead64(VmcsField::kVirtualApicPageAddr);
-				if (!CheckPhysicalAddress(guest_virtual_apicpage))
-				{
-					HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: VMCS EXEC CTRL: virtual apic phy addr malformed");
-					VMfailInvalid(&guest_context->flag_reg);
-					break;
-				}
-
-
-#if MY_SUPPORT_VMX >= 2
-				if (guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_VIRTUAL_INT_DELIVERY)
-				{
-					if (!guest_pin_base_ctls & VMX_PIN_BASED_EXTERNAL_INTERRUPT_VMEXIT)
-					{
-						HYPERPLATFORM_LOG_DEBUG(("VMLAUNCH: VMCS EXEC CTRL: virtual interrupt delivery must be set together with external interrupt exiting"));
-						VMfailInvalid(&guest_context->flag_reg);
-						break;
-					}
-					guest_eoi_exit_bitmap[0] = UtilVmRead64(VmcsField::kEoiExitBitmap0);
-					guest_eoi_exit_bitmap[1] = UtilVmRead64(VmcsField::kEoiExitBitmap0High);
-					guest_eoi_exit_bitmap[2] = UtilVmRead64(VmcsField::kEoiExitBitmap1);
-					guest_eoi_exit_bitmap[3] = UtilVmRead64(VmcsField::kEoiExitBitmap1High);
-					guest_eoi_exit_bitmap[4] = UtilVmRead64(VmcsField::kEoiExitBitmap2);
-					guest_eoi_exit_bitmap[5] = UtilVmRead64(VmcsField::kEoiExitBitmap2High);
-					guest_eoi_exit_bitmap[6] = UtilVmRead64(VmcsField::kEoiExitBitmap3);
-					guest_eoi_exit_bitmap[7] = UtilVmRead64(VmcsField::kEoiExitBitmap3High);
-
-					guest_interrupt_status = (USHORT)UtilVmRead(VmcsField::kGuestInterruptStatus);
-
-					rvi = guest_interrupt_status & 0xff;
-					svi = guest_interrupt_status >> 8;
-				}
-				else
-#endif
-				{
-					//VmRead32(VmcsField::kTprThreshold, guest_vmcs_va, &guest_tpr_threshold);
-					guest_tpr_threshold = (ULONG32)UtilVmRead(VmcsField::kTprThreshold);
-
-					if (guest_tpr_threshold & 0xfffffff0)
-					{
-						HYPERPLATFORM_LOG_DEBUG(("VMLAUNCH: VMCS EXEC CTRL: TPR threshold too big"));
-						VMfailInvalid(&guest_context->flag_reg);
-						break;
-					}
-
-					if (!(guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_VIRTUALIZE_APIC_ACCESSES))
-					{
-						/*USHORT tpr_shadow = (VMX_Read_Virtual_APIC(BX_LAPIC_TPR) >> 4) & 0xf;
-						if (guest_tpr_threshold > tpr_shadow) {
-						VMfailInvalid(&guest_context->flag_reg);
-						break;
-						}
-						*/
-					}
-
-				}
-			}
-#if MY_SUPPORT_VMX >= 2
-			else
-			{
-				if (guest_secondary_processor_base_ctls & (VMX_SECONDARY_PROCESSOR_BASED_VIRTUALIZE_X2APIC_MODE |
-					VMX_SECONDARY_PROCESSOR_BASED_VIRTUALIZE_APIC_REGISTERS |
-					VMX_SECONDARY_PROCESSOR_BASED_VIRTUAL_INT_DELIVERY))
-				{
-					HYPERPLATFORM_LOG_DEBUG(("VMLAUNCH: VMCS EXEC CTRL: apic virtualization is enabled without TPR shadow"));
-					VMfailInvalid(&guest_context->flag_reg);
-					break;
-				}
-			}
-#endif
-
-
-			if (guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_VIRTUALIZE_APIC_ACCESSES)
-			{
-				//VmRead64(VmcsField::kApicAccessAddr, guest_vmcs_va, &guest_apic_access_address);
-				guest_apic_access_address = UtilVmRead64(VmcsField::kApicAccessAddr);
-				if (!CheckPhysicalAddress(guest_apic_access_address))
-				{
-					HYPERPLATFORM_LOG_DEBUG(("VMLAUNCH: VMCS EXEC CTRL: apic access page phy addr malformed"));
-					VMfailInvalid(&guest_context->flag_reg);
-					break;
-				}
-
-			}
-
-
-#if MY_SUPPORT_VMX >= 2
-			if (guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_VIRTUALIZE_X2APIC_MODE)
-			{
-				HYPERPLATFORM_LOG_DEBUG(("VMFAIL: VMCS EXEC CTRL: virtualize X2APIC mode enabled together with APIC access virtualization"));
-				VMfailInvalid(&guest_context->flag_reg);
-				break;
-			}
-#endif
-
-#if MY_SUPPORT_VMX >= 2
-			if (guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_EPT_ENABLE)
-			{
-				//VmRead64(VmcsField::kEptPointer, guest_vmcs_va, &guest_ept_pointer);
-				guest_ept_pointer = UtilVmRead64(VmcsField::kEptPointer);
-				if (!is_eptptr_valid(guest_ept_pointer))
-				{
-					HYPERPLATFORM_LOG_DEBUG(("VMFAIL: VMCS EXEC CTRL: invalid EPTPTR value"));
-					VMfailInvalid(&guest_context->flag_reg);
-					break;
-				}
-
-			}
-			else {
-				if (guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_UNRESTRICTED_GUEST)
-				{
-					HYPERPLATFORM_LOG_DEBUG(("VMFAIL: VMCS EXEC CTRL: unrestricted guest without EPT"));
-					VMfailInvalid(&guest_context->flag_reg);
-					break;
-				}
-			}
-
-			if (guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_VPID_ENABLE) {
-				//VmRead16(VmcsField::kVirtualProcessorId, guest_vmcs_va, &guest_vpid);
-				guest_vpid = (USHORT)UtilVmRead(VmcsField::kVirtualProcessorId);
-				if (guest_vpid == 0)
-				{
-					HYPERPLATFORM_LOG_DEBUG("VMFAIL: VMCS EXEC CTRL: guest VPID == 0");
-					VMfailInvalid(&guest_context->flag_reg);
-					break;
-				}
-
-			}
-
-			if (guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_PAUSE_LOOP_VMEXIT)
-			{
-				//VmRead32(VmcsField::kPleGap,guest_vmcs_va, &pause_loop_exiting_gap);
-				//VmRead32(VmcsField::kPleWindow,guest_vmcs_va, &pause_loop_exiting_window);
-				pause_loop_exiting_gap = (ULONG32)UtilVmRead(VmcsField::kPleGap);
-				pause_loop_exiting_window = (ULONG32)UtilVmRead(VmcsField::kPleWindow);
-
-			}
-
-			if (guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_VMFUNC_ENABLE)
-			{
-				//VmRead64(VmcsField::kVmFuncCtls, guest_vmcs_va, &vmfunc_ctrls);
-				vmfunc_ctrls = UtilVmRead64(VmcsField::kVmFuncCtls);
-				ULONG64	all = GetControlValue(Msr::kIa32VmxVmfunc, &highpart, &lowpart);
-
-				if (vmfunc_ctrls & ~all)
-				{
-					HYPERPLATFORM_LOG_DEBUG(("VMLAUNCH: VMCS VM Functions control reserved bits set"));
-				}
-
-				if (vmfunc_ctrls & VMX_VMFUNC_EPTP_SWITCHING_MASK)
-				{
-					if ((guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_EPT_ENABLE) == 0)
-					{
-						HYPERPLATFORM_LOG_DEBUG(("VMLAUNCH: VMFUNC EPTP-SWITCHING: EPT disabled"));
-						VMfailInvalid(&guest_context->flag_reg);
-						break;
-					}
-				}
-
-			}
-			else
-			{
-				vmfunc_ctrls = 0;
-			}
-
-			///VmRead64(VmcsField::kEptpListAddress, guest_vmcs_va, &eptp_list_address);
-			eptp_list_address = UtilVmRead64(VmcsField::kEptpListAddress);
-			if (!CheckPhysicalAddress(eptp_list_address))
-			{
-				HYPERPLATFORM_LOG_DEBUG(("VMLAUNCH: VMFUNC EPTP-SWITCHING: eptp list phy addr malformed"));
-				VMfailInvalid(&guest_context->flag_reg);
-				break;
-			}
-
-
-
-			if (guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_PML_ENABLE) {
-				if ((guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_EPT_ENABLE) == 0) {
-					HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: VMCS EXEC CTRL: PML is enabled without EPT");
-					VMfailInvalid(&guest_context->flag_reg);
-					break;
-				}
-
-				pml_address = UtilVmRead64(VmcsField::kPmlAddress);
-
-				if (!CheckPhysicalAddress(pml_address))
-				{
-					HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: VMCS EXEC CTRL: PML base phy addr malformed");
-					VMfailInvalid(&guest_context->flag_reg);
-					break;
-				}
-				VmRead16(VmcsField::kGuestPmlIndex, guest_vmcs_va, &pml_index);
-			}
-#endif
+			//Guest passed it to us, and read/write it  VMCS 1-2 
+			auto  vmcs12_pa = g_vcpus[vcpu_index]->guest_vmcs;
+			auto  vmcs12_va = (ULONG64)UtilVaFromPa(vmcs12_pa);
+			
 			// Write a VMCS revision identifier
 			const Ia32VmxBasicMsr vmx_basic_msr = { UtilReadMsr64(Msr::kIa32VmxBasic) };
-			ULONG64 host_rsp = UtilVmRead64(VmcsField::kHostRsp);
-			ULONG64 host_rip = UtilVmRead64(VmcsField::kHostRip);
-			ULONG32 exit_control = (ULONG32)UtilVmRead(VmcsField::kVmExitControls);
-
-			RtlFillMemory((PVOID)current_vmcs_va, 0, PAGE_SIZE);
-			VmControlStructure* ptr = (VmControlStructure*)current_vmcs_va;
+				RtlFillMemory((PVOID)vmcs02_va, 0, PAGE_SIZE);
+			VmControlStructure* ptr = (VmControlStructure*)vmcs02_va;
 			ptr->revision_identifier = vmx_basic_msr.fields.revision_identifier;
-
-			HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: current_vmcs : %I64X", current_vmcs);
-
-			VmxStatus status;
-			if (VmxStatus::kOk != (status = static_cast<VmxStatus>(__vmx_vmclear(&current_vmcs))))
-			{
-				VmxInstructionError error = static_cast<VmxInstructionError>(UtilVmRead(VmcsField::kVmInstructionError));
-				HYPERPLATFORM_LOG_DEBUG("Error vmclear2 error code :%x , %x ", status, error);
-				HYPERPLATFORM_COMMON_DBG_BREAK();
-			}
-			if (VmxStatus::kOk != (status = static_cast<VmxStatus>(__vmx_vmptrld(&current_vmcs))))
-			{
-				VmxInstructionError error = static_cast<VmxInstructionError>(UtilVmRead(VmcsField::kVmInstructionError));
-				HYPERPLATFORM_LOG_DEBUG("Error vmptrld error code :%x , %x", status, error);
-				HYPERPLATFORM_COMMON_DBG_BREAK();
-			}
+			
+			ULONG64 vmcs01_rsp = UtilVmRead64(VmcsField::kHostRsp);
+			ULONG64 vmcs01_rip = UtilVmRead64(VmcsField::kHostRip);
+			
+			/*
+				Mix vmcs control field
+			*/
+			MixControlFieldWithVmcs01AndVmcs12(vmcs12_va, vmcs02_pa, TRUE);
 
 			//Read VMCS12 Guest's field to VMCS02
-			FillGuestFieldFromVMCS12(guest_vmcs_va, guest_interrupt_status, pml_index);
-
-			// all utilvmread/write is read/write to VMCS02 now, assuemed VMCS12 is filled by VMREAD/VMWRITE of L1
-
-			//-----------------------------------------------------------------------------------------------------------//	
-			//  Mixing Control field with VMCS01 and VMCS12 into VMCS02
-			/*
-			16 bit Control Field
-			*/
-			USHORT my_guest_vpid = 0;
-			VmRead16(VmcsField::kVirtualProcessorId, guest_vmcs_va, &my_guest_vpid);
-			UtilVmWrite(VmcsField::kVirtualProcessorId, guest_vpid | my_guest_vpid);
-
-			/*
-			32 bit Control Field
-			*/
-			ULONG32 my_pin_base_ctls;
-			ULONG32 my_primary_processor_base_ctls;
-			ULONG32 my_exception_bitmap;
-			ULONG32 my_guest_page_fault_mask;
-			ULONG32 my_page_fault_error_code_match;
-			ULONG32 my_cr3_target_count;
-			ULONG32	my_exit_control;
-			ULONG32	my_vmexit_msr_store_cnt;
-			ULONG32	my_vmexit_msr_load_cnt;
-			ULONG32	my_vmentry_ctrls;
-			ULONG32	my_vmentry_msr_load_cnt;
-			ULONG32	my_vmentry_interr_info;
-			ULONG32	my_vmentry_except_Err_code;
-			ULONG32	my_vmentry_instr_length;
-			ULONG32	my_guest_tpr_threshold;
-			ULONG32 my_pause_loop_exiting_gap;
-			ULONG32 my_pause_loop_exiting_window;
-			ULONG32 my_guest_secondary_processor_base_ctls;
-
-			VmRead32(VmcsField::kPinBasedVmExecControl, guest_vmcs_va, &my_pin_base_ctls);
-			VmRead32(VmcsField::kCpuBasedVmExecControl, guest_vmcs_va, &my_primary_processor_base_ctls);
-			VmRead32(VmcsField::kExceptionBitmap, guest_vmcs_va, &my_exception_bitmap);
-			VmRead32(VmcsField::kPageFaultErrorCodeMask, guest_vmcs_va, &my_guest_page_fault_mask);
-			VmRead32(VmcsField::kPageFaultErrorCodeMatch, guest_vmcs_va, &my_page_fault_error_code_match);
-			VmRead32(VmcsField::kCr3TargetCount, guest_vmcs_va, &my_cr3_target_count);
-			VmRead32(VmcsField::kVmExitControls, guest_vmcs_va, &my_exit_control);
-			VmRead32(VmcsField::kVmExitMsrStoreCount, guest_vmcs_va, &my_vmexit_msr_store_cnt);
-			VmRead32(VmcsField::kVmExitMsrLoadCount, guest_vmcs_va, &my_vmexit_msr_load_cnt);
-			VmRead32(VmcsField::kVmEntryControls, guest_vmcs_va, &my_vmentry_ctrls);
-			VmRead32(VmcsField::kVmEntryMsrLoadCount, guest_vmcs_va, &my_vmentry_msr_load_cnt);
-			VmRead32(VmcsField::kVmEntryIntrInfoField, guest_vmcs_va, &my_vmentry_interr_info);
-			VmRead32(VmcsField::kVmEntryExceptionErrorCode, guest_vmcs_va, &my_vmentry_except_Err_code);
-			VmRead32(VmcsField::kVmEntryInstructionLen, guest_vmcs_va, &my_vmentry_instr_length);
-			VmRead32(VmcsField::kTprThreshold, guest_vmcs_va, &my_guest_tpr_threshold);
-			VmRead32(VmcsField::kPleGap, guest_vmcs_va, &my_pause_loop_exiting_gap);
-			VmRead32(VmcsField::kPleWindow, guest_vmcs_va, &my_pause_loop_exiting_window);
-			VmRead32(VmcsField::kSecondaryVmExecControl, guest_vmcs_va, &my_guest_secondary_processor_base_ctls);
-
-			UtilVmWrite(VmcsField::kPinBasedVmExecControl, guest_pin_base_ctls | my_pin_base_ctls);
-			UtilVmWrite(VmcsField::kCpuBasedVmExecControl, guest_primary_processor_base_ctls | my_primary_processor_base_ctls);
-			UtilVmWrite(VmcsField::kExceptionBitmap, guest_exception_bitmap | my_exception_bitmap);
-			UtilVmWrite(VmcsField::kPageFaultErrorCodeMask, guest_page_fault_mask | my_guest_page_fault_mask);
-			UtilVmWrite(VmcsField::kPageFaultErrorCodeMatch, guest_page_fault_error_code_match | my_page_fault_error_code_match);
-			UtilVmWrite(VmcsField::kCr3TargetCount, guest_cr3_target_count | my_cr3_target_count);
-			UtilVmWrite(VmcsField::kVmExitControls, exit_control | my_exit_control);
-			UtilVmWrite(VmcsField::kVmExitMsrStoreCount, vmexit_msr_store_cnt | my_vmexit_msr_store_cnt);
-			UtilVmWrite(VmcsField::kVmExitMsrLoadCount, vmexit_msr_load_cnt );
-			UtilVmWrite(VmcsField::kVmEntryControls, vmentry_ctrls | my_vmentry_ctrls);
-			UtilVmWrite(VmcsField::kVmEntryMsrLoadCount, vmentry_msr_load_cnt );
-			UtilVmWrite(VmcsField::kVmEntryIntrInfoField,   my_vmentry_interr_info);
-			UtilVmWrite(VmcsField::kVmEntryExceptionErrorCode,  my_vmentry_except_Err_code);
-			UtilVmWrite(VmcsField::kVmEntryInstructionLen,  my_vmentry_instr_length);
-			UtilVmWrite(VmcsField::kTprThreshold, guest_tpr_threshold | my_guest_tpr_threshold);
-			UtilVmWrite(VmcsField::kPleGap, 0);
-			UtilVmWrite(VmcsField::kPleWindow, 0);
-			UtilVmWrite(VmcsField::kSecondaryVmExecControl, guest_secondary_processor_base_ctls | my_guest_secondary_processor_base_ctls);
-
-			/*
-			64bit control field
-			*/
-			UtilVmWrite64(VmcsField::kIoBitmapA, guest_io_bitmap[0]);
-			UtilVmWrite64(VmcsField::kIoBitmapB, guest_io_bitmap[1]);
-			UtilVmWrite64(VmcsField::kMsrBitmap, guest_msr_bitmap);
-			UtilVmWrite64(VmcsField::kPmlAddress, pml_address);
-			UtilVmWrite64(VmcsField::kApicAccessAddr, guest_apic_access_address);
-			UtilVmWrite64(VmcsField::kVmFuncCtls, vmfunc_ctrls);
-			UtilVmWrite64(VmcsField::kEptPointer, guest_ept_pointer);
-			UtilVmWrite64(VmcsField::kEoiExitBitmap0, guest_eoi_exit_bitmap[0]);
-			UtilVmWrite64(VmcsField::kEoiExitBitmap0High, guest_eoi_exit_bitmap[1]);
-			UtilVmWrite64(VmcsField::kEoiExitBitmap1, guest_eoi_exit_bitmap[2]);
-			UtilVmWrite64(VmcsField::kEoiExitBitmap1High, guest_eoi_exit_bitmap[3]);
-			UtilVmWrite64(VmcsField::kEoiExitBitmap2, guest_eoi_exit_bitmap[4]);
-			UtilVmWrite64(VmcsField::kEoiExitBitmap2High, guest_eoi_exit_bitmap[5]);
-			UtilVmWrite64(VmcsField::kEoiExitBitmap3, guest_eoi_exit_bitmap[6]);
-			UtilVmWrite64(VmcsField::kEoiExitBitmap3High, guest_eoi_exit_bitmap[7]);
-			UtilVmWrite64(VmcsField::kEptpListAddress, eptp_list_address);
-
-			/*
-			Natural-width control field
-			*/
-			UtilVmWrite64(VmcsField::kCr0GuestHostMask, guest_cr0_mask);
-			UtilVmWrite64(VmcsField::kCr4GuestHostMask, guest_cr4_mask);
-			UtilVmWrite64(VmcsField::kCr0ReadShadow, guest_cr0_read_shadow);
-			UtilVmWrite64(VmcsField::kCr4ReadShadow, guest_cr4_read_shadow);
-			UtilVmWrite64(VmcsField::kCr3TargetValue0, guest_cr3_target_value[0]);
-			UtilVmWrite64(VmcsField::kCr3TargetValue1, guest_cr3_target_value[1]);
-			UtilVmWrite64(VmcsField::kCr3TargetValue2, guest_cr3_target_value[2]);
-			UtilVmWrite64(VmcsField::kCr3TargetValue3, guest_cr3_target_value[3]);
-
-			/*
-			VM control field End
-			--------------------------------------------------------------------------------------*/
+			FillGuestFieldFromVMCS12(vmcs12_va);
 
 			/*
 			VM Host state field Start
-			*/
-
-			FillHostStateFieldByPhysicalCpu(host_rip, host_rsp);
+			*/ 
+			FillHostStateFieldByPhysicalCpu(vmcs01_rip, vmcs01_rsp);
 
 			/*
 			Host state field end
@@ -3025,9 +2438,9 @@ extern "C" {
 			ULONG64 rip, rsp, rflags;
 			//Get VMCS 1-2 Guest Rip & Rsp , means where is it trapped by 
 			//Get Vmlaunch return address from VMCS12 (it supposed provided by L1 already), there's no way to verify it 
-			VmRead64(VmcsField::kGuestRip, guest_vmcs_va, &rip);
-			VmRead64(VmcsField::kGuestRsp, guest_vmcs_va, &rsp);
-			VmRead64(VmcsField::kGuestRflags, guest_vmcs_va, &rflags);
+			VmRead64(VmcsField::kGuestRip, vmcs12_va, &rip);
+			VmRead64(VmcsField::kGuestRsp, vmcs12_va, &rsp);
+			VmRead64(VmcsField::kGuestRflags, vmcs12_va, &rflags);
 
 			UtilVmWrite(VmcsField::kGuestRsp, rsp);
 			UtilVmWrite(VmcsField::kGuestRip, rip);
@@ -3038,6 +2451,7 @@ extern "C" {
 			{
 				KeLowerIrql(guest_context->irql);
 			}
+
 			if (VmxStatus::kOk != (status = static_cast<VmxStatus>(__vmx_vmlaunch())))
 			{
 				VmxInstructionError error2 = static_cast<VmxInstructionError>(UtilVmRead(VmcsField::kVmInstructionError));
@@ -3053,7 +2467,6 @@ extern "C" {
 	}
 
 
-	//---------------------------------------------------------------------------------------------------------------------// 
 
 
 	VOID VmresumeEmulate(GuestContext* guest_context)
@@ -3062,6 +2475,7 @@ extern "C" {
 		{
 			PROCESSOR_NUMBER  procnumber = { 0 };
 			ULONG			  vcpu_index = KeGetCurrentProcessorNumberEx(&procnumber);
+
 			HYPERPLATFORM_LOG_DEBUG("----Start Emulate VMRESUME---");
 			//not in vmx mode
 			if (!g_vcpus[vcpu_index]->inVMX)
@@ -3112,9 +2526,15 @@ extern "C" {
 				break;
 			}
 
-			auto current_vmcs = g_vcpus[vcpu_index]->current_vmcs;
-			auto current_vmcs_va = (ULONG64)UtilVaFromPa(current_vmcs);
-			if (current_vmcs == 0xFFFFFFFFFFFFFFFF)
+			//We created it when guest VMPTRLD VMCS12 , it called VMCS02 , what L2 actually running on
+			auto vmcs02_pa = g_vcpus[vcpu_index]->current_vmcs;
+			auto vmcs02_va = (ULONG64)UtilVaFromPa(vmcs02_pa);
+
+			//Guest passed it to us, and read/write it  VMCS 1-2 
+			auto  vmcs12_pa = g_vcpus[vcpu_index]->guest_vmcs;
+			auto  vmcs12_va = (ULONG64)UtilVaFromPa(vmcs12_pa);
+
+			if (vmcs02_pa == 0xFFFFFFFFFFFFFFFF)
 			{
 				HYPERPLATFORM_LOG_DEBUG(("VMLAUNCH: VMCS still not loaded ! \r\n"));
 				VMfailInvalid(&guest_context->flag_reg);
@@ -3127,588 +2547,38 @@ extern "C" {
 			///4. Set VMCS to "launched"
 			///5. VM Entry success
 
-
-			///Guest passed it to us, and read/write it  VMCS 1-2 
-			auto  guest_vmcs = g_vcpus[vcpu_index]->guest_vmcs;
-			auto  guest_vmcs_va = (ULONG64)UtilVaFromPa(guest_vmcs);
-			UCHAR svi; /* Servicing Virtual Interrupt */
-			UCHAR rvi; /* Requesting Virtual Interrupt */
-
-					   //16bit control field
-			USHORT guest_interrupt_status = 0;
-			USHORT guest_vpid = 0;
-			USHORT	pml_index = 0;
-
-			//32bit control field
-			ULONG32 guest_pin_base_ctls = 0;
-			ULONG32 guest_primary_processor_base_ctls = 0;
-			ULONG32 guest_exception_bitmap = 0;
-			ULONG32 guest_page_fault_mask = 0;
-			ULONG32 guest_page_fault_error_code_match = 0;
-			ULONG32 guest_cr3_target_count = 0;
-			ULONG32 vmexit_ctrls;
-			ULONG32 vmexit_msr_store_cnt;
-			ULONG32 vmexit_msr_load_cnt;
-			ULONG32 vmentry_ctrls;
-			ULONG32 vmentry_msr_load_cnt;
-			ULONG32 vmentry_interr_info;
-			ULONG32 vmentry_except_Err_code;
-			ULONG32 vmentry_instr_length;
-			ULONG32 guest_tpr_threshold = 0;
-			ULONG32 guest_secondary_processor_base_ctls = 0;
-			ULONG32 pause_loop_exiting_gap = 0;
-			ULONG32 pause_loop_exiting_window = 0;
-
-			//natural-width control field
-			ULONG_PTR guest_cr0_mask = 0;
-			ULONG_PTR guest_cr4_mask = 0;
-			ULONG_PTR guest_cr0_read_shadow = 0;
-			ULONG_PTR guest_cr4_read_shadow = 0;
-			ULONG_PTR guest_cr3_target_value[4] = { 0 };
-
-			//64bit control field
-			ULONG_PTR guest_io_bitmap[2];
-			ULONG_PTR guest_msr_bitmap = 0;
-			ULONG_PTR guest_eoi_exit_bitmap[8] = {};
-			ULONG_PTR guest_apic_access_address = 0;
-			ULONG_PTR guest_ept_pointer = 0;
-			ULONG_PTR vmfunc_ctrls = 0;
-			ULONG_PTR pml_address = 0;
-			ULONG_PTR eptp_list_address = 0;
-
-
-			guest_pin_base_ctls = (ULONG32)UtilVmRead(VmcsField::kPinBasedVmExecControl);
-			guest_primary_processor_base_ctls = (ULONG32)UtilVmRead(VmcsField::kCpuBasedVmExecControl);
-			guest_secondary_processor_base_ctls = (ULONG32)UtilVmRead(VmcsField::kSecondaryVmExecControl);
-
-			ULONG_PTR guest_vmreadBitmapAddress = 0;
-			ULONG_PTR guest_vmwriteBitMapAddress = 0;
-			ULONG_PTR guest_vmexceptionAddress = 0;
-			ULONG_PTR guest_virtual_apicpage = 0;
-
-			vmexit_ctrls = (ULONG32)UtilVmRead(VmcsField::kVmExitControls);
-			vmexit_msr_store_cnt = (ULONG32)UtilVmRead(VmcsField::kVmExitMsrStoreCount);
-			vmexit_msr_load_cnt = (ULONG32)UtilVmRead(VmcsField::kVmExitMsrLoadCount);
-
-			vmentry_interr_info = (ULONG32)UtilVmRead(VmcsField::kVmEntryIntrInfoField);
-			vmentry_except_Err_code = (ULONG32)UtilVmRead(VmcsField::kVmEntryExceptionErrorCode);
-			vmentry_instr_length = (ULONG32)UtilVmRead(VmcsField::kVmEntryInstructionLen);
-			vmentry_ctrls = (ULONG32)UtilVmRead(VmcsField::kVmEntryControls);
-			vmentry_msr_load_cnt = (ULONG32)UtilVmRead(VmcsField::kVmEntryMsrLoadCount);
-
-
-			guest_exception_bitmap = (ULONG32)UtilVmRead(VmcsField::kExceptionBitmap);
-			guest_page_fault_mask = (ULONG32)UtilVmRead(VmcsField::kPageFaultErrorCodeMask);
-			guest_page_fault_error_code_match = (ULONG32)UtilVmRead(VmcsField::kPageFaultErrorCodeMatch);
-			guest_cr3_target_count = (ULONG32)UtilVmRead(VmcsField::kCr3TargetCount);
-
-			guest_cr0_mask = UtilVmRead64(VmcsField::kCr0GuestHostMask);
-			guest_cr4_mask = UtilVmRead64(VmcsField::kCr4GuestHostMask);
-			guest_cr0_read_shadow = UtilVmRead64(VmcsField::kCr0ReadShadow);
-			guest_cr4_read_shadow = UtilVmRead64(VmcsField::kCr4ReadShadow);
-			guest_cr3_target_value[0] = UtilVmRead64(VmcsField::kCr3TargetValue0);
-			guest_cr3_target_value[1] = UtilVmRead64(VmcsField::kCr3TargetValue1);
-			guest_cr3_target_value[2] = UtilVmRead64(VmcsField::kCr3TargetValue2);
-			guest_cr3_target_value[3] = UtilVmRead64(VmcsField::kCr3TargetValue3);
-
-
-			//Checking start 
-
-			ULONG32 highpart, lowpart = 0;
-			const auto use_true_msrs = Ia32VmxBasicMsr{ UtilReadMsr64(Msr::kIa32VmxBasic) }.fields.vmx_capability_hint;
-
-			GetControlValue((use_true_msrs) ? Msr::kIa32VmxTruePinbasedCtls
-				: Msr::kIa32VmxPinbasedCtls,
-				&highpart, &lowpart);
-
-			// check if bit should be 1 but we set 0
-			// For example:
-			// lowpart : 10110  msr given
-			// ourpart : 01001  bit4 bit2 bit1 should be 1
-			// (~01001) & 10110 = 10110 & 10110 = 10110 it is VM Fail
-
-			// lowpart : 10110  msr given
-			// ourpart : 10110  bit4 bit2 bit1 should be 1
-			// 01001 & 10110 = 0 it is success
-			if (~guest_pin_base_ctls & lowpart)
-			{
-				VMfailInvalid(&guest_context->flag_reg);
-				HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: pin base low part error \r\n");
-				break;
-			}
-			// check if bit should be zero but we set 1
-			// For example:
-			// highpart : 00000 msr given
-			// ourpart  : 01001 all bit should be 0
-			// we can't use above method since always == 0 , so reverse highpart 
-			if (guest_pin_base_ctls & ~highpart)
-			{
-				VMfailInvalid(&guest_context->flag_reg);
-				HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: pin base high part error \r\n");
-				break;
-			}
-
-			if (!(guest_pin_base_ctls & VMX_PIN_BASED_NMI_EXITING))
-			{
-				if (guest_pin_base_ctls & VMX_PIN_BASED_VIRTUAL_NMI)
-				{
-					VMfailInvalid(&guest_context->flag_reg);
-					HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: Virtual NMI without set NMI EXITING\r\n");
-					break;
-				}
-			}
-
-			if (!(guest_pin_base_ctls & VMX_PIN_BASED_VIRTUAL_NMI))
-			{
-				if (guest_primary_processor_base_ctls & VMX_PRCESSOR_BASED_NMI_WINDOW_EXITING)
-				{
-					VMfailInvalid(&guest_context->flag_reg);
-					HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: NMI Windows exit without set Virtual NMI in pin base control field\r\n");
-					break;
-				}
-			}
-
-			GetControlValue(Msr::kIa32VmxProcBasedCtls, &highpart, &lowpart);
-
-			if (~guest_primary_processor_base_ctls & lowpart)
-			{
-				VMfailInvalid(&guest_context->flag_reg);
-				HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: processor base low part error \r\n");
-				break;
-			}
-
-			if (guest_primary_processor_base_ctls & ~highpart)
-			{
-				VMfailInvalid(&guest_context->flag_reg);
-				HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: processor base high part error \r\n");
-				break;
-			}
-			if (guest_secondary_processor_base_ctls)
-			{
-				GetControlValue(Msr::kIa32VmxProcBasedCtls2, &highpart, &lowpart);
-				if (~guest_secondary_processor_base_ctls & lowpart)
-				{
-					VMfailInvalid(&guest_context->flag_reg);
-					HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: processor base2 low part error \r\n");
-					break;
-				}
-				if (guest_secondary_processor_base_ctls & ~highpart)
-				{
-					VMfailInvalid(&guest_context->flag_reg);
-					HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: processor base2 high part error \r\n");
-					break;
-				}
-			}
-
-			if (guest_cr3_target_count > 4)
-			{
-				VMfailInvalid(&guest_context->flag_reg);
-				HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: dose not support cr3 target count > 4 \r\n");
-				break;
-			}
-
-			if (guest_secondary_processor_base_ctls & VMX_PRCESSOR_BASED_IO_BITMAPS)
-			{
-
-				guest_io_bitmap[0] = UtilVmRead64(VmcsField::kIoBitmapA);
-				guest_io_bitmap[1] = UtilVmRead64(VmcsField::kIoBitmapB);
-
-				if (!CheckPhysicalAddress(guest_io_bitmap[0]) ||
-					!CheckPhysicalAddress(guest_io_bitmap[1]))
-				{
-					VMfailInvalid(&guest_context->flag_reg);
-					HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: IO_BITMAP invalid physical address \r\n");
-					break;
-				}
-
-			}
-			if (guest_secondary_processor_base_ctls & VMX_PRCESSOR_BASED_MSR_BITMAPS)
-			{
-				//VmRead64(VmcsField::kMsrBitmap, guest_vmcs_va, &guest_msr_bitmap);
-				guest_msr_bitmap = UtilVmRead64(VmcsField::kMsrBitmap);
-				if (!CheckPhysicalAddress(guest_msr_bitmap))
-				{
-					VMfailInvalid(&guest_context->flag_reg);
-					HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: msr bitmap invalid physical address \r\n");
-					break;
-				}
-
-			}
-			if (guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_VMCS_SHADOWING)
-			{
-
-				//VmRead64(VmcsField::kVmreadBitmapAddress, guest_vmcs_va, &guest_vmreadBitmapAddress);
-				guest_vmreadBitmapAddress = UtilVmRead64(VmcsField::kVmreadBitmapAddress);
-
-				if (!CheckPhysicalAddress(guest_vmreadBitmapAddress))
-				{
-					HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: VMCS EXEC CTRL: VMREAD bitmap phy addr malformed");
-					VMfailInvalid(&guest_context->flag_reg);
-					break;
-				}
-
-				//VmRead64(VmcsField::kVmwriteBitmapAddress, guest_vmcs_va, &guest_vmwriteBitMapAddress);
-				guest_vmwriteBitMapAddress = UtilVmRead64(VmcsField::kVmwriteBitmapAddress);
-				if (!CheckPhysicalAddress(guest_vmwriteBitMapAddress))
-				{
-					HYPERPLATFORM_LOG_DEBUG(("VMLAUNCH: VMCS EXEC CTRL: VMWRITE bitmap phy addr malformed"));
-					VMfailInvalid(&guest_context->flag_reg);
-					break;
-				}
-			}
-
-			if (guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_EPT_VIOLATION_EXCEPTION)
-			{
-				//VmRead64(VmcsField::kVirtualizationExceptionInfoAddress,guest_vmcs_va, &guest_vmexceptionAddress);
-				guest_vmexceptionAddress = UtilVmRead64(VmcsField::kVirtualizationExceptionInfoAddress);
-				if (!CheckPhysicalAddress(guest_vmexceptionAddress))
-				{
-					HYPERPLATFORM_LOG_DEBUG(("VMLAUNCH: VMCS EXEC CTRL: broken #VE information address"));
-					VMfailInvalid(&guest_context->flag_reg);
-					break;
-				}
-
-			}
-
-			if (guest_primary_processor_base_ctls & VMX_PRCESSOR_BASED_TPR_SHADOW)
-			{
-				//VmRead64(VmcsField::kVirtualApicPageAddr, guest_vmcs_va, &guest_virtual_apicpage);
-				guest_virtual_apicpage = UtilVmRead64(VmcsField::kVirtualApicPageAddr);
-				if (!CheckPhysicalAddress(guest_virtual_apicpage))
-				{
-					HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: VMCS EXEC CTRL: virtual apic phy addr malformed");
-					VMfailInvalid(&guest_context->flag_reg);
-					break;
-				}
-
-
-#if MY_SUPPORT_VMX >= 2
-				if (guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_VIRTUAL_INT_DELIVERY)
-				{
-					if (!guest_pin_base_ctls & VMX_PIN_BASED_EXTERNAL_INTERRUPT_VMEXIT)
-					{
-						HYPERPLATFORM_LOG_DEBUG(("VMLAUNCH: VMCS EXEC CTRL: virtual interrupt delivery must be set together with external interrupt exiting"));
-						VMfailInvalid(&guest_context->flag_reg);
-						break;
-					}
-
-					guest_eoi_exit_bitmap[0] = UtilVmRead64(VmcsField::kEoiExitBitmap0);
-					guest_eoi_exit_bitmap[1] = UtilVmRead64(VmcsField::kEoiExitBitmap0High);
-					guest_eoi_exit_bitmap[2] = UtilVmRead64(VmcsField::kEoiExitBitmap1);
-					guest_eoi_exit_bitmap[3] = UtilVmRead64(VmcsField::kEoiExitBitmap1High);
-					guest_eoi_exit_bitmap[4] = UtilVmRead64(VmcsField::kEoiExitBitmap2);
-					guest_eoi_exit_bitmap[5] = UtilVmRead64(VmcsField::kEoiExitBitmap2High);
-					guest_eoi_exit_bitmap[6] = UtilVmRead64(VmcsField::kEoiExitBitmap3);
-					guest_eoi_exit_bitmap[7] = UtilVmRead64(VmcsField::kEoiExitBitmap3High);
-
-					guest_interrupt_status = (USHORT)UtilVmRead(VmcsField::kGuestInterruptStatus);
-
-					rvi = guest_interrupt_status & 0xff;
-					svi = guest_interrupt_status >> 8;
-				}
-				else
-#endif
-				{
-					//VmRead32(VmcsField::kTprThreshold, guest_vmcs_va, &guest_tpr_threshold);
-					guest_tpr_threshold = (ULONG32)UtilVmRead(VmcsField::kTprThreshold);
-
-					if (guest_tpr_threshold & 0xfffffff0)
-					{
-						HYPERPLATFORM_LOG_DEBUG(("VMLAUNCH: VMCS EXEC CTRL: TPR threshold too big"));
-						VMfailInvalid(&guest_context->flag_reg);
-						break;
-					}
-
-					if (!(guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_VIRTUALIZE_APIC_ACCESSES))
-					{
-						/*USHORT tpr_shadow = (VMX_Read_Virtual_APIC(BX_LAPIC_TPR) >> 4) & 0xf;
-						if (guest_tpr_threshold > tpr_shadow) {
-						VMfailInvalid(&guest_context->flag_reg);
-						break;
-						}
-						*/
-					}
-
-				}
-			}
-#if MY_SUPPORT_VMX >= 2
-			else
-			{
-				if (guest_secondary_processor_base_ctls & (VMX_SECONDARY_PROCESSOR_BASED_VIRTUALIZE_X2APIC_MODE |
-					VMX_SECONDARY_PROCESSOR_BASED_VIRTUALIZE_APIC_REGISTERS |
-					VMX_SECONDARY_PROCESSOR_BASED_VIRTUAL_INT_DELIVERY))
-				{
-					HYPERPLATFORM_LOG_DEBUG(("VMLAUNCH: VMCS EXEC CTRL: apic virtualization is enabled without TPR shadow"));
-					VMfailInvalid(&guest_context->flag_reg);
-					break;
-				}
-			}
-#endif
-
-
-			if (guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_VIRTUALIZE_APIC_ACCESSES)
-			{
-				//VmRead64(VmcsField::kApicAccessAddr, guest_vmcs_va, &guest_apic_access_address);
-				guest_apic_access_address = UtilVmRead64(VmcsField::kApicAccessAddr);
-				if (!CheckPhysicalAddress(guest_apic_access_address))
-				{
-					HYPERPLATFORM_LOG_DEBUG(("VMLAUNCH: VMCS EXEC CTRL: apic access page phy addr malformed"));
-					VMfailInvalid(&guest_context->flag_reg);
-					break;
-				}
-
-			}
-
-
-#if MY_SUPPORT_VMX >= 2
-			if (guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_VIRTUALIZE_X2APIC_MODE)
-			{
-				HYPERPLATFORM_LOG_DEBUG(("VMFAIL: VMCS EXEC CTRL: virtualize X2APIC mode enabled together with APIC access virtualization"));
-				VMfailInvalid(&guest_context->flag_reg);
-				break;
-			}
-#endif
-
-#if MY_SUPPORT_VMX >= 2
-			if (guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_EPT_ENABLE)
-			{
-				//VmRead64(VmcsField::kEptPointer, guest_vmcs_va, &guest_ept_pointer);
-				guest_ept_pointer = UtilVmRead64(VmcsField::kEptPointer);
-				if (!is_eptptr_valid(guest_ept_pointer))
-				{
-					HYPERPLATFORM_LOG_DEBUG(("VMFAIL: VMCS EXEC CTRL: invalid EPTPTR value"));
-					VMfailInvalid(&guest_context->flag_reg);
-					break;
-				}
-
-			}
-			else {
-				if (guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_UNRESTRICTED_GUEST)
-				{
-					HYPERPLATFORM_LOG_DEBUG(("VMFAIL: VMCS EXEC CTRL: unrestricted guest without EPT"));
-					VMfailInvalid(&guest_context->flag_reg);
-					break;
-				}
-			}
-
-			if (guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_VPID_ENABLE) {
-				//VmRead16(VmcsField::kVirtualProcessorId, guest_vmcs_va, &guest_vpid);
-				guest_vpid = (USHORT)UtilVmRead(VmcsField::kVirtualProcessorId);
-				if (guest_vpid == 0)
-				{
-					HYPERPLATFORM_LOG_DEBUG("VMFAIL: VMCS EXEC CTRL: guest VPID == 0");
-					VMfailInvalid(&guest_context->flag_reg);
-					break;
-				}
-
-			}
-
-			if (guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_PAUSE_LOOP_VMEXIT)
-			{
-				//VmRead32(VmcsField::kPleGap,guest_vmcs_va, &pause_loop_exiting_gap);
-				//VmRead32(VmcsField::kPleWindow,guest_vmcs_va, &pause_loop_exiting_window);
-				pause_loop_exiting_gap = (ULONG32)UtilVmRead(VmcsField::kPleGap);
-				pause_loop_exiting_window = (ULONG32)UtilVmRead(VmcsField::kPleWindow);
-
-			}
-
-			if (guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_VMFUNC_ENABLE)
-			{
-				//VmRead64(VmcsField::kVmFuncCtls, guest_vmcs_va, &vmfunc_ctrls);
-				vmfunc_ctrls = UtilVmRead64(VmcsField::kVmFuncCtls);
-				ULONG64	all = GetControlValue(Msr::kIa32VmxVmfunc, &highpart, &lowpart);
-
-				if (vmfunc_ctrls & ~all)
-				{
-					HYPERPLATFORM_LOG_DEBUG(("VMLAUNCH: VMCS VM Functions control reserved bits set"));
-				}
-
-				if (vmfunc_ctrls & VMX_VMFUNC_EPTP_SWITCHING_MASK)
-				{
-					if ((guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_EPT_ENABLE) == 0)
-					{
-						HYPERPLATFORM_LOG_DEBUG(("VMLAUNCH: VMFUNC EPTP-SWITCHING: EPT disabled"));
-						VMfailInvalid(&guest_context->flag_reg);
-						break;
-					}
-				}
-
-			}
-			else
-			{
-				vmfunc_ctrls = 0;
-			}
-
-			///VmRead64(VmcsField::kEptpListAddress, guest_vmcs_va, &eptp_list_address);
-			eptp_list_address = UtilVmRead64(VmcsField::kEptpListAddress);
-			if (!CheckPhysicalAddress(eptp_list_address))
-			{
-				HYPERPLATFORM_LOG_DEBUG(("VMLAUNCH: VMFUNC EPTP-SWITCHING: eptp list phy addr malformed"));
-				VMfailInvalid(&guest_context->flag_reg);
-				break;
-			}
-
-
-
-			if (guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_PML_ENABLE) {
-				if ((guest_secondary_processor_base_ctls & VMX_SECONDARY_PROCESSOR_BASED_EPT_ENABLE) == 0) {
-					HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: VMCS EXEC CTRL: PML is enabled without EPT");
-					VMfailInvalid(&guest_context->flag_reg);
-					break;
-				}
-
-				pml_address = UtilVmRead64(VmcsField::kPmlAddress);
-
-				if (!CheckPhysicalAddress(pml_address))
-				{
-					HYPERPLATFORM_LOG_DEBUG("VMLAUNCH: VMCS EXEC CTRL: PML base phy addr malformed");
-					VMfailInvalid(&guest_context->flag_reg);
-					break;
-				}
-				VmRead16(VmcsField::kGuestPmlIndex, guest_vmcs_va, &pml_index);
-			}
-#endif
+			
 			// Write a VMCS revision identifier
 			const Ia32VmxBasicMsr vmx_basic_msr = { UtilReadMsr64(Msr::kIa32VmxBasic) };
-			ULONG64 host_rsp = UtilVmRead64(VmcsField::kHostRsp);
-			ULONG64 host_rip = UtilVmRead64(VmcsField::kHostRip);
-			ULONG32 exit_control = (ULONG32)UtilVmRead(VmcsField::kVmExitControls);
+			ULONG64 vmcs01_rsp = UtilVmRead64(VmcsField::kHostRsp);
+			ULONG64 vmcs01_rip = UtilVmRead64(VmcsField::kHostRip); 
 
-			VmControlStructure* ptr = (VmControlStructure*)current_vmcs_va;
+			VmControlStructure* ptr = (VmControlStructure*)vmcs02_va;
 			ptr->revision_identifier = vmx_basic_msr.fields.revision_identifier;
 
-			HYPERPLATFORM_LOG_DEBUG("current_vmcs: %I64X", current_vmcs);
-			VmxStatus status;
+			HYPERPLATFORM_LOG_DEBUG("current_vmcs: %I64X", vmcs12_va);
+		
+			//Mixing AND checking Control Field 
+			//Current VMCS is VMCS01
+			MixControlFieldWithVmcs01AndVmcs12(vmcs12_va, vmcs02_pa, FALSE);
+			//Current VMCS is VMCS02 
 
-			//VMCS02
-			if (VmxStatus::kOk != (status = static_cast<VmxStatus>(__vmx_vmptrld(&current_vmcs))))
-			{
-				VmxInstructionError error = static_cast<VmxInstructionError>(UtilVmRead(VmcsField::kVmInstructionError));
-				HYPERPLATFORM_LOG_DEBUG("Error vmptrld error code :%x , %x", status, error);
-				HYPERPLATFORM_COMMON_DBG_BREAK();
-			}
 
 			/*
 			VM Guest state field Start
 			*/
-			FillGuestFieldFromVMCS12(guest_vmcs_va, guest_interrupt_status, pml_index);
+			
+			FillGuestFieldFromVMCS12(vmcs12_va);
+		
 			/*
 			VM Guest state field End
 			*/
 
 
-			//-----------------------------------------------------------------------------------------------------------//	
-			//  Mixing Control field with VMCS01 and VMCS12 into VMCS02
-			/*
-			16 bit Control Field
-			*/
-			USHORT my_guest_vpid = 0;
-			VmRead16(VmcsField::kVirtualProcessorId, guest_vmcs_va, &my_guest_vpid);
-			UtilVmWrite(VmcsField::kVirtualProcessorId, my_guest_vpid);
-
-			/*
-			32 bit Control Field
-			*/
-			ULONG32 my_pin_base_ctls;
-			ULONG32 my_primary_processor_base_ctls;
-			ULONG32 my_exception_bitmap;
-			ULONG32 my_guest_page_fault_mask;
-			ULONG32 my_page_fault_error_code_match;
-			ULONG32 my_cr3_target_count;
-			ULONG32 my_exit_control;
-			ULONG32 my_vmexit_msr_store_cnt;
-			ULONG32 my_vmexit_msr_load_cnt;
-			ULONG32 my_vmentry_ctrls;
-			ULONG32 my_vmentry_msr_load_cnt;
-			ULONG32 my_vmentry_interr_info;
-			ULONG32 my_vmentry_except_Err_code;
-			ULONG32 my_vmentry_instr_length;
-			ULONG32 my_guest_tpr_threshold;
-			ULONG32 my_pause_loop_exiting_gap;
-			ULONG32 my_pause_loop_exiting_window;
-			ULONG32 my_guest_secondary_processor_base_ctls;
-
-			VmRead32(VmcsField::kPinBasedVmExecControl, guest_vmcs_va, &my_pin_base_ctls);
-			VmRead32(VmcsField::kCpuBasedVmExecControl, guest_vmcs_va, &my_primary_processor_base_ctls);
-			VmRead32(VmcsField::kExceptionBitmap, guest_vmcs_va, &my_exception_bitmap);
-			VmRead32(VmcsField::kPageFaultErrorCodeMask, guest_vmcs_va, &my_guest_page_fault_mask);
-			VmRead32(VmcsField::kPageFaultErrorCodeMatch, guest_vmcs_va, &my_page_fault_error_code_match);
-			VmRead32(VmcsField::kCr3TargetCount, guest_vmcs_va, &my_cr3_target_count);
-			VmRead32(VmcsField::kVmExitControls, guest_vmcs_va, &my_exit_control);
-			VmRead32(VmcsField::kVmExitMsrStoreCount, guest_vmcs_va, &my_vmexit_msr_store_cnt);
-			VmRead32(VmcsField::kVmExitMsrLoadCount, guest_vmcs_va, &my_vmexit_msr_load_cnt);
-			VmRead32(VmcsField::kVmEntryControls, guest_vmcs_va, &my_vmentry_ctrls);
-			VmRead32(VmcsField::kVmEntryMsrLoadCount, guest_vmcs_va, &my_vmentry_msr_load_cnt);
-			VmRead32(VmcsField::kVmEntryIntrInfoField, guest_vmcs_va, &my_vmentry_interr_info);
-			VmRead32(VmcsField::kVmEntryExceptionErrorCode, guest_vmcs_va, &my_vmentry_except_Err_code);
-			VmRead32(VmcsField::kVmEntryInstructionLen, guest_vmcs_va, &my_vmentry_instr_length);
-			VmRead32(VmcsField::kTprThreshold, guest_vmcs_va, &my_guest_tpr_threshold);
-			VmRead32(VmcsField::kPleGap, guest_vmcs_va, &my_pause_loop_exiting_gap);
-			VmRead32(VmcsField::kPleWindow, guest_vmcs_va, &my_pause_loop_exiting_window);
-			VmRead32(VmcsField::kSecondaryVmExecControl, guest_vmcs_va, &my_guest_secondary_processor_base_ctls);
-
-			UtilVmWrite(VmcsField::kPageFaultErrorCodeMask,  my_guest_page_fault_mask);
-			UtilVmWrite(VmcsField::kPageFaultErrorCodeMatch, my_page_fault_error_code_match);
-			UtilVmWrite(VmcsField::kCr3TargetCount,			 my_cr3_target_count);
-
-			UtilVmWrite(VmcsField::kPinBasedVmExecControl,  my_pin_base_ctls | guest_pin_base_ctls);
-			UtilVmWrite(VmcsField::kVmExitControls,			exit_control | my_exit_control);
-			UtilVmWrite(VmcsField::kSecondaryVmExecControl, guest_secondary_processor_base_ctls | my_guest_secondary_processor_base_ctls);
-			UtilVmWrite(VmcsField::kCpuBasedVmExecControl,  guest_primary_processor_base_ctls | my_primary_processor_base_ctls);
-			UtilVmWrite(VmcsField::kExceptionBitmap,		guest_exception_bitmap | my_exception_bitmap);
-
-			UtilVmWrite(VmcsField::kVmExitMsrStoreCount, my_vmexit_msr_store_cnt);
-			UtilVmWrite(VmcsField::kVmExitMsrLoadCount,  my_vmexit_msr_load_cnt);
-			UtilVmWrite(VmcsField::kVmEntryControls,  my_vmentry_ctrls);
-			UtilVmWrite(VmcsField::kVmEntryMsrLoadCount,  my_vmentry_msr_load_cnt);
-			UtilVmWrite(VmcsField::kVmEntryIntrInfoField, my_vmentry_interr_info);
-			UtilVmWrite(VmcsField::kVmEntryExceptionErrorCode, my_vmentry_except_Err_code);
-			UtilVmWrite(VmcsField::kVmEntryInstructionLen,  my_vmentry_instr_length);
-			UtilVmWrite(VmcsField::kTprThreshold,  my_guest_tpr_threshold);
-			UtilVmWrite(VmcsField::kPleGap,  0);
-			UtilVmWrite(VmcsField::kPleWindow,  0);
-
-
-			/*
-			64bit control field
-			*/
-			UtilVmWrite64(VmcsField::kIoBitmapA, guest_io_bitmap[0]);
-			UtilVmWrite64(VmcsField::kIoBitmapB, guest_io_bitmap[1]);
-			UtilVmWrite64(VmcsField::kMsrBitmap, guest_msr_bitmap);
-			UtilVmWrite64(VmcsField::kPmlAddress, pml_address);
-			UtilVmWrite64(VmcsField::kApicAccessAddr, guest_apic_access_address);
-			UtilVmWrite64(VmcsField::kVmFuncCtls, vmfunc_ctrls);
-			UtilVmWrite64(VmcsField::kEptPointer, guest_ept_pointer);
-			UtilVmWrite64(VmcsField::kEoiExitBitmap0, guest_eoi_exit_bitmap[0]);
-			UtilVmWrite64(VmcsField::kEoiExitBitmap0High, guest_eoi_exit_bitmap[1]);
-			UtilVmWrite64(VmcsField::kEoiExitBitmap1, guest_eoi_exit_bitmap[2]);
-			UtilVmWrite64(VmcsField::kEoiExitBitmap1High, guest_eoi_exit_bitmap[3]);
-			UtilVmWrite64(VmcsField::kEoiExitBitmap2, guest_eoi_exit_bitmap[4]);
-			UtilVmWrite64(VmcsField::kEoiExitBitmap2High, guest_eoi_exit_bitmap[5]);
-			UtilVmWrite64(VmcsField::kEoiExitBitmap3, guest_eoi_exit_bitmap[6]);
-			UtilVmWrite64(VmcsField::kEoiExitBitmap3High, guest_eoi_exit_bitmap[7]);
-			UtilVmWrite64(VmcsField::kEptpListAddress, eptp_list_address);
-
-			/*
-			Natural-width field
-			*/
-			UtilVmWrite64(VmcsField::kCr0GuestHostMask, guest_cr0_mask);
-			UtilVmWrite64(VmcsField::kCr4GuestHostMask, guest_cr4_mask);
-			UtilVmWrite64(VmcsField::kCr0ReadShadow, guest_cr0_read_shadow);
-			UtilVmWrite64(VmcsField::kCr4ReadShadow, guest_cr4_read_shadow);
-			UtilVmWrite64(VmcsField::kCr3TargetValue0, guest_cr3_target_value[0]);
-			UtilVmWrite64(VmcsField::kCr3TargetValue1, guest_cr3_target_value[1]);
-			UtilVmWrite64(VmcsField::kCr3TargetValue2, guest_cr3_target_value[2]);
-			UtilVmWrite64(VmcsField::kCr3TargetValue3, guest_cr3_target_value[3]);
-
-			/*
-			VM control field End
-			--------------------------------------------------------------------------------------*/
-
 			/*
 			VM Host state field Start
 			*/
-			FillHostStateFieldByPhysicalCpu(host_rip, host_rsp);
+			FillHostStateFieldByPhysicalCpu(vmcs01_rip, vmcs01_rsp);
 			/*
 			VM Host state field End
 			*/
@@ -3727,15 +2597,16 @@ extern "C" {
 
 			//--------------------------------------------------------------------------------------//
 
+			// Explicitly write once again. It is important and will be cause the system hang.
 			ULONG64   rip = 0;
-			VmRead64(VmcsField::kGuestRip, guest_vmcs_va, &rip);
+			VmRead64(VmcsField::kGuestRip, vmcs12_va, &rip);
 			HYPERPLATFORM_LOG_DEBUG("VMCS12 Guest rip : %I64x guest_context->irql: %i", rip, guest_context->irql);
 
 			ULONG64   rsp = 0;
-			VmRead64(VmcsField::kGuestRsp, guest_vmcs_va, &rsp);
+			VmRead64(VmcsField::kGuestRsp, vmcs12_va, &rsp);
 			HYPERPLATFORM_LOG_DEBUG("VMCS12 Guest rsp : %I64x ", rsp);
 			ULONG64   rflags = 0;
-			VmRead64(VmcsField::kGuestRflags, guest_vmcs_va, &rflags);
+			VmRead64(VmcsField::kGuestRflags, vmcs12_va, &rflags);
 			HYPERPLATFORM_LOG_DEBUG("VMCS12 Guest rsp : %I64x ", rflags);
 
 
@@ -3980,16 +2851,12 @@ extern "C" {
 	}
 
 	// EXIT_REASON_EPT_MISCONFIG
-	_Use_decl_annotations_ static void VmmpHandleEptMisconfig(
-		GuestContext *guest_context) {
+	_Use_decl_annotations_ static void VmmpHandleEptMisconfig(GuestContext *guest_context) 
+	{
 		UNREFERENCED_PARAMETER(guest_context);
-
 		const auto fault_address = UtilVmRead(VmcsField::kGuestPhysicalAddress);
-		const auto ept_pt_entry = EptGetEptPtEntry(
-			guest_context->stack->processor_data->ept_data, fault_address);
-		HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kEptMisconfigVmExit,
-			fault_address,
-			reinterpret_cast<ULONG_PTR>(ept_pt_entry), 0);
+		const auto ept_pt_entry = EptGetEptPtEntry(guest_context->stack->processor_data->ept_data, fault_address);
+		HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kEptMisconfigVmExit,fault_address,reinterpret_cast<ULONG_PTR>(ept_pt_entry), 0);
 	}
 
 	// Selects a register to be used based on the index

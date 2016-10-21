@@ -78,83 +78,12 @@ extern "C" {
 	////////////////////////////////////////////////////////////////////////////////
 	//
 	// implementations
-	// 
-	NTSTATUS DDI_devCtrlRoutine(
-		IN PDEVICE_OBJECT		DeviceObject,
-		IN PIRP					Irp
-	)
-	{
-		PIO_STATUS_BLOCK	ioStatus;
-		PIO_STACK_LOCATION	pIrpStack;
-		PDEVICE_EXTENSION	deviceExtension;
-		PVOID				inputBuffer, outputBuffer;
-		ULONG				inputBufferLength, outputBufferLength;
-		ULONG				ioControlCode;
-
-
-		pIrpStack = IoGetCurrentIrpStackLocation(Irp);
-		deviceExtension = (PDEVICE_EXTENSION)DeviceObject->DeviceExtension;
-
-		ioStatus = &Irp->IoStatus;
-		ioStatus->Status = STATUS_SUCCESS;	// Assume success
-		ioStatus->Information = 0;              // Assume nothing returned
-
-												//
-												// Get the pointer to the input/output buffer and it's length
-		inputBuffer = Irp->AssociatedIrp.SystemBuffer;
-		inputBufferLength = pIrpStack->Parameters.DeviceIoControl.InputBufferLength;
-		outputBuffer = Irp->AssociatedIrp.SystemBuffer;
-		outputBufferLength = pIrpStack->Parameters.DeviceIoControl.OutputBufferLength;
-		ioControlCode = pIrpStack->Parameters.DeviceIoControl.IoControlCode;
-
-
-		switch (pIrpStack->MajorFunction)
-		{
-		case IRP_MJ_CREATE:
-			DbgPrint("[$ARK]<-IRP_MJ_CREATE.\n");
-			break;
-
-		case IRP_MJ_CLOSE:
-			DbgPrint("[$ARK]->IRP_MJ_CLOSE.\n");
-			break;
-
-		case IRP_MJ_SHUTDOWN:
-			DbgPrint("[$ARK] IRP_MJ_SHUTDOWN.\n");
-			break;
-
-		case IRP_MJ_DEVICE_CONTROL:
-			if (IOCTL_TRANSFER_TYPE(ioControlCode) == METHOD_NEITHER)
-			{
-				DbgPrint("[$ARK] METHOD_NEITHER\n");
-				outputBuffer = Irp->UserBuffer;
-			}
-
-			//
-			DbgPrint("[$XTR] IRP_MJ_DEVICE_CONTROL->IrpMjXTRdevCtrlRoutine(DeviceObject=0x%08x, Irp=0x%08x)->ARKioControl().\n", DeviceObject, Irp);
-
-			break;
-		}
-
-		//
-		// TODO: if not pending, call IoCompleteRequest and Irp is freed.
-		//
-
-		Irp->IoStatus.Status = ioStatus->Status;
-		Irp->IoStatus.Information = ioStatus->Information;
-		IoCompleteRequest(Irp, IO_NO_INCREMENT);
-
-		return STATUS_SUCCESS;
-	}
-
+	//  
 	// A driver entry point
 
 	_Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
 		PUNICODE_STRING registry_path) {
-		BOOLEAN symbolicLink;
-		UNICODE_STRING		ntDeviceName;
-		UNICODE_STRING		dosDeviceName;
-		PDEVICE_OBJECT		deviceObject = NULL;
-		PDEVICE_EXTENSION		deviceExtension = NULL;
+		 
 
 
 		UNREFERENCED_PARAMETER(registry_path);
@@ -221,51 +150,6 @@ extern "C" {
 			LogRegisterReinitialization(driver_object);
 		}
 
-		RtlInitUnicodeString(&ntDeviceName, DDI_DEVICE_NAME_W);
-
-		status = IoCreateDevice(
-			driver_object,
-			sizeof(DEVICE_EXTENSION),		// DeviceExtensionSize
-			&ntDeviceName,					// DeviceName
-			FILE_DEVICE_UNKNOWN,			// DeviceType
-			0,								// DeviceCharacteristics
-			TRUE,							// Exclusive
-			&deviceObject					// [OUT]
-		);
-
-		if (!NT_SUCCESS(status))
-		{
-			DbgPrint("[$XTR] IoCreateDevice failed(0x%x).\n", status);
-			return FALSE;
-		}
-
-		deviceObject->Flags |= DO_BUFFERED_IO;
-
-		deviceExtension = (PDEVICE_EXTENSION)deviceObject->DeviceExtension;
-
-		//
-		// TODO: set up synchronization objects, state info,, etc.
-		//
-
-		RtlInitUnicodeString(&dosDeviceName, DDI_DOS_DEVICE_NAME_W);
-
-		status = IoCreateSymbolicLink(&dosDeviceName, &ntDeviceName);
-
-		if (!NT_SUCCESS(status))
-		{
-			DbgPrint("[$XTR] IoCreateSymbolicLink failed(0x%x).\n", status);
-			return FALSE;
-		}
-
-		symbolicLink = TRUE;
-
-		driver_object->MajorFunction[IRP_MJ_CREATE] =
-			driver_object->MajorFunction[IRP_MJ_CLOSE] =
-			driver_object->MajorFunction[IRP_MJ_DEVICE_CONTROL] = DDI_devCtrlRoutine;
-
-		//DriverObject->DriverUnload = IrpMjXTRUnloadRoutine;
-
-		HYPERPLATFORM_LOG_INFO("The VMM has been installed. IRQL: %x \r\n", KeGetCurrentIrql());
 		return status;
 	}
 

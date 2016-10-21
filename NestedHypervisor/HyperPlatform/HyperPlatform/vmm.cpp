@@ -223,11 +223,11 @@ _Use_decl_annotations_ static void VmmpHandleVmExit(GuestContext *guest_context)
   }
 
   switch (exit_reason.fields.reason) {
-	//Æê≥£ªÚ≤ªø…∆¡±Œ÷–î‡
+	//Áï∞Â∏∏Êàñ‰∏çÂèØÂ±èËîΩ‰∏≠Êñ∑
     case VmxExitReason::kExceptionOrNmi:
       VmmpHandleException(guest_context);
       break;
-	//»˝¥Œ??
+	//‰∏âÊ¨°??
     case VmxExitReason::kTripleFault:
       VmmpHandleTripleFault(guest_context);
       break;
@@ -342,7 +342,7 @@ _Use_decl_annotations_ static void VmmpHandleException(GuestContext *guest_conte
 		  static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrErrorCode))
 	  };
 
-	  //»°Exit qualification
+	  //ÂèñExit qualification
       const auto fault_address = UtilVmRead(VmcsField::kExitQualification);
 
       VmEntryInterruptionInformationField inject = {};
@@ -370,9 +370,16 @@ _Use_decl_annotations_ static void VmmpHandleException(GuestContext *guest_conte
       UtilVmWrite(VmcsField::kVmEntryIntrInfoField, inject.all); 
  
     } 
-	else 
+	else
 	{
-		//InterruptionVector EXIT = static_cast<InterruptionVector>(exception.fields.vector);
+		HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 0, 0,  0);
+	}
+  }
+  else if (static_cast<interruption_type>(exception.fields.interruption_type) == interruption_type::kSoftwareException) 
+  {
+    if (static_cast<InterruptionVector>(exception.fields.vector) ==  InterruptionVector::kBreakpointException) 
+	{
+      // #BP 
 		VmEntryInterruptionInformationField inject = {};
 		inject.fields.interruption_type = exception.fields.interruption_type;
 		inject.fields.vector = exception.fields.vector;
@@ -380,18 +387,8 @@ _Use_decl_annotations_ static void VmmpHandleException(GuestContext *guest_conte
 		inject.fields.valid = true;
 		UtilVmWrite(VmcsField::kVmEntryIntrInfoField, inject.all);
 		UtilVmWrite(VmcsField::kVmEntryInstructionLen, 1);
-		//HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 0, 0,
-        //                               0);
-    }
-  }
-  else if (static_cast<interruption_type>(exception.fields.interruption_type) == interruption_type::kSoftwareException) 
-  {
-    if (static_cast<InterruptionVector>(exception.fields.vector) ==  InterruptionVector::kBreakpointException) 
-	{
-      // #BP 
 	  HYPERPLATFORM_LOG_DEBUG("L1 GuestIp= %p, #BP ", guest_context->ip);
-	  VmmpAdjustGuestInstructionPointer(guest_context->ip);
-    }
+     }
 	else if (static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kTrapFlags)
 	{
 		VmEntryInterruptionInformationField inject = {};
@@ -405,26 +402,14 @@ _Use_decl_annotations_ static void VmmpHandleException(GuestContext *guest_conte
 
 	}
 	else 
-	{ 
-		VmEntryInterruptionInformationField inject = {};
-		inject.fields.interruption_type = exception.fields.interruption_type;
-		inject.fields.vector = exception.fields.vector;
-		inject.fields.deliver_error_code = false;
-		inject.fields.valid = true;
-		UtilVmWrite(VmcsField::kVmEntryIntrInfoField, inject.all);
-		UtilVmWrite(VmcsField::kVmEntryInstructionLen, 1);
+	{
+		HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 0, 0, 0);
     }
   }
   else {
-	  VmEntryInterruptionInformationField inject = {};
-	  inject.fields.interruption_type = exception.fields.interruption_type;
-	  inject.fields.vector = exception.fields.vector;
-	  inject.fields.deliver_error_code = false;
-	  inject.fields.valid = true;
-	  UtilVmWrite(VmcsField::kVmEntryIntrInfoField, inject.all);
-	  UtilVmWrite(VmcsField::kVmEntryInstructionLen, 1);
+	  HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 0, 0, 0);
   }
-}//VMMÆê≥£≤∂?∫ØîµÕÍ
+}//VMMÁï∞Â∏∏Êçï?ÂáΩÊï∏ÂÆå
 
 // CPUID
 _Use_decl_annotations_ static void VmmpHandleCpuid(
@@ -890,7 +875,7 @@ _Use_decl_annotations_ static void VmmpHandleVmx(GuestContext *guest_context) {
 }
 
 // VMCALL
-// ÷ÿ?vmcall÷∏¡Ó
+// Èáç?vmcallÊåá‰ª§
 _Use_decl_annotations_ static void VmmpHandleVmCall(
     GuestContext *guest_context) 
 {
@@ -945,13 +930,13 @@ _Use_decl_annotations_ static void VmmpHandleVmCall(
   } 
   else if (hypercall_number == HypercallNumber::kShEnablePageShadowing) 
   {
-	//1. å§’“å¶ë™µƒept±ÌÌó
-	//2. ‘O÷√±ÌÌóûÈ≤ªø…◊x/åë
-	//3. EPT-Violation handler÷–Ãé¿Ì
+	//1. Â∞ãÊâæÂ∞çÊáâÁöÑeptË°®È†Ö
+	//2. Ë®≠ÁΩÆË°®È†ÖÁÇ∫‰∏çÂèØËÆÄ/ÂØ´
+	//3. EPT-Violation handler‰∏≠ËôïÁêÜ
     ShEnablePageShadowing(
         guest_context->stack->processor_data->ept_data,
         guest_context->stack->processor_data->shared_data->shared_sh_data);
-	//‘O÷√RIP/EIP
+	//Ë®≠ÁΩÆRIP/EIP
     VmmpAdjustGuestInstructionPointer(guest_context->ip);
 
     // Indicates successful VMCALL

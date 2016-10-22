@@ -264,7 +264,7 @@ extern "C" {
 
 		// Activate VM-exit for RDMSR against all MSRs
 		const auto bitmap_read_low = reinterpret_cast<UCHAR *>(msr_bitmap);
-		const auto bitmap_read_high = bitmap_read_low + 1024;	//加一?大小
+		const auto bitmap_read_high = bitmap_read_low + 1024;	//鍔犱竴?澶у皬
 
 		RtlFillMemory(bitmap_read_low, 1024, 0xff);   // read        0 -     1fff
 		RtlFillMemory(bitmap_read_high, 1024, 0xff);  // read c0000000 - c0001fff
@@ -586,9 +586,9 @@ extern "C" {
 
 		const auto exception_bitmap =
 			1 << InterruptionVector::kBreakpointException |
-			1 << InterruptionVector::kGeneralProtectionException |
-			1 << InterruptionVector::kPageFaultException |
-			1 << InterruptionVector::kTrapFlags |
+			//1 << InterruptionVector::kGeneralProtectionException |
+			//1 << InterruptionVector::kPageFaultException |
+			//1 << InterruptionVector::kTrapFlags |
 			0;
 
 		// clang-format off

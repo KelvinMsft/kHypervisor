@@ -427,6 +427,7 @@ extern "C" {
 		const VmExitInterruptionInformationField exception = {
 			static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrInfo))
 		};
+
 		PrintVMCS();
 
 		HYPERPLATFORM_LOG_DEBUG("[EmulateVmExit]VMCS id %x", UtilVmRead(VmcsField::kVirtualProcessorId));
@@ -547,12 +548,6 @@ extern "C" {
 		if (vpid)
 		{
 			SaveGuestFieldFromVmcs02(vpid);
-			ULONG64 proc = (ULONG64)PsGetCurrentProcess();
-			CHAR*   name = (char*)proc + 0x2D8;
-			if (strstr(name, "od.exe"))
-			{
-				PrintVMCS();
-			}
 		}
 		
 		if (kVmmpEnableRecordVmExit)
@@ -721,9 +716,7 @@ extern "C" {
 
 				AsmWriteCR2(fault_address);
 				UtilVmWrite(VmcsField::kVmEntryExceptionErrorCode, fault_code.all);
-				UtilVmWrite(VmcsField::kVmEntryIntrInfoField, inject.all);
-
-				//Handle Copy-On-Write 
+				UtilVmWrite(VmcsField::kVmEntryIntrInfoField, inject.all); 
 
 			}
 			else if (static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kGeneralProtectionException)

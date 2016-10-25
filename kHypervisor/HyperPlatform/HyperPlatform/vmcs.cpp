@@ -13,7 +13,7 @@
 		PrintControlField();
 		PrintHostStateField();
 		PrintGuestStateField();
-		VOID PrintReadOnlyField();
+		PrintReadOnlyField();
 		HYPERPLATFORM_LOG_DEBUG("------------------------- End Printed by %s -----------------------------", func);
 
 	}

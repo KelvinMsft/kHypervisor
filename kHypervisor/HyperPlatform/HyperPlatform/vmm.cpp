@@ -293,28 +293,12 @@ extern "C" {
 		const VmExitInterruptionInformationField exception = {
 			static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrInfo))
 		};
-		/*
-		HYPERPLATFORM_LOG_DEBUG("exit_reason %I64X", exit_reason.all);
-		HYPERPLATFORM_LOG_DEBUG("interruption_type: %I64X", static_cast<interruption_type>(exception.fields.interruption_type));
-		HYPERPLATFORM_LOG_DEBUG("InterruptionVector: %I64X", static_cast<InterruptionVector>(exception.fields.vector));
-		*/
 
-		//Write to VMCS12 for vmread
-		ULONG32 exception2, exit_reason2;
-
-		//Write to VMCS12 for vmread
-		VmRead32(VmcsField::kVmExitIntrInfo, guest_vmcs_va, &exception2);
-		VmRead32(VmcsField::kVmExitReason, guest_vmcs_va, &exit_reason2);
-		/*
-		HYPERPLATFORM_LOG_DEBUG("VMCS id %x", UtilVmRead(VmcsField::kVirtualProcessorId));
-		HYPERPLATFORM_LOG_DEBUG("Trapped by %I64X ", UtilVmRead(VmcsField::kGuestRip));
-		HYPERPLATFORM_LOG_DEBUG("Trapped Reason: %I64X ", exit_reason.fields.reason);
-		HYPERPLATFORM_LOG_DEBUG("Trapped Intrreupt: %I64X ", exception.fields.interruption_type);
-		HYPERPLATFORM_LOG_DEBUG("Trapped Intrreupt vector: %I64X ", exception.fields.vector);
-		HYPERPLATFORM_LOG_DEBUG("Trapped kVmExitInstructionLen: %I64X ", UtilVmRead(VmcsField::kVmExitInstructionLen));
-		*/
+		ULONG_PTR vmexit_qualification = UtilVmRead(VmcsField::kExitQualification); 
+		
 		VmWrite32(VmcsField::kVmExitIntrInfo, guest_vmcs_va, exception.all);
 		VmWrite32(VmcsField::kVmExitReason, guest_vmcs_va, exit_reason.all);
+		VmWrite32(VmcsField::kExitQualification, guest_vmcs_va, vmexit_qualification);
 		VmWrite32(VmcsField::kVmExitInstructionLen, guest_vmcs_va, UtilVmRead(VmcsField::kVmExitInstructionLen));
 		VmWrite32(VmcsField::kVmInstructionError, guest_vmcs_va, UtilVmRead(VmcsField::kVmInstructionError));
 		VmWrite32(VmcsField::kVmExitIntrErrorCode, guest_vmcs_va, UtilVmRead(VmcsField::kVmExitIntrErrorCode));

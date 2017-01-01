@@ -38,11 +38,11 @@ ASM_DUMP_REGISTERS MACRO
     mov ecx, esp                ; all_regs
     mov edx, esp
     add edx, 4*9                ; stack_pointer
-    
+
     push ecx
     push edx
     call UtilDumpGpRegisters@8  ; UtilDumpGpRegisters(all_regs, stack_pointer);
-    
+
     popad
     popfd
 ENDM
@@ -52,7 +52,7 @@ ENDM
 ;
 ; implementations
 ;
-.CODE INIT
+.CODE
 
 ; bool __stdcall AsmInitializeVm(
 ;     _In_ void (*vm_initialization_routine)(_In_ ULONG_PTR, _In_ ULONG_PTR,
@@ -63,10 +63,10 @@ AsmInitializeVm PROC vm_initialization_routine, context
     pushad                  ; -4 * 8
 
     mov ecx, esp            ; esp
-    
-    ; vm_initialization_routine(rsp, asmResumeVM, context)
+
+    ; vm_initialization_routine(rsp, asmResumeVm, context)
     push context
-    push asmResumeVM
+    push asmResumeVm
     push ecx
     call vm_initialization_routine
 
@@ -76,8 +76,8 @@ AsmInitializeVm PROC vm_initialization_routine, context
     ret
 
     ; This is where the virtualized guest start to execute after successful
-    ; vmlaunch. 
-asmResumeVM:
+    ; vmlaunch.
+asmResumeVm:
     nop                     ; keep this nop for ease of debugging
     popad
     popfd
@@ -86,9 +86,6 @@ asmResumeVM:
     inc eax                 ; return true
     ret
 AsmInitializeVm ENDP
-
-
-.CODE
 
 ; void __stdcall AsmVmmEntryPoint();
 AsmVmmEntryPoint PROC
@@ -101,13 +98,13 @@ AsmVmmEntryPoint PROC
     call VmmVmExitHandler@4 ; bool vm_continue = VmmVmExitHandler(guest_context);
 
     test al, al
-    jz exitVM               ; if (!vm_continue) jmp exitVM
+    jz exitVm               ; if (!vm_continue) jmp exitVm
 
     popad
     vmresume
     jmp vmxError
 
-exitVM:
+exitVm:
     ; Executes vmxoff and ends virtualization
     ;   eax = Guest's eflags
     ;   edx = Guest's esp
@@ -117,7 +114,7 @@ exitVM:
     jz vmxError             ; if (ZF) jmp
     jc vmxError             ; if (CF) jmp
     push eax
-    popfd                   ; eflags <= GurstFlags 
+    popfd                   ; eflags <= GurstFlags
     mov esp, edx            ; esp <= GuestRsp
     push ecx
     ret                     ; jmp AddressToReturn
@@ -291,8 +288,9 @@ AsmWriteCR2 PROC cr2_value
     ret
 AsmWriteCR2 ENDP
 
-; unsigned char __stdcall AsmInvept(_In_ InvEptType invept_type,
-;                                   _In_ const InvEptDescriptor *invept_descriptor);
+; unsigned char __stdcall AsmInvept(
+;     _In_ InvEptType invept_type,
+;     _In_ const InvEptDescriptor *invept_descriptor);
 AsmInvept PROC invept_type, invept_descriptor
     mov ecx, invept_type
     mov edx, invept_descriptor
@@ -311,6 +309,28 @@ errorWithCode:
     mov eax, VMX_ERROR_WITH_STATUS
     ret
 AsmInvept ENDP
+
+; unsigned char __stdcall AsmInvvpid(
+;     _In_ InvVpidType invvpid_type,
+;     _In_ const InvVpidDescriptor *invvpid_descriptor);
+AsmInvvpid PROC invvpid_type, invvpid_descriptor
+    mov ecx, invvpid_type
+    mov edx, invvpid_descriptor
+    ; invvpid  ecx, oword ptr [rdx]
+    db  66h, 0fh, 38h, 81h, 0ah
+    jz errorWithCode        ; if (ZF) jmp
+    jc errorWithoutCode     ; if (CF) jmp
+    xor eax, eax            ; return VMX_OK
+    ret
+
+errorWithoutCode:
+    mov eax, VMX_ERROR_WITHOUT_STATUS
+    ret
+
+errorWithCode:
+    mov eax, VMX_ERROR_WITH_STATUS
+    ret
+AsmInvvpid ENDP
 
 
 PURGE ASM_DUMP_REGISTERS

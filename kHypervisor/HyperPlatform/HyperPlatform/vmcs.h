@@ -1,7 +1,7 @@
 #pragma once
 
 #include <fltKernel.h>
-#include "../HyperPlatform/HyperPlatform/asm.h"
+#include "asm.h"
 
 
 #define CHECK_BOUNDARY_FOR_IA32					 0xFFFFFFFF00000000
@@ -21,14 +21,14 @@
 
 #define PrintVMCS(){ PrintAllField(__func__);}
 
-extern "C" 
+extern "C"
 {
 	VOID    BuildGernericVMCSMap();
 	BOOLEAN RegularCheck();
 	BOOLEAN is_vmcs_field_supported(VmcsField encoding);
-	
+
 	/*
-		VMCS Phase 1
+	VMCS Phase 1
 	*/
 	VOID  VmRead64(VmcsField Field, ULONG_PTR base, PULONG64 destination);
 	VOID  VmRead32(VmcsField Field, ULONG_PTR base, PULONG32 destination);
@@ -39,11 +39,11 @@ extern "C"
 	VOID  VmWrite16(VmcsField Field, ULONG_PTR base, ULONG_PTR value);
 
 	VmcsField DecodeVmwriteOrVmRead(
-		GpRegisters* guest_context, 
-		ULONG_PTR* Offset, 
-		ULONG_PTR* Value, 
-		BOOLEAN* RorM, 
-		ULONG_PTR* RegIndex = NULL, 
+		GpRegisters* guest_context,
+		ULONG_PTR* Offset,
+		ULONG_PTR* Value,
+		BOOLEAN* RorM,
+		ULONG_PTR* RegIndex = NULL,
 		ULONG_PTR* MemAddr = NULL
 	);
 	ULONG64 GetControlValue(Msr msr, ULONG32* highpart, ULONG32* lowpart);
@@ -57,3 +57,4 @@ extern "C"
 	VOID PrintReadOnlyField();
 	VOID PrintAllField(const char* func);
 }
+#pragma once

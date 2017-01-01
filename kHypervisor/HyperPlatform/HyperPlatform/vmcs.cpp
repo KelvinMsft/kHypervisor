@@ -3,20 +3,20 @@
 #include "vmcs.h"
 #include "util.h" 
 #include "common.h"
-#include "..\HyperPlatform\HyperPlatform\asm.h"
-#include "..\HyperPlatform\HyperPlatform\log.h"  
- 
-    
-	VOID PrintAllField(const char* func)
-	{
-		HYPERPLATFORM_LOG_DEBUG("------------------------- Start Printed by %s -----------------------------", func);
-		PrintControlField();
-		PrintHostStateField();
-		PrintGuestStateField();
-		PrintReadOnlyField();
-		HYPERPLATFORM_LOG_DEBUG("------------------------- End Printed by %s -----------------------------", func);
+#include "asm.h"
+#include "log.h"  
 
-	}
+
+VOID PrintAllField(const char* func)
+{
+	HYPERPLATFORM_LOG_DEBUG("------------------------- Start Printed by %s -----------------------------", func);
+	PrintControlField();
+	PrintHostStateField();
+	PrintGuestStateField();
+	PrintReadOnlyField();
+	HYPERPLATFORM_LOG_DEBUG("------------------------- End Printed by %s -----------------------------", func);
+
+}
 extern "C" {
 
 	unsigned	g_vmcs_map[16][1 + VMX_HIGHEST_VMCS_ENCODING];
@@ -199,7 +199,7 @@ extern "C" {
 	{
 
 		HYPERPLATFORM_LOG_DEBUG("###################### Natural Read-only data field #############################");
-		HYPERPLATFORM_LOG_DEBUG("kGuestPhysicalAddress: %I64X  ",  UtilVmRead(VmcsField::kGuestPhysicalAddress));		
+		HYPERPLATFORM_LOG_DEBUG("kGuestPhysicalAddress: %I64X  ", UtilVmRead(VmcsField::kGuestPhysicalAddress));
 		HYPERPLATFORM_LOG_DEBUG("###################### 64bit Read-only data field #############################");
 		HYPERPLATFORM_LOG_DEBUG("kVmInstructionError	:%I64X  ", UtilVmRead(VmcsField::kVmInstructionError));
 		HYPERPLATFORM_LOG_DEBUG("kVmExitReason			:%I64X  ", UtilVmRead(VmcsField::kVmExitReason));
@@ -705,7 +705,7 @@ extern "C" {
 
 	// Returns a base address of segment_descriptor
 	_Use_decl_annotations_ static ULONG_PTR GetSegmentBaseByDescriptor(
-		const SegmentDesctiptor *segment_descriptor) {
+		const SegmentDescriptor *segment_descriptor) {
 		// Caluculate a 32bit base address
 		const auto base_high = segment_descriptor->fields.base_high << (6 * 4);
 		const auto base_middle = segment_descriptor->fields.base_mid << (4 * 4);
@@ -722,10 +722,10 @@ extern "C" {
 	}
 
 	// Returns the segment descriptor corresponds to the SegmentSelector
-	_Use_decl_annotations_ static SegmentDesctiptor *GetSegmentDescriptor(
+	_Use_decl_annotations_ static SegmentDescriptor *GetSegmentDescriptor(
 		ULONG_PTR descriptor_table_base, USHORT segment_selector) {
 		const SegmentSelector ss = { segment_selector };
-		return reinterpret_cast<SegmentDesctiptor *>(descriptor_table_base + ss.fields.index * sizeof(SegmentDesctiptor));
+		return reinterpret_cast<SegmentDescriptor *>(descriptor_table_base + ss.fields.index * sizeof(SegmentDescriptor));
 	}
 
 	// Returns a base address of the segment specified by SegmentSelector
@@ -783,7 +783,7 @@ extern "C" {
 	VOID MixControlFieldWithVmcs01AndVmcs12(ULONG_PTR vmcs12_va, ULONG_PTR vmcs02_pa, BOOLEAN isLaunch)
 	{
 
-	
+
 		//16bit control field
 		USHORT guest_vpid = 0;
 
@@ -830,68 +830,68 @@ extern "C" {
 		ULONG_PTR guest_virtual_apicpage = 0;
 		ULONG32	  exit_control = 0;
 		ULONG32   highpart, lowpart = 0;
-		USHORT	  my_guest_vpid = 0; 
+		USHORT	  my_guest_vpid = 0;
 
 		VmxStatus status;
 
-		exit_control						= (ULONG32)UtilVmRead(VmcsField::kVmExitControls);
-		guest_pin_base_ctls					= (ULONG32)UtilVmRead(VmcsField::kPinBasedVmExecControl);
-		guest_primary_processor_base_ctls	= (ULONG32)UtilVmRead(VmcsField::kCpuBasedVmExecControl);
+		exit_control = (ULONG32)UtilVmRead(VmcsField::kVmExitControls);
+		guest_pin_base_ctls = (ULONG32)UtilVmRead(VmcsField::kPinBasedVmExecControl);
+		guest_primary_processor_base_ctls = (ULONG32)UtilVmRead(VmcsField::kCpuBasedVmExecControl);
 		guest_secondary_processor_base_ctls = (ULONG32)UtilVmRead(VmcsField::kSecondaryVmExecControl);
 
 
 
-		vmexit_ctrls						= (ULONG32)UtilVmRead(VmcsField::kVmExitControls);
-		vmexit_msr_store_cnt				= (ULONG32)UtilVmRead(VmcsField::kVmExitMsrStoreCount);
-		vmexit_msr_load_cnt					= (ULONG32)UtilVmRead(VmcsField::kVmExitMsrLoadCount);
+		vmexit_ctrls = (ULONG32)UtilVmRead(VmcsField::kVmExitControls);
+		vmexit_msr_store_cnt = (ULONG32)UtilVmRead(VmcsField::kVmExitMsrStoreCount);
+		vmexit_msr_load_cnt = (ULONG32)UtilVmRead(VmcsField::kVmExitMsrLoadCount);
 
-		vmentry_interr_info					= (ULONG32)UtilVmRead(VmcsField::kVmEntryIntrInfoField);
-		vmentry_except_Err_code				= (ULONG32)UtilVmRead(VmcsField::kVmEntryExceptionErrorCode);
-		vmentry_instr_length				= (ULONG32)UtilVmRead(VmcsField::kVmEntryInstructionLen);
-		vmentry_ctrls						= (ULONG32)UtilVmRead(VmcsField::kVmEntryControls);
-		vmentry_msr_load_cnt				= (ULONG32)UtilVmRead(VmcsField::kVmEntryMsrLoadCount);
+		vmentry_interr_info = (ULONG32)UtilVmRead(VmcsField::kVmEntryIntrInfoField);
+		vmentry_except_Err_code = (ULONG32)UtilVmRead(VmcsField::kVmEntryExceptionErrorCode);
+		vmentry_instr_length = (ULONG32)UtilVmRead(VmcsField::kVmEntryInstructionLen);
+		vmentry_ctrls = (ULONG32)UtilVmRead(VmcsField::kVmEntryControls);
+		vmentry_msr_load_cnt = (ULONG32)UtilVmRead(VmcsField::kVmEntryMsrLoadCount);
 
 
-		guest_exception_bitmap				= (ULONG32)UtilVmRead(VmcsField::kExceptionBitmap);
-		guest_page_fault_mask				= (ULONG32)UtilVmRead(VmcsField::kPageFaultErrorCodeMask);
-		guest_page_fault_error_code_match	= (ULONG32)UtilVmRead(VmcsField::kPageFaultErrorCodeMatch);
-		guest_cr3_target_count				= (ULONG32)UtilVmRead(VmcsField::kCr3TargetCount);
+		guest_exception_bitmap = (ULONG32)UtilVmRead(VmcsField::kExceptionBitmap);
+		guest_page_fault_mask = (ULONG32)UtilVmRead(VmcsField::kPageFaultErrorCodeMask);
+		guest_page_fault_error_code_match = (ULONG32)UtilVmRead(VmcsField::kPageFaultErrorCodeMatch);
+		guest_cr3_target_count = (ULONG32)UtilVmRead(VmcsField::kCr3TargetCount);
 
-		guest_cr0_mask						= UtilVmRead64(VmcsField::kCr0GuestHostMask);
-		guest_cr4_mask						= UtilVmRead64(VmcsField::kCr4GuestHostMask);
-		guest_cr0_read_shadow				= UtilVmRead64(VmcsField::kCr0ReadShadow);
-		guest_cr4_read_shadow				= UtilVmRead64(VmcsField::kCr4ReadShadow);
-		guest_cr3_target_value[0]			= UtilVmRead64(VmcsField::kCr3TargetValue0);
-		guest_cr3_target_value[1]			= UtilVmRead64(VmcsField::kCr3TargetValue1);
-		guest_cr3_target_value[2]			= UtilVmRead64(VmcsField::kCr3TargetValue2);
-		guest_cr3_target_value[3]			= UtilVmRead64(VmcsField::kCr3TargetValue3);
+		guest_cr0_mask = UtilVmRead64(VmcsField::kCr0GuestHostMask);
+		guest_cr4_mask = UtilVmRead64(VmcsField::kCr4GuestHostMask);
+		guest_cr0_read_shadow = UtilVmRead64(VmcsField::kCr0ReadShadow);
+		guest_cr4_read_shadow = UtilVmRead64(VmcsField::kCr4ReadShadow);
+		guest_cr3_target_value[0] = UtilVmRead64(VmcsField::kCr3TargetValue0);
+		guest_cr3_target_value[1] = UtilVmRead64(VmcsField::kCr3TargetValue1);
+		guest_cr3_target_value[2] = UtilVmRead64(VmcsField::kCr3TargetValue2);
+		guest_cr3_target_value[3] = UtilVmRead64(VmcsField::kCr3TargetValue3);
 
 
 		// Get vmcs01 Control field 
-		guest_io_bitmap[0]					= UtilVmRead64(VmcsField::kIoBitmapA);
-		guest_io_bitmap[1]					= UtilVmRead64(VmcsField::kIoBitmapB);
-		guest_msr_bitmap					= UtilVmRead64(VmcsField::kMsrBitmap);
-		guest_vmreadBitmapAddress			= UtilVmRead64(VmcsField::kVmreadBitmapAddress);
-		guest_vmwriteBitMapAddress			= UtilVmRead64(VmcsField::kVmwriteBitmapAddress);
-		guest_vmexceptionAddress			= UtilVmRead64(VmcsField::kVirtualizationExceptionInfoAddress);
-		guest_virtual_apicpage				= UtilVmRead64(VmcsField::kVirtualApicPageAddr);
-		guest_eoi_exit_bitmap[0]			= UtilVmRead64(VmcsField::kEoiExitBitmap0);
-		guest_eoi_exit_bitmap[1]			= UtilVmRead64(VmcsField::kEoiExitBitmap0High);
-		guest_eoi_exit_bitmap[2]			= UtilVmRead64(VmcsField::kEoiExitBitmap1);
-		guest_eoi_exit_bitmap[3]			= UtilVmRead64(VmcsField::kEoiExitBitmap1High);
-		guest_eoi_exit_bitmap[4]			= UtilVmRead64(VmcsField::kEoiExitBitmap2);
-		guest_eoi_exit_bitmap[5]			= UtilVmRead64(VmcsField::kEoiExitBitmap2High);
-		guest_eoi_exit_bitmap[6]			= UtilVmRead64(VmcsField::kEoiExitBitmap3);
-		guest_eoi_exit_bitmap[7]			= UtilVmRead64(VmcsField::kEoiExitBitmap3High);
-		guest_tpr_threshold					= (ULONG32)UtilVmRead(VmcsField::kTprThreshold);
-		guest_apic_access_address			= UtilVmRead64(VmcsField::kApicAccessAddr);
-		guest_ept_pointer					= UtilVmRead64(VmcsField::kEptPointer);
-		vmfunc_ctrls						= UtilVmRead64(VmcsField::kVmFuncCtls);
-		eptp_list_address					= UtilVmRead64(VmcsField::kEptpListAddress);
-		pml_address							= UtilVmRead64(VmcsField::kPmlAddress);
-		pause_loop_exiting_gap				= (ULONG32)UtilVmRead(VmcsField::kPleGap);
-		pause_loop_exiting_window			= (ULONG32)UtilVmRead(VmcsField::kPleWindow);
-		guest_vpid							= (USHORT)UtilVmRead(VmcsField::kVirtualProcessorId);
+		guest_io_bitmap[0] = UtilVmRead64(VmcsField::kIoBitmapA);
+		guest_io_bitmap[1] = UtilVmRead64(VmcsField::kIoBitmapB);
+		guest_msr_bitmap = UtilVmRead64(VmcsField::kMsrBitmap);
+		guest_vmreadBitmapAddress = UtilVmRead64(VmcsField::kVmreadBitmapAddress);
+		guest_vmwriteBitMapAddress = UtilVmRead64(VmcsField::kVmwriteBitmapAddress);
+		guest_vmexceptionAddress = UtilVmRead64(VmcsField::kVirtualizationExceptionInfoAddress);
+		guest_virtual_apicpage = UtilVmRead64(VmcsField::kVirtualApicPageAddr);
+		guest_eoi_exit_bitmap[0] = UtilVmRead64(VmcsField::kEoiExitBitmap0);
+		guest_eoi_exit_bitmap[1] = UtilVmRead64(VmcsField::kEoiExitBitmap0High);
+		guest_eoi_exit_bitmap[2] = UtilVmRead64(VmcsField::kEoiExitBitmap1);
+		guest_eoi_exit_bitmap[3] = UtilVmRead64(VmcsField::kEoiExitBitmap1High);
+		guest_eoi_exit_bitmap[4] = UtilVmRead64(VmcsField::kEoiExitBitmap2);
+		guest_eoi_exit_bitmap[5] = UtilVmRead64(VmcsField::kEoiExitBitmap2High);
+		guest_eoi_exit_bitmap[6] = UtilVmRead64(VmcsField::kEoiExitBitmap3);
+		guest_eoi_exit_bitmap[7] = UtilVmRead64(VmcsField::kEoiExitBitmap3High);
+		guest_tpr_threshold = (ULONG32)UtilVmRead(VmcsField::kTprThreshold);
+		guest_apic_access_address = UtilVmRead64(VmcsField::kApicAccessAddr);
+		guest_ept_pointer = UtilVmRead64(VmcsField::kEptPointer);
+		vmfunc_ctrls = UtilVmRead64(VmcsField::kVmFuncCtls);
+		eptp_list_address = UtilVmRead64(VmcsField::kEptpListAddress);
+		pml_address = UtilVmRead64(VmcsField::kPmlAddress);
+		pause_loop_exiting_gap = (ULONG32)UtilVmRead(VmcsField::kPleGap);
+		pause_loop_exiting_window = (ULONG32)UtilVmRead(VmcsField::kPleWindow);
+		guest_vpid = (USHORT)UtilVmRead(VmcsField::kVirtualProcessorId);
 
 		const auto use_true_msrs = Ia32VmxBasicMsr{ UtilReadMsr64(Msr::kIa32VmxBasic) }.fields.vmx_capability_hint;
 
@@ -919,7 +919,7 @@ extern "C" {
 		//  Start Mixing Control field with VMCS01 and VMCS12 into VMCS02
 		/*
 		16 bit Control Field
-		*/ 
+		*/
 		VmRead16(VmcsField::kVirtualProcessorId, vmcs12_va, &my_guest_vpid);
 		UtilVmWrite(VmcsField::kVirtualProcessorId, my_guest_vpid);
 
@@ -968,8 +968,8 @@ extern "C" {
 		UtilVmWrite(VmcsField::kPageFaultErrorCodeMatch, my_page_fault_error_code_match);
 		UtilVmWrite(VmcsField::kCr3TargetCount, my_cr3_target_count);
 
-		UtilVmWrite(VmcsField::kPinBasedVmExecControl, my_pin_base_ctls | guest_pin_base_ctls);
-		UtilVmWrite(VmcsField::kVmExitControls, exit_control | my_exit_control);
+		UtilVmWrite(VmcsField::kPinBasedVmExecControl, my_pin_base_ctls );
+		UtilVmWrite(VmcsField::kVmExitControls, exit_control);
 		UtilVmWrite(VmcsField::kSecondaryVmExecControl, guest_secondary_processor_base_ctls | my_guest_secondary_processor_base_ctls);
 		UtilVmWrite(VmcsField::kCpuBasedVmExecControl, guest_primary_processor_base_ctls | my_primary_processor_base_ctls);
 		UtilVmWrite(VmcsField::kExceptionBitmap, guest_exception_bitmap | my_exception_bitmap);
@@ -1049,10 +1049,10 @@ extern "C" {
 		VmRead16(VmcsField::kGuestDsSelector, guest_vmcs_va, &vmcs12_ds_selector);
 		VmRead16(VmcsField::kGuestFsSelector, guest_vmcs_va, &vmcs12_fs_selector);
 		VmRead16(VmcsField::kGuestGsSelector, guest_vmcs_va, &vmcs12_gs_selector);
-		VmRead16(VmcsField::kGuestLdtrSelector, guest_vmcs_va,    &vmcs12_ldtr_selector);
-		VmRead16(VmcsField::kGuestTrSelector, guest_vmcs_va,      &vmcs12_tr_selector);
+		VmRead16(VmcsField::kGuestLdtrSelector, guest_vmcs_va, &vmcs12_ldtr_selector);
+		VmRead16(VmcsField::kGuestTrSelector, guest_vmcs_va, &vmcs12_tr_selector);
 		VmRead16(VmcsField::kGuestInterruptStatus, guest_vmcs_va, &vmcs12_guest_interrupt_status);
-		VmRead16(VmcsField::kGuestPmlIndex, guest_vmcs_va,		  &vmcs12_pmlindex);
+		VmRead16(VmcsField::kGuestPmlIndex, guest_vmcs_va, &vmcs12_pmlindex);
 
 		UtilVmWrite(VmcsField::kGuestEsSelector, vmcs12_es_selector);
 		UtilVmWrite(VmcsField::kGuestCsSelector, vmcs12_cs_selector);
@@ -1097,7 +1097,7 @@ extern "C" {
 		VmRead32(VmcsField::kGuestDsLimit, guest_vmcs_va, &vmcs12_kGuestDsLimit);
 		VmRead32(VmcsField::kGuestFsLimit, guest_vmcs_va, &vmcs12_kGuestFsLimit);
 		VmRead32(VmcsField::kGuestGsLimit, guest_vmcs_va, &vmcs12_kGuestGsLimit);
-		VmRead32(VmcsField::kGuestLdtrLimit, guest_vmcs_va,&vmcs12_kGuestLdtrLimit);
+		VmRead32(VmcsField::kGuestLdtrLimit, guest_vmcs_va, &vmcs12_kGuestLdtrLimit);
 		VmRead32(VmcsField::kGuestTrLimit, guest_vmcs_va, &vmcs12_kGuestTrLimit);
 		VmRead32(VmcsField::kGuestGdtrLimit, guest_vmcs_va, &vmcs12_kGuestGdtrLimit);
 		VmRead32(VmcsField::kGuestIdtrLimit, guest_vmcs_va, &vmcs12_kGuestIdtrLimit);
@@ -1120,15 +1120,15 @@ extern "C" {
 		UtilVmWrite(VmcsField::kGuestFsLimit, vmcs12_kGuestFsLimit);
 		UtilVmWrite(VmcsField::kGuestGsLimit, vmcs12_kGuestGsLimit);
 		UtilVmWrite(VmcsField::kGuestLdtrLimit, vmcs12_kGuestLdtrLimit);
-		UtilVmWrite(VmcsField::kGuestTrLimit,  vmcs12_kGuestTrLimit);
-		UtilVmWrite(VmcsField::kGuestGdtrLimit,vmcs12_kGuestGdtrLimit);
-		UtilVmWrite(VmcsField::kGuestIdtrLimit,vmcs12_kGuestIdtrLimit);
-		UtilVmWrite(VmcsField::kGuestEsArBytes,vmcs12_kGuestEsArBytes);
-		UtilVmWrite(VmcsField::kGuestCsArBytes,vmcs12_kGuestCsArBytes);
-		UtilVmWrite(VmcsField::kGuestSsArBytes,vmcs12_kGuestSsArBytes);
-		UtilVmWrite(VmcsField::kGuestDsArBytes,vmcs12_kGuestDsArBytes);
-		UtilVmWrite(VmcsField::kGuestFsArBytes,vmcs12_kGuestFsArBytes);
-		UtilVmWrite(VmcsField::kGuestGsArBytes,vmcs12_kGuestGsArBytes);
+		UtilVmWrite(VmcsField::kGuestTrLimit, vmcs12_kGuestTrLimit);
+		UtilVmWrite(VmcsField::kGuestGdtrLimit, vmcs12_kGuestGdtrLimit);
+		UtilVmWrite(VmcsField::kGuestIdtrLimit, vmcs12_kGuestIdtrLimit);
+		UtilVmWrite(VmcsField::kGuestEsArBytes, vmcs12_kGuestEsArBytes);
+		UtilVmWrite(VmcsField::kGuestCsArBytes, vmcs12_kGuestCsArBytes);
+		UtilVmWrite(VmcsField::kGuestSsArBytes, vmcs12_kGuestSsArBytes);
+		UtilVmWrite(VmcsField::kGuestDsArBytes, vmcs12_kGuestDsArBytes);
+		UtilVmWrite(VmcsField::kGuestFsArBytes, vmcs12_kGuestFsArBytes);
+		UtilVmWrite(VmcsField::kGuestGsArBytes, vmcs12_kGuestGsArBytes);
 		UtilVmWrite(VmcsField::kGuestLdtrArBytes, vmcs12_kGuestLdtrArBytes);
 		UtilVmWrite(VmcsField::kGuestTrArBytes, vmcs12_kGuestTrArBytes);
 		UtilVmWrite(VmcsField::kGuestInterruptibilityInfo, vmcs12_kGuestInterruptibilityInfo);
@@ -1140,7 +1140,7 @@ extern "C" {
 		*/
 		ULONG64 vmcs12_kIa32Debugctl;
 		VmRead64(VmcsField::kGuestIa32Debugctl, guest_vmcs_va, &vmcs12_kIa32Debugctl);
-		UtilVmWrite64(VmcsField::kVmcsLinkPointer, MAXULONG64);//涓嶄娇鐢ㄥ奖瀛怴MCS
+		UtilVmWrite64(VmcsField::kVmcsLinkPointer, MAXULONG64);//不使用影子VMCS
 		UtilVmWrite64(VmcsField::kGuestIa32Debugctl, vmcs12_kIa32Debugctl);
 
 		/*
@@ -1171,21 +1171,21 @@ extern "C" {
 		VmRead64(VmcsField::kGuestSysenterEsp, guest_vmcs_va, &vmcs12_kGuestSysenterEsp);
 		VmRead64(VmcsField::kGuestSysenterEip, guest_vmcs_va, &vmcs12_kGuestSysenterEip);
 		VmRead64(VmcsField::kGuestPendingDbgExceptions, guest_vmcs_va, &vmcs12_guest_Pending_dbg_exception);
-		VmRead64(VmcsField::kGuestEsBase, guest_vmcs_va,	&vmcs12_kGuestEsBase);
-		VmRead64(VmcsField::kGuestCsBase, guest_vmcs_va,	&vmcs12_kGuestCsBase);
-		VmRead64(VmcsField::kGuestSsBase, guest_vmcs_va,	&vmcs12_kGuestSsBase);
-		VmRead64(VmcsField::kGuestDsBase, guest_vmcs_va,	&vmcs12_kGuestDsBase);
-		VmRead64(VmcsField::kGuestFsBase, guest_vmcs_va,	&vmcs12_kGuestFsBase);
-		VmRead64(VmcsField::kGuestGsBase, guest_vmcs_va,	&vmcs12_kGuestGsBase);
-		VmRead64(VmcsField::kGuestLdtrBase, guest_vmcs_va,  &vmcs12_kGuestLdtrBase);
-		VmRead64(VmcsField::kGuestTrBase, guest_vmcs_va,	&vmcs12_kGuestTrBase);
-		VmRead64(VmcsField::kGuestGdtrBase, guest_vmcs_va,  &vmcs12_kGuestGdtrBase);
-		VmRead64(VmcsField::kGuestIdtrBase, guest_vmcs_va,  &vmcs12_kGuestIdtrBase);
-		VmRead64(VmcsField::kGuestDr7, guest_vmcs_va,		&vmcs12_kGuestDr7);
-		VmRead64(VmcsField::kGuestRflags, guest_vmcs_va,	&vmcs12_kGuestRflags);
-		VmRead64(VmcsField::kGuestCr0, guest_vmcs_va,		&vmcs12_kGuestCr0);
-		VmRead64(VmcsField::kGuestCr3, guest_vmcs_va,		&vmcs12_kGuestCr3);
-		VmRead64(VmcsField::kGuestCr4, guest_vmcs_va,		&vmcs12_kGuestCr4);
+		VmRead64(VmcsField::kGuestEsBase, guest_vmcs_va, &vmcs12_kGuestEsBase);
+		VmRead64(VmcsField::kGuestCsBase, guest_vmcs_va, &vmcs12_kGuestCsBase);
+		VmRead64(VmcsField::kGuestSsBase, guest_vmcs_va, &vmcs12_kGuestSsBase);
+		VmRead64(VmcsField::kGuestDsBase, guest_vmcs_va, &vmcs12_kGuestDsBase);
+		VmRead64(VmcsField::kGuestFsBase, guest_vmcs_va, &vmcs12_kGuestFsBase);
+		VmRead64(VmcsField::kGuestGsBase, guest_vmcs_va, &vmcs12_kGuestGsBase);
+		VmRead64(VmcsField::kGuestLdtrBase, guest_vmcs_va, &vmcs12_kGuestLdtrBase);
+		VmRead64(VmcsField::kGuestTrBase, guest_vmcs_va, &vmcs12_kGuestTrBase);
+		VmRead64(VmcsField::kGuestGdtrBase, guest_vmcs_va, &vmcs12_kGuestGdtrBase);
+		VmRead64(VmcsField::kGuestIdtrBase, guest_vmcs_va, &vmcs12_kGuestIdtrBase);
+		VmRead64(VmcsField::kGuestDr7, guest_vmcs_va, &vmcs12_kGuestDr7);
+		VmRead64(VmcsField::kGuestRflags, guest_vmcs_va, &vmcs12_kGuestRflags);
+		VmRead64(VmcsField::kGuestCr0, guest_vmcs_va, &vmcs12_kGuestCr0);
+		VmRead64(VmcsField::kGuestCr3, guest_vmcs_va, &vmcs12_kGuestCr3);
+		VmRead64(VmcsField::kGuestCr4, guest_vmcs_va, &vmcs12_kGuestCr4);
 
 		HYPERPLATFORM_LOG_DEBUG("Vmcs12 GuestCr3: %I64X  Vmcs02 GuestCr3: %I64X", vmcs12_kGuestCr3, UtilVmRead64(VmcsField::kGuestCr3));
 

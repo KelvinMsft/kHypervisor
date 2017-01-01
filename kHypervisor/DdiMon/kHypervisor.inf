@@ -1,0 +1,90 @@
+;
+; kHypervisor.inf
+;
+
+[Version]
+Signature="$WINDOWS NT$"
+Class=Sample ; TODO: edit Class
+ClassGuid={78A1C341-4539-11d3-B88D-00C04FAD5171} ; TODO: edit ClassGuid
+Provider=%ManufacturerName%
+CatalogFile=kHypervisor.cat
+DriverVer= ; TODO: set DriverVer in stampinf property pages
+
+[DestinationDirs]
+DefaultDestDir = 12
+
+; ================= Class section =====================
+
+[ClassInstall32]
+Addreg=SampleClassReg
+
+[SampleClassReg]
+HKR,,,0,%ClassName%
+HKR,,Icon,,-5
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+kHypervisor.sys  = 1,,
+
+;*****************************************
+; Install Section
+;*****************************************
+
+[Manufacturer]
+%ManufacturerName%=Standard,NT$ARCH$
+
+[Standard.NT$ARCH$]
+%kHypervisor.DeviceDesc%=kHypervisor_Device, Root\kHypervisor ; TODO: edit hw-id
+
+[kHypervisor_Device.NT]
+CopyFiles=Drivers_Dir
+
+[Drivers_Dir]
+kHypervisor.sys
+
+;-------------- Service installation
+[kHypervisor_Device.NT.Services]
+AddService = kHypervisor,%SPSVCINST_ASSOCSERVICE%, kHypervisor_Service_Inst
+
+; -------------- kHypervisor driver install sections
+[kHypervisor_Service_Inst]
+DisplayName    = %kHypervisor.SVCDESC%
+ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
+StartType      = 3               ; SERVICE_DEMAND_START
+ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
+ServiceBinary  = %12%\kHypervisor.sys
+
+;
+;--- kHypervisor_Device Coinstaller installation ------
+;
+
+[DestinationDirs]
+kHypervisor_Device_CoInstaller_CopyFiles = 11
+
+[kHypervisor_Device.NT.CoInstallers]
+AddReg=kHypervisor_Device_CoInstaller_AddReg
+CopyFiles=kHypervisor_Device_CoInstaller_CopyFiles
+
+[kHypervisor_Device_CoInstaller_AddReg]
+HKR,,CoInstallers32,0x00010000, "WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll,WdfCoInstaller"
+
+[kHypervisor_Device_CoInstaller_CopyFiles]
+WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll
+
+[SourceDisksFiles]
+WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll=1 ; make sure the number matches with SourceDisksNames
+
+[kHypervisor_Device.NT.Wdf]
+KmdfService =  kHypervisor, kHypervisor_wdfsect
+[kHypervisor_wdfsect]
+KmdfLibraryVersion = $KMDFVERSION$
+
+[Strings]
+SPSVCINST_ASSOCSERVICE= 0x00000002
+ManufacturerName="<Your manufacturer name>" ;TODO: Replace with your manufacturer name
+ClassName="Samples" ; TODO: edit ClassName
+DiskName = "kHypervisor Installation Disk"
+kHypervisor.DeviceDesc = "kHypervisor Device"
+kHypervisor.SVCDESC = "kHypervisor Service"

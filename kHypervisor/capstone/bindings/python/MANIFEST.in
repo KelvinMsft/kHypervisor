@@ -1,4 +1,0 @@
-recursive-include capstone *
-recursive-include prebuilt *
-include LICENSE.TXT
-include README

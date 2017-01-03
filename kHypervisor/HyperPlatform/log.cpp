@@ -799,7 +799,7 @@ _Use_decl_annotations_ static bool LogpIsPrinted(char *message) {
 // Sets a break point that works only when a debugger is present
 /*_Use_decl_annotations_*/ static void LogpDbgBreak() {
   if (!KD_DEBUGGER_NOT_PRESENT) {
-    __debugbreak();
+	// __debugbreak();
   }
 }
 

@@ -234,15 +234,14 @@ ULONG64 GetCurrentVmcs12(
 	__vmx_vmptrst(&vmcs_pa);
 	if (vmcs_pa)
 	{
-		for (i = 0; i < (int)KeQueryMaximumProcessorCount()-1; i++)
+		for (i = 0; i < (int)KeQueryMaximumProcessorCount(); i++)
 		{
 			if (!g_vcpus[i]) 
 			{
 				break;
 			}
 			if (!g_vcpus[i]->current_vmcs || 
-				!g_vcpus[i]->guest_vmcs
-				)
+				!g_vcpus[i]->guest_vmcs)
 			{
 				break;
 			}
@@ -267,6 +266,7 @@ VOID SaveExceptionInformationFromVmcs02(VmExitInformation exit_reason)
 	ULONG64 guest_vmcs_va = GetCurrentVmcs12();
 	if (!guest_vmcs_va)
 	{
+
 		return;
 	}
 
@@ -732,8 +732,7 @@ _Use_decl_annotations_ static void VmmpHandleException(
       const auto fault_address = UtilVmRead(VmcsField::kExitQualification);
 
       VmmpInjectInterruption(interruption_type, vector, true, fault_code.all);
-      HYPERPLATFORM_LOG_INFO_SAFE("GuestIp= %p, #PF Fault= %p Code= 0x%2x",
-                                  guest_context->ip, fault_address, fault_code);
+      
       AsmWriteCR2(fault_address);
 
     } else if (vector == InterruptionVector::kGeneralProtectionException) {
@@ -742,8 +741,7 @@ _Use_decl_annotations_ static void VmmpHandleException(
           static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrErrorCode));
 
       VmmpInjectInterruption(interruption_type, vector, true, error_code);
-      HYPERPLATFORM_LOG_INFO_SAFE("GuestIp= %p, #GP Code= 0x%2x",
-                                  guest_context->ip, error_code);
+       
 
     } else {
       HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 0, 0,

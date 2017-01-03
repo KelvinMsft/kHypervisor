@@ -1,0 +1,92 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="..\HyperPlatform\driver.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\HyperPlatform\ept.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\HyperPlatform\kernel_stl.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\HyperPlatform\log.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\HyperPlatform\performance.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\HyperPlatform\util.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\HyperPlatform\\vm.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="vmcs.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\HyperPlatform\vmm.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\HyperPlatform\asm.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\common.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\driver.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\ept.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\ia32_type.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\kernel_stl.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\log.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\perf_counter.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\performance.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\util.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\vmcs.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\vm.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\vmm.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Inf Include="kHypervisor.inf" />
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="..\HyperPlatform\Arch\x86\x86.asm">
+      <Filter>Source</Filter>
+    </MASM>
+    <MASM Include="..\HyperPlatform\Arch\x64\x64.asm">
+      <Filter>Source</Filter>
+    </MASM>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Include">
+      <UniqueIdentifier>{faf82dec-0f8d-4818-8bb3-e45d8b59539a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source">
+      <UniqueIdentifier>{6a95ba81-244d-489f-98f5-3fc3036eb376}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

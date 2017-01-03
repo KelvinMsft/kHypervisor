@@ -21,14 +21,14 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress:
 
 #Installation
 
- Compiled kHypervisor.sys and DdiMon.sys by kHypervisor and NestedHypervisor respectively
+ 1. Compiled kHypervisor.sys and DdiMon.sys by kHypervisor and NestedHypervisor respectively
 
- We only support Signle core temporarily. (We can set a multi-core by msconfig.exe)
+ 2. We only support Signle core temporarily. (We can set a multi-core by msconfig.exe)
 
- Install DdiMon.sys and kHypervisor.sys by following command:
+ 3. Install DdiMon.sys and kHypervisor.sys by following command:
 
- sc create hostvmm type= kernel binPath= C:\kHypervisor.sys 
- sc create nestedvmm type= kernel binPath= C:\Ddimon.sys
+  -  sc create hostvmm type= kernel binPath= C:\kHypervisor.sys 
+  -  sc create nestedvmm type= kernel binPath= C:\Ddimon.sys
 
  start a service as following screen capture with its expected output : 
 

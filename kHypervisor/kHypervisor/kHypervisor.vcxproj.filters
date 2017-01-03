@@ -28,6 +28,15 @@
     <ClCompile Include="..\HyperPlatform\vmm.cpp">
       <Filter>Source</Filter>
     </ClCompile>
+    <ClCompile Include="..\HyperPlatform\power_callback.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\HyperPlatform\global_object.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\HyperPlatform\hotplug_callback.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\HyperPlatform\asm.h">
@@ -68,6 +77,18 @@
     </ClInclude>
     <ClInclude Include="..\HyperPlatform\vmm.h">
       <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\power_callback.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\global_object.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\hotplug_callback.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\HyperPlatform\util_page_constants.h">
+      <Filter>Source</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

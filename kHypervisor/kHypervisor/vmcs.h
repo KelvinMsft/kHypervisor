@@ -1,7 +1,7 @@
 #pragma once
 
 #include <fltKernel.h>
-#include "../HyperPlatform/asm.h"
+#include "..\HyperPlatform\asm.h"
 
 
 #define CHECK_BOUNDARY_FOR_IA32					 0xFFFFFFFF00000000
@@ -17,14 +17,18 @@
 
 
 #define MY_SUPPORT_VMX							   2
-extern "C" 
+
+
+#define PrintVMCS(){ PrintAllField(__func__);}
+
+extern "C"
 {
 	VOID    BuildGernericVMCSMap();
 	BOOLEAN RegularCheck();
 	BOOLEAN is_vmcs_field_supported(VmcsField encoding);
-	
+
 	/*
-		VMCS Phase 1
+	VMCS Phase 1
 	*/
 	VOID  VmRead64(VmcsField Field, ULONG_PTR base, PULONG64 destination);
 	VOID  VmRead32(VmcsField Field, ULONG_PTR base, PULONG32 destination);
@@ -35,21 +39,22 @@ extern "C"
 	VOID  VmWrite16(VmcsField Field, ULONG_PTR base, ULONG_PTR value);
 
 	VmcsField DecodeVmwriteOrVmRead(
-		GpRegisters* guest_context, 
-		ULONG_PTR* Offset, 
-		ULONG_PTR* Value, 
-		BOOLEAN* RorM, 
-		ULONG_PTR* RegIndex = NULL, 
+		GpRegisters* guest_context,
+		ULONG_PTR* Offset,
+		ULONG_PTR* Value,
+		BOOLEAN* RorM,
+		ULONG_PTR* RegIndex = NULL,
 		ULONG_PTR* MemAddr = NULL
 	);
-
-	VOID FillGuestFieldFromVMCS12(ULONG_PTR guest_vmcs_va, USHORT guest_interrupt_status, USHORT pml_index);
-	VOID FillHostStateFieldByPhysicalCpu(ULONG_PTR host_rip, ULONG_PTR host_rsp);
+	ULONG64 GetControlValue(Msr msr, ULONG32* highpart, ULONG32* lowpart);
+	VOID MixControlFieldWithVmcs01AndVmcs12(ULONG_PTR vmcs12_va, ULONG_PTR vmcs02_va, BOOLEAN isLaunch);
+	VOID FillGuestFieldFromVMCS12(ULONG_PTR guest_vmcs_va);
+	VOID FillHostStateFieldByPhysicalCpu(ULONG_PTR vmcs01_rip, ULONG_PTR vmcs01_rsp);
 
 	VOID PrintControlField();
 	VOID PrintHostStateField();
 	VOID PrintGuestStateField();
-	VOID PrintVMCS();
-
-
+	VOID PrintReadOnlyField();
+	VOID PrintAllField(const char* func);
 }
+#pragma once

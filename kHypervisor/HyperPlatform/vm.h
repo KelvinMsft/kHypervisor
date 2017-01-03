@@ -11,47 +11,55 @@
 #include <fltKernel.h>
 
 extern "C" {
-	////////////////////////////////////////////////////////////////////////////////
-	//
-	// macro utilities
-	//
+////////////////////////////////////////////////////////////////////////////////
+//
+// macro utilities
+//
 
-	////////////////////////////////////////////////////////////////////////////////
-	//
-	// constants and macros
-	//
+////////////////////////////////////////////////////////////////////////////////
+//
+// constants and macros
+//
 
-	////////////////////////////////////////////////////////////////////////////////
-	//
-	// types
-	//
+////////////////////////////////////////////////////////////////////////////////
+//
+// types
+//
 
-	////////////////////////////////////////////////////////////////////////////////
-	//
-	// prototypes
-	//
+////////////////////////////////////////////////////////////////////////////////
+//
+// prototypes
+//
 
-	/// Virtualizes all processors
-	/// @return STATUS_SUCCESS on success
-	///
-	/// Initializes a VMCS region and virtualizes (ie, enters the VMX non-root
-	/// operation mode) for each processor. Returns non STATUS_SUCCESS value if any
-	/// of processors failed to do so. In that case, this function de-virtualize
-	/// already virtualized processors.
-	_IRQL_requires_max_(PASSIVE_LEVEL) NTSTATUS VmInitialization();
+/// Virtualizes all processors
+/// @return STATUS_SUCCESS on success
+///
+/// Initializes a VMCS region and virtualizes (ie, enters the VMX non-root
+/// operation mode) for each processor. Returns non STATUS_SUCCESS value if any
+/// of processors failed to do so. In that case, this function de-virtualize
+/// already virtualized processors.
+_IRQL_requires_max_(PASSIVE_LEVEL) NTSTATUS VmInitialization();
 
-	/// De-virtualize all processors
-	_IRQL_requires_max_(PASSIVE_LEVEL) void VmTermination();
+/// De-virtualize all processors
+_IRQL_requires_max_(PASSIVE_LEVEL) void VmTermination();
 
-	////////////////////////////////////////////////////////////////////////////////
-	//
-	// variables
-	//
+/// Virtualizes the specified processor
+/// @param proc_num   A processor number to virtualize
+/// @return STATUS_SUCCESS on success
+///
+/// The processor 0 must have already been virtualized, or it fails.
+_IRQL_requires_max_(PASSIVE_LEVEL) NTSTATUS
+    VmHotplugCallback(const PROCESSOR_NUMBER& proc_num);
 
-	////////////////////////////////////////////////////////////////////////////////
-	//
-	// implementations
-	//
+////////////////////////////////////////////////////////////////////////////////
+//
+// variables
+//
+
+////////////////////////////////////////////////////////////////////////////////
+//
+// implementations
+//
 
 }  // extern "C"
 

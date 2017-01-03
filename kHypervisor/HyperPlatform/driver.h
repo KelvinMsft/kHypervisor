@@ -8,6 +8,7 @@
 #ifndef HYPERPLATFORM_DRIVER_H_
 #define HYPERPLATFORM_DRIVER_H_
 
+extern "C" {
 ////////////////////////////////////////////////////////////////////////////////
 //
 // macro utilities
@@ -37,5 +38,7 @@
 //
 // implementations
 //
+
+}  // extern "C"
 
 #endif  // HYPERPLATFORM_DRIVER_H_

@@ -14,6 +14,7 @@
 #include "util.h"
 #include "performance.h"
 #include "vmcs.h"
+#pragma warning(disable: 4505)
 extern "C" {
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -227,32 +228,39 @@ ULONG64 GetCurrentVmcs12(
 	__inout_opt ULONG64* vmcs02_va = NULL
 )
 {
+	ULONG64 vmcs12_va  = 0;
 	ULONG64 vmcs_pa;
 	int i = 0;
 	__vmx_vmptrst(&vmcs_pa);
 	if (vmcs_pa)
 	{
-		for (i = 0; i < (int)KeQueryMaximumProcessorCount(); i++)
+		for (i = 0; i < (int)KeQueryMaximumProcessorCount()-1; i++)
 		{
 			if (!g_vcpus[i]) 
 			{
 				break;
 			}
-			if (g_vcpus[i]->current_vmcs == vmcs_pa)
+			if (!g_vcpus[i]->current_vmcs || 
+				!g_vcpus[i]->guest_vmcs
+				)
 			{
-				if (vmcs02_va)
-				{
-						*vmcs02_va = (ULONG64)UtilVaFromPa(vmcs_pa);
-				}
-				
-				if (g_vcpus[i]->guest_vmcs)
-				{
-					return (ULONG64)UtilVaFromPa(g_vcpus[i]->guest_vmcs);
-				}
+				break;
 			}
+
+			if (!g_vcpus[i]->current_vmcs == vmcs_pa)
+			{
+				continue;
+			}
+
+			if (vmcs02_va)
+			{
+				*vmcs02_va = (ULONG64)UtilVaFromPa(vmcs_pa);
+			}	
+			vmcs12_va = (ULONG64)UtilVaFromPa(g_vcpus[i]->guest_vmcs);
+			break;
 		}
 	}
-	return 0;
+	return vmcs12_va;
 }
 VOID SaveExceptionInformationFromVmcs02(VmExitInformation exit_reason)
 {
@@ -328,19 +336,19 @@ VOID SaveGuestFieldFromVmcs02()
 	VmWrite32(VmcsField::kGuestActivityState, guest_vmcs_va, UtilVmRead(VmcsField::kGuestActivityState));
 	VmWrite32(VmcsField::kGuestSysenterCs, guest_vmcs_va, UtilVmRead(VmcsField::kGuestSysenterCs));
 
-	VmWrite64(VmcsField::kGuestSysenterEsp, guest_vmcs_va, UtilVmRead(VmcsField::kGuestSysenterEsp));
-	VmWrite64(VmcsField::kGuestSysenterEip, guest_vmcs_va, UtilVmRead(VmcsField::kGuestSysenterEip));
+	VmWrite64(VmcsField::kGuestSysenterEsp,			 guest_vmcs_va, UtilVmRead(VmcsField::kGuestSysenterEsp));
+	VmWrite64(VmcsField::kGuestSysenterEip,			 guest_vmcs_va, UtilVmRead(VmcsField::kGuestSysenterEip));
 	VmWrite64(VmcsField::kGuestPendingDbgExceptions, guest_vmcs_va, UtilVmRead(VmcsField::kGuestPendingDbgExceptions));
-	VmWrite64(VmcsField::kGuestEsBase, guest_vmcs_va, UtilVmRead(VmcsField::kGuestEsBase));
-	VmWrite64(VmcsField::kGuestCsBase, guest_vmcs_va, UtilVmRead(VmcsField::kGuestCsBase));
-	VmWrite64(VmcsField::kGuestSsBase, guest_vmcs_va, UtilVmRead(VmcsField::kGuestSsBase));
-	VmWrite64(VmcsField::kGuestDsBase, guest_vmcs_va, UtilVmRead(VmcsField::kGuestDsBase));
-	VmWrite64(VmcsField::kGuestFsBase, guest_vmcs_va, UtilVmRead(VmcsField::kGuestFsBase));
-	VmWrite64(VmcsField::kGuestGsBase, guest_vmcs_va, UtilVmRead(VmcsField::kGuestGsBase));
-	VmWrite64(VmcsField::kGuestLdtrBase, guest_vmcs_va, UtilVmRead(VmcsField::kGuestLdtrBase));
-	VmWrite64(VmcsField::kGuestTrBase, guest_vmcs_va, UtilVmRead(VmcsField::kGuestTrBase));
-	VmWrite64(VmcsField::kGuestGdtrBase, guest_vmcs_va, UtilVmRead(VmcsField::kGuestGdtrBase));
-	VmWrite64(VmcsField::kGuestIdtrBase, guest_vmcs_va, UtilVmRead(VmcsField::kGuestIdtrBase));
+	VmWrite64(VmcsField::kGuestEsBase,		         guest_vmcs_va, UtilVmRead(VmcsField::kGuestEsBase));
+	VmWrite64(VmcsField::kGuestCsBase,		         guest_vmcs_va, UtilVmRead(VmcsField::kGuestCsBase));
+	VmWrite64(VmcsField::kGuestSsBase,		         guest_vmcs_va, UtilVmRead(VmcsField::kGuestSsBase));
+	VmWrite64(VmcsField::kGuestDsBase,		         guest_vmcs_va, UtilVmRead(VmcsField::kGuestDsBase));
+	VmWrite64(VmcsField::kGuestFsBase,		         guest_vmcs_va, UtilVmRead(VmcsField::kGuestFsBase));
+	VmWrite64(VmcsField::kGuestGsBase,		         guest_vmcs_va, UtilVmRead(VmcsField::kGuestGsBase));
+	VmWrite64(VmcsField::kGuestLdtrBase,	         guest_vmcs_va, UtilVmRead(VmcsField::kGuestLdtrBase));
+	VmWrite64(VmcsField::kGuestTrBase,		         guest_vmcs_va, UtilVmRead(VmcsField::kGuestTrBase));
+	VmWrite64(VmcsField::kGuestGdtrBase,	         guest_vmcs_va, UtilVmRead(VmcsField::kGuestGdtrBase));
+	VmWrite64(VmcsField::kGuestIdtrBase,	         guest_vmcs_va, UtilVmRead(VmcsField::kGuestIdtrBase));
 
 	//Read - only field
 	//Write to VMCS12 for vmread
@@ -526,12 +534,12 @@ _Use_decl_annotations_ bool __stdcall VmmVmExitHandler(VmmInitialStack *stack) {
                                 true};
   guest_context.gp_regs->sp = UtilVmRead(VmcsField::kGuestRsp);
 
-  VmmpSaveExtendedProcessorState(&guest_context);
+  //VmmpSaveExtendedProcessorState(&guest_context);
 
   // Dispatch the current VM-exit event
   VmmpHandleVmExit(&guest_context);
 
-  VmmpRestoreExtendedProcessorState(&guest_context);
+  //VmmpRestoreExtendedProcessorState(&guest_context);
 
   // See: Guidelines for Use of the INVVPID Instruction, and Guidelines for Use
   // of the INVEPT Instruction
@@ -880,18 +888,26 @@ _Use_decl_annotations_ static void VmmpHandleMsrAccess(
   const auto is_64bit_vmcs =
       UtilIsInBounds(vmcs_field, VmcsField::kIoBitmapA,
                      VmcsField::kHostIa32PerfGlobalCtrlHigh);
+ 
 
   LARGE_INTEGER msr_value = {};
   if (read_access) {
+
     if (transfer_to_vmcs) {
       if (is_64bit_vmcs) {
         msr_value.QuadPart = UtilVmRead64(vmcs_field);
       } else {
         msr_value.QuadPart = UtilVmRead(vmcs_field);
       }
-    } else {
-      msr_value.QuadPart = UtilReadMsr64(msr);
-    }
+    } else { 
+		 
+			msr_value.QuadPart = UtilReadMsr64(msr);
+ 
+	}	
+	if (msr == Msr::kIa32VmxEptVpidCap)
+	 {
+	   msr_value.QuadPart = 0; 
+	 }
     guest_context->gp_regs->ax = msr_value.LowPart;
     guest_context->gp_regs->dx = msr_value.HighPart;
   } else {
@@ -3032,14 +3048,12 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  if (guest_context->irql < DISPATCH_LEVEL)
 		  {
 			  KeLowerIrql(guest_context->irql);
-		  }
-		  UtilInvvpidAllContext();
+		  } 
 
 		  HYPERPLATFORM_COMMON_DBG_BREAK();
 	  } while (FALSE);
   }
-
-
+   
   //----------------------------------------------------------------------------------------------------------------//
 
   _Use_decl_annotations_ static void VmmpHandleVmx(GuestContext *guest_context) {

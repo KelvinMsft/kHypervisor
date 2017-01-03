@@ -118,6 +118,7 @@
       <WppScanConfigurationData Condition="'%(ClCompile.ScanConfigurationData)' == ''">trace.h</WppScanConfigurationData>
       <WppKernelMode>true</WppKernelMode>
       <AdditionalIncludeDirectories>$(SolutionDir)capstone\include;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
     </ClCompile>
     <Link>
       <AdditionalDependencies>ntstrsafe.lib;%(AdditionalDependencies)</AdditionalDependencies>

@@ -15,3 +15,5 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress:
 
 
 2016-10-21 : Fixed Ring-3 vm-exit emulation error. 
+
+2017-01-03 : Reconstruct project, and Finding VMCS12 through VMCS02 by executing vmptrst 

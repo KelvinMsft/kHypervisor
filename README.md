@@ -22,6 +22,8 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
 
 #Installation
 
+ - kHypervisor extended HyperPlatform which is created by Tandasat, it is a Nested-Virtual Machine Monitor, and DdiMon is one of Tandasat's product of HyperPlatform for test demo in kHypervisor.
+
  1. Compiled kHypervisor.sys and DdiMon.sys by kHypervisor and NestedHypervisor respectively
 
  2. We only support Signle core temporarily. (We can set a multi-core by msconfig.exe)
@@ -44,9 +46,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
   <img src="https://cloud.githubusercontent.com/assets/22551808/21608895/50274d54-d1fa-11e6-84a2-fddd41b5d2b5.png"> </img>
  4. After the DdiMon catch up the control flow, it will normally execute a <b>VMRESUME</b>, since he didn't know anythings, and feel it is normal trap only :) </br>
 
- 
- kHypervisor extended HyperPlatform which is created by Tandasat, it is a Nested-Virtual Machine Monitor, and DdiMon is one of Tandasat's product of HyperPlatform for test demo in kHypervisor.
-
+  
 
 #TODO
  - Fully Support CPU Feature from vCPU aspect.

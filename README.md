@@ -34,6 +34,10 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress:
 
 <img src="https://cloud.githubusercontent.com/assets/22551808/21606548/47069716-d1eb-11e6-9620-4c7262aad172.png"> </img>
 
+ 5. After both VMM is started, we can use a debugger(such as, x64dbg), and if the breakpoint is hitted, the result will as follow, since the breakpoint is running on Ddimon.sys but nested in kHypervisor actually.
+ 
+<img src="https://cloud.githubusercontent.com/assets/22551808/21607047/9070407a-d1ee-11e6-9c7d-3f2279f8556b.png"> </img>
+
  kHypervisor extended HyperPlatform which is created by Tandasat, it is a Nested-Virtual Machine Monitor, and DdiMon is one of Tandasat's product of HyperPlatform for test demo in kHypervisor.
 
 

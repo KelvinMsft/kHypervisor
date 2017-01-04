@@ -40,11 +40,11 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
 
 #Expected Output
  1. During the installion we could able to see a result, since we set a breakpoint as soon as the DdiMon's virtualization. </br>
- <img src="https://cloud.githubusercontent.com/assets/22551808/21608786/796ca796-d1f9-11e6-98c7-853933c7447b.png" width="50%" height="50%"> </img>
+ <img src="https://cloud.githubusercontent.com/assets/22551808/21608786/796ca796-d1f9-11e6-98c7-853933c7447b.png" width="70%" height="70%"> </img>
  2. We can see the windbg as following result, after the DdiMon execute a breakpoint, kHypervisor will first capture the breakpoint : </br>
-  <img src="https://cloud.githubusercontent.com/assets/22551808/21608841/ce0d11aa-d1f9-11e6-8014-db882836c751.png" width="50%" height="50%"> </img>
+  <img src="https://cloud.githubusercontent.com/assets/22551808/21608841/ce0d11aa-d1f9-11e6-8014-db882836c751.png" width="70%" height="70%"> </img>
  3. After printed VMCS, the emulation of vmexit is done, and kHypervisor will find out which is the original handler as following, the control flow is transfer to DdiMon now. (the kHypervisor is not supposed exists by Ddimon, but it does.)
-  <img src="https://cloud.githubusercontent.com/assets/22551808/21608895/50274d54-d1fa-11e6-84a2-fddd41b5d2b5.png" width="50%" height="50%"> </img>
+  <img src="https://cloud.githubusercontent.com/assets/22551808/21608895/50274d54-d1fa-11e6-84a2-fddd41b5d2b5.png" width="70%" height="70%"> </img>
  4. After the DdiMon catch up the control flow, it will normally execute a <b>VMRESUME</b>, since he didn't know anythings, and feel it is normal trap only :) </br>
 
   

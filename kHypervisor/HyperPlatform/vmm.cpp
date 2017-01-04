@@ -73,8 +73,8 @@ enum VMX_state
 typedef struct NestedVmm
 {
 	ULONG64 vmxon_region;
-	ULONG64 current_vmcs;				///VMCS02
-	ULONG64 guest_vmcs;				///VMCS12 , i.e. L1 provided at the beginning
+	ULONG64 vmcs02_pa;				///VMCS02
+	ULONG64 vmcs12_pa;				///VMCS12 , i.e. L1 provided at the beginning
 	ULONG   CpuNumber;				///vCPU number
 	BOOLEAN blockINITsignal;			///NOT USED
 	BOOLEAN blockAndDisableA20M;			///NOT USED
@@ -240,13 +240,13 @@ ULONG64 GetCurrentVmcs12(
 			{
 				break;
 			}
-			if (!g_vcpus[i]->current_vmcs || 
-				!g_vcpus[i]->guest_vmcs)
+			if (!g_vcpus[i]->vmcs02_pa || 
+				!g_vcpus[i]->vmcs12_pa)
 			{
 				break;
 			}
 
-			if (!g_vcpus[i]->current_vmcs == vmcs_pa)
+			if (!g_vcpus[i]->vmcs02_pa == vmcs_pa)
 			{
 				continue;
 			}
@@ -255,7 +255,7 @@ ULONG64 GetCurrentVmcs12(
 			{
 				*vmcs02_va = (ULONG64)UtilVaFromPa(vmcs_pa);
 			}	
-			vmcs12_va = (ULONG64)UtilVaFromPa(g_vcpus[i]->guest_vmcs);
+			vmcs12_va = (ULONG64)UtilVaFromPa(g_vcpus[i]->vmcs12_pa);
 			break;
 		}
 	}
@@ -887,7 +887,7 @@ _Use_decl_annotations_ static void VmmpHandleMsrAccess(
       UtilIsInBounds(vmcs_field, VmcsField::kIoBitmapA,
                      VmcsField::kHostIa32PerfGlobalCtrlHigh);
  
-
+   
   LARGE_INTEGER msr_value = {};
   if (read_access) {
 
@@ -2175,8 +2175,8 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  vm->inRoot = TRUE;
 		  vm->blockINITsignal = TRUE;
 		  vm->blockAndDisableA20M = TRUE;
-		  vm->current_vmcs = 0xFFFFFFFFFFFFFFFF;
-		  vm->guest_vmcs = 0xFFFFFFFFFFFFFFFF;
+		  vm->vmcs02_pa = 0xFFFFFFFFFFFFFFFF;
+		  vm->vmcs12_pa = 0xFFFFFFFFFFFFFFFF;
 		  vm->vmxon_region = vmxon_region_pa;
 		  vm->CpuNumber = KeGetCurrentProcessorNumberEx(&number);
 		  g_vcpus[vm->CpuNumber] = vm;
@@ -2187,7 +2187,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 			  vmxon_region_pa, g_VM_Core_Count, vm->CpuNumber, number.Group, number.Number);
 
 		  HYPERPLATFORM_LOG_DEBUG("VMXON: VCPU No.: %i Mode: %s Current VMCS : %I64X VMXON Region : %I64X  ",
-			  g_vcpus[vm->CpuNumber]->CpuNumber, (g_vcpus[vm->CpuNumber]->inVMX) ? "VMX" : "No VMX", g_vcpus[vm->CpuNumber]->current_vmcs, g_vcpus[vm->CpuNumber]->vmxon_region);
+			  g_vcpus[vm->CpuNumber]->CpuNumber, (g_vcpus[vm->CpuNumber]->inVMX) ? "VMX" : "No VMX", g_vcpus[vm->CpuNumber]->vmcs02_pa, g_vcpus[vm->CpuNumber]->vmxon_region);
 
 		  //a group of CPU maximum is 64 core
 		  if (g_VM_Core_Count < 64)
@@ -2306,12 +2306,12 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  }
 
 		  *(PLONG)(&vmcs_region_va->data) = VMCS_STATE_CLEAR;
-		  if (vmcs_region_pa == g_vcpus[vcpu_index]->guest_vmcs)
+		  if (vmcs_region_pa == g_vcpus[vcpu_index]->vmcs12_pa)
 		  {
-			  g_vcpus[vcpu_index]->guest_vmcs = 0xFFFFFFFFFFFFFFFF;
+			  g_vcpus[vcpu_index]->vmcs12_pa = 0xFFFFFFFFFFFFFFFF;
 		  }
-		  __vmx_vmclear(&g_vcpus[vcpu_index]->current_vmcs); 
-		  g_vcpus[vcpu_index]->current_vmcs = 0xFFFFFFFFFFFFFFFF;
+		  __vmx_vmclear(&g_vcpus[vcpu_index]->vmcs02_pa); 
+		  g_vcpus[vcpu_index]->vmcs02_pa = 0xFFFFFFFFFFFFFFFF;
 
 		  HYPERPLATFORM_LOG_DEBUG("VMCLEAR: Guest Instruction Pointer %I64X Guest Stack Pointer: %I64X  Guest vmcs region: %I64X stored at %I64x on stack\r\n",
 			  InstructionPointer, StackPointer, vmcs_region_pa, debug_vmcs_region_pa);
@@ -2320,7 +2320,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 			  vmcs_region_pa, g_VM_Core_Count, g_vcpus[vcpu_index]->CpuNumber, procnumber.Group, procnumber.Number);
 
 		  HYPERPLATFORM_LOG_DEBUG("VMCLEAR: VCPU No.: %i Mode: %s Current VMCS : %I64X VMXON Region : %I64X  ",
-			  g_vcpus[vcpu_index]->CpuNumber, (g_vcpus[vcpu_index]->inVMX) ? "VMX" : "No VMX", g_vcpus[vcpu_index]->current_vmcs, g_vcpus[vcpu_index]->vmxon_region);
+			  g_vcpus[vcpu_index]->CpuNumber, (g_vcpus[vcpu_index]->inVMX) ? "VMX" : "No VMX", g_vcpus[vcpu_index]->vmcs02_pa, g_vcpus[vcpu_index]->vmxon_region);
 
 		  VMSucceed(&guest_context->flag_reg);
 	  } while (FALSE);
@@ -2438,8 +2438,8 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 
 		  RtlFillMemory(vmcs_region_rw_va, PAGE_SIZE, 0x0);
  
-		  g_vcpus[vcpu_index]->current_vmcs = vmcs_region_rw_pa;		//vmcs02' physical address - DIRECT VMREAD/WRITE
-		  g_vcpus[vcpu_index]->guest_vmcs   = vmcs_region_pa;		    //vmcs12' physical address - we will control its structure in Vmread/Vmwrite
+		  g_vcpus[vcpu_index]->vmcs02_pa = vmcs_region_rw_pa;		//vmcs02' physical address - DIRECT VMREAD/WRITE
+		  g_vcpus[vcpu_index]->vmcs12_pa   = vmcs_region_pa;		    //vmcs12' physical address - we will control its structure in Vmread/Vmwrite
 		  g_vcpus[vcpu_index]->kVirtualProcessorId = (USHORT)KeGetCurrentProcessorNumberEx(nullptr) + 1;
 
 		  HYPERPLATFORM_LOG_DEBUG("VMPTRLD: Guest Instruction Pointer %I64X Guest Stack Pointer: %I64X  Guest VMCS PA: %I64X Guest VMCS VA : %I64X Run VMCS PA : %I64X Run VMCS VA : %I64X \r\n",
@@ -2449,7 +2449,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 			  vmcs_region_pa, g_VM_Core_Count, g_vcpus[vcpu_index]->CpuNumber, procnumber.Group, procnumber.Number);
 
 		  HYPERPLATFORM_LOG_DEBUG("VMPTRLD: VCPU No.: %i Mode: %s Current VMCS : %I64X VMXON Region : %I64X  ",
-			  g_vcpus[vcpu_index]->CpuNumber, (g_vcpus[vcpu_index]->inVMX) ? "VMX" : "No VMX", g_vcpus[vcpu_index]->current_vmcs, g_vcpus[vcpu_index]->vmxon_region);
+			  g_vcpus[vcpu_index]->CpuNumber, (g_vcpus[vcpu_index]->inVMX) ? "VMX" : "No VMX", g_vcpus[vcpu_index]->vmcs02_pa, g_vcpus[vcpu_index]->vmxon_region);
 
 		  VMSucceed(&guest_context->flag_reg);
 
@@ -2464,7 +2464,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 	  {
 		  PROCESSOR_NUMBER  procnumber = { 0 };
 		  ULONG				 vcpu_index = KeGetCurrentProcessorNumberEx(&procnumber);
-		  ULONG64			  vmcs12_pa = g_vcpus[vcpu_index]->guest_vmcs;
+		  ULONG64			  vmcs12_pa = g_vcpus[vcpu_index]->vmcs12_pa;
 		  ULONG64			  vmcs12_va = (ULONG64)UtilVaFromPa(vmcs12_pa);
 
 		  // if vCPU not run in VMX mode
@@ -2603,7 +2603,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 	  {
 		  PROCESSOR_NUMBER    procnumber = { 0 };
 		  ULONG				  vcpu_index = KeGetCurrentProcessorNumberEx(&procnumber);
-		  ULONG64			  vmcs12_pa = (ULONG64)g_vcpus[vcpu_index]->guest_vmcs;
+		  ULONG64			  vmcs12_pa = (ULONG64)g_vcpus[vcpu_index]->vmcs12_pa;
 		  ULONG64			  vmcs12_va = (ULONG64)UtilVaFromPa(vmcs12_pa);
 
 		  // if vCPU not run in VMX mode
@@ -2810,8 +2810,8 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //Get vmcs02 / vmcs12
 		
 
-		  auto    vmcs02_pa = g_vcpus[vcpu_index]->current_vmcs;
-		  auto	  vmcs12_pa = g_vcpus[vcpu_index]->guest_vmcs;
+		  auto    vmcs02_pa = g_vcpus[vcpu_index]->vmcs02_pa;
+		  auto	  vmcs12_pa = g_vcpus[vcpu_index]->vmcs12_pa;
 
 		  if (!vmcs02_pa || !vmcs12_pa)
 		  {
@@ -2868,7 +2868,6 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  UtilVmWrite(VmcsField::kGuestRsp, rsp);
 		  UtilVmWrite(VmcsField::kGuestRip, rip);
 		  UtilVmWrite(VmcsField::kGuestRflags, rflags);
-	 
 		  if (guest_context->irql < DISPATCH_LEVEL)
 		  {
 			  KeLowerIrql(guest_context->irql);
@@ -2946,8 +2945,8 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 			  ThrowGerneralFaultInterrupt();
 			  break;
 		  }
-		  auto    vmcs02_pa = g_vcpus[vcpu_index]->current_vmcs;
-		  auto	  vmcs12_pa = g_vcpus[vcpu_index]->guest_vmcs;
+		  auto    vmcs02_pa = g_vcpus[vcpu_index]->vmcs02_pa;
+		  auto	  vmcs12_pa = g_vcpus[vcpu_index]->vmcs12_pa;
 
 		  if (!vmcs02_pa || !vmcs12_pa)
 		  {
@@ -2975,7 +2974,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  VmControlStructure* ptr = (VmControlStructure*)vmcs02_va;
 		  ptr->revision_identifier = vmx_basic_msr.fields.revision_identifier;
 
-		  HYPERPLATFORM_LOG_DEBUG("current_vmcs: %I64X", vmcs12_va);
+		  HYPERPLATFORM_LOG_DEBUG("vmcs02_pa: %I64X", vmcs12_va);
 
 		  //Mixing AND checking Control Field 
 		  //Current VMCS is VMCS01
@@ -3043,10 +3042,10 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  HYPERPLATFORM_LOG_DEBUG("VMCS02: kGuestRip :%I64x , kGuestRsp %I64x ", UtilVmRead(VmcsField::kGuestRip), UtilVmRead(VmcsField::kGuestRsp));
 		  HYPERPLATFORM_LOG_DEBUG("VMCS02: kHostRip :%I64x  , kHostRsp  %I64x ", UtilVmRead(VmcsField::kHostRip), UtilVmRead(VmcsField::kHostRsp));
 
-		  if (guest_context->irql < DISPATCH_LEVEL)
-		  {
-			  KeLowerIrql(guest_context->irql);
-		  } 
+		   if (guest_context->irql < DISPATCH_LEVEL)
+		   {
+		 	  KeLowerIrql(guest_context->irql);
+		   } 
 
 		  HYPERPLATFORM_COMMON_DBG_BREAK();
 	  } while (FALSE);

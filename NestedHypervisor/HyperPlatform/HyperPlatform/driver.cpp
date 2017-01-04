@@ -34,8 +34,7 @@ typedef struct _DEVICE_EXTENSION
 	ULONG  StateVariable;
 } DEVICE_EXTENSION, *PDEVICE_EXTENSION;
 
-ULONG64 G_cr3;
-UCHAR* testpool;
+
 extern "C" {
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -167,12 +166,7 @@ _Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
                          : kLogPutLevelDebug | kLogOptDisableFunctionName;
  
   auto status = STATUS_UNSUCCESSFUL; 
-   
-  testpool = reinterpret_cast<UCHAR*>(ExAllocatePool(
-	  NonPagedPool, PAGE_SIZE));
-
-  RtlFillMemory(testpool, 1024, 0x90);
-  
+     
   driver_object->DriverUnload = DriverpDriverUnload;
 
   
@@ -224,11 +218,8 @@ _Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
    // LogTermination();	
     return status;
   } 
-  */
- 
-
-  HYPERPLATFORM_LOG_INFO("break IRQL: %x \r\n", KeGetCurrentIrql());
-  HYPERPLATFORM_COMMON_DBG_BREAK();
+  */ 
+  HYPERPLATFORM_LOG_INFO("break IRQL: %x \r\n", KeGetCurrentIrql()); 
    
   HYPERPLATFORM_LOG_INFO("The VMM has been installed. IRQL: %x \r\n", KeGetCurrentIrql());
   return status;
@@ -242,7 +233,7 @@ _Use_decl_annotations_ static void DriverpDriverUnload(
 
   HYPERPLATFORM_COMMON_DBG_BREAK();
 
-  //VmTermination();
+  VmTermination();
   //UtilTermination();
   //PerfTermination();
   //LogTermination();

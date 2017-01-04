@@ -319,9 +319,9 @@ _Use_decl_annotations_ static void VmmpHandleMonitorTrap(
     GuestContext *guest_context) {
   HYPERPLATFORM_PERFORMANCE_MEASURE_THIS_SCOPE();
   auto processor_data = guest_context->stack->processor_data;
-  ShHandleMonitorTrapFlag(processor_data->sh_data,
+ /* ShHandleMonitorTrapFlag(processor_data->sh_data,
                           processor_data->shared_data->shared_sh_data,
-                          processor_data->ept_data);
+                          processor_data->ept_data);*/
 }
 
 //exception handler #PF, #GP, #BP, #TF
@@ -929,13 +929,12 @@ _Use_decl_annotations_ static void VmmpHandleVmCall(
 
   } 
   else if (hypercall_number == HypercallNumber::kShEnablePageShadowing) 
-  {
-	//1. 尋找對應的ept表項
-	//2. 設置表項為不可讀/寫
-	//3. EPT-Violation handler中處理
-    ShEnablePageShadowing(
-        guest_context->stack->processor_data->ept_data,
-        guest_context->stack->processor_data->shared_data->shared_sh_data);
+  { 
+     /*
+		 ShEnablePageShadowing(
+			  guest_context->stack->processor_data->ept_data,
+			  guest_context->stack->processor_data->shared_data->shared_sh_data);
+		*/
 	//設置RIP/EIP
     VmmpAdjustGuestInstructionPointer(guest_context->ip);
 
@@ -947,11 +946,13 @@ _Use_decl_annotations_ static void VmmpHandleVmCall(
   } 
   else if (hypercall_number == HypercallNumber::kShDisablePageShadowing) 
   {
-    ShVmCallDisablePageShadowing(
+      /*
+		ShVmCallDisablePageShadowing(
         guest_context->stack->processor_data->ept_data,
-        guest_context->stack->processor_data->shared_data->shared_sh_data);
-
-    VmmpAdjustGuestInstructionPointer(guest_context->ip);
+        guest_context->stack->processor_data->shared_data->shared_sh_data); 
+	  */
+	
+	VmmpAdjustGuestInstructionPointer(guest_context->ip);
     // Indicates successful VMCALL
     guest_context->flag_reg.fields.cf = false;
     guest_context->flag_reg.fields.zf = false;
@@ -991,23 +992,24 @@ _Use_decl_annotations_ static void VmmpHandleEptViolation(
 
   //DbgPrint("EPT Violation Current CR3: 0x%08x Guest CR3: 0x%08x", __readcr3(), UtilVmRead64(VmcsField::kGuestCr3));
   
-  EptHandleEptViolation(
+  /*EptHandleEptViolation(
       processor_data->ept_data, 
 	  processor_data->sh_data,
-      processor_data->shared_data->shared_sh_data);
+      processor_data->shared_data->shared_sh_data);*/
 }
 
 // EXIT_REASON_EPT_MISCONFIG
 _Use_decl_annotations_ static void VmmpHandleEptMisconfig(
     GuestContext *guest_context) {
   UNREFERENCED_PARAMETER(guest_context);
-
+  /*
   const auto fault_address = UtilVmRead(VmcsField::kGuestPhysicalAddress);
   const auto ept_pt_entry = EptGetEptPtEntry(
       guest_context->stack->processor_data->ept_data, fault_address);
   HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kEptMisconfigVmExit,
                                  fault_address,
                                  reinterpret_cast<ULONG_PTR>(ept_pt_entry), 0);
+								 */
 }
 
 // Selects a register to be used based on the index

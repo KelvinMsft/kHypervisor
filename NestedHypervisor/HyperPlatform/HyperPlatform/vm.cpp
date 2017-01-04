@@ -145,7 +145,7 @@ _Use_decl_annotations_ NTSTATUS VmInitialization() {
     //UtilForEachProcessor(VmpStopVM, nullptr);
     return status;
   } 
-  HYPERPLATFORM_COMMON_DBG_BREAK();
+  // HYPERPLATFORM_COMMON_DBG_BREAK();
 
   return status;
 }
@@ -291,12 +291,13 @@ _Use_decl_annotations_ static SharedProcessorData *VmpInitializeSharedData()
 // Virtualize the current processor
 _Use_decl_annotations_ static NTSTATUS VmpStartVM(void *context) 
 {
-  HYPERPLATFORM_LOG_DEBUG("Initializing VMX for the processor %d.",
-                         KeGetCurrentProcessorNumberEx(nullptr));
+  HYPERPLATFORM_LOG_DEBUG("Initializing VMX for the processor %d. with IRQL: %X",
+                         KeGetCurrentProcessorNumberEx(nullptr), KeGetCurrentIrql());
  
   const auto ok = AsmInitializeVm(VmpInitializeVm, context);
   
-  if (!ok) {
+  if (!ok) 
+  {
     return STATUS_UNSUCCESSFUL;
   }
 
@@ -323,16 +324,18 @@ _Use_decl_annotations_ static void VmpInitializeVm(ULONG_PTR guest_stack_pointer
   }
   RtlZeroMemory(processor_data, sizeof(ProcessorData));
 
-  processor_data->ept_data = EptInitialization();
+  /*processor_data->ept_data = EptInitialization();
   if (!processor_data->ept_data) 
   {
     goto ReturnFalse;
   }
-   
+   */
+  /*
   processor_data->sh_data = ShAllocateShadowHookData();
   if (!processor_data->sh_data) {
     goto ReturnFalse;
   } 
+  */
   const auto vmm_stack_limit = UtilAllocateContiguousMemory(KERNEL_STACK_SIZE);
    
   const auto vmcs_region =
@@ -409,8 +412,7 @@ _Use_decl_annotations_ static void VmpInitializeVm(ULONG_PTR guest_stack_pointer
   if (!VmpSetupVMCS(processor_data, guest_stack_pointer,
                     guest_instruction_pointer, vmm_stack_base)) {
     goto ReturnFalseWithVmxOff;
-  }
-  PrintVMCS();
+  } 
   // Do virtualize the processor 
   VmpLaunchVM();
 
@@ -906,8 +908,7 @@ VOID PrintVMCS()
   if (error_code) {
     HYPERPLATFORM_LOG_WARN("VM_INSTRUCTION_ERROR = %d", error_code);
   }
-  PrintVMCS();
-  HYPERPLATFORM_COMMON_DBG_BREAK();
+  HYPERPLATFORM_LOG_DEBUG("VMlaunch [ddimon] irql : %x", KeGetCurrentIrql());
   auto vmx_status = static_cast<VmxStatus>(__vmx_vmlaunch());
 
   // Here is not be executed with successful vmlaunch. Instead, the context
@@ -1028,7 +1029,7 @@ _Use_decl_annotations_ static void VmpVmxOffThreadRoutine(void *start_context) {
   PAGED_CODE();
 
   HYPERPLATFORM_LOG_INFO("Uninstalling VMM.");
-  DdimonTermination();
+  ///DdimonTermination();
   auto status = UtilForEachProcessor(VmpStopVM, nullptr);
    
   if (NT_SUCCESS(status)) {
@@ -1073,13 +1074,13 @@ _Use_decl_annotations_ static void VmpFreeProcessorData(
     ExFreePoolWithTag(processor_data->vmxon_region,
                       kHyperPlatformCommonPoolTag);
   }
-  if (processor_data->sh_data) {
+ /* if (processor_data->sh_data) {
     ShFreeShadowHookData(processor_data->sh_data);
   }
   if (processor_data->ept_data) {
     EptTermination(processor_data->ept_data);
   }
-
+  */
   // Free shared data if this is the last reference
   if (processor_data->shared_data &&
       InterlockedDecrement(&processor_data->shared_data->reference_count) ==

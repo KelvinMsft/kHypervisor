@@ -5,7 +5,7 @@ kHypervisor is an Open Source light-weighted Nested-Virtual Machine Monitor in W
 - Visual Studio 2015 update 3 
 - Windows SDK 10
 - Windowr Driver Kit 10
-- Single Core CPU (Temporarily)
+- Single Core Processor (Temporarily)
 - VMware 12 with EPT environment.
 - Windbg
 

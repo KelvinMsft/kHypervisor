@@ -51,7 +51,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
   <img src="https://cloud.githubusercontent.com/assets/22551808/21608895/50274d54-d1fa-11e6-84a2-fddd41b5d2b5.png" width="70%" height="70%"> </img>
  4. After the DdiMon catch up the control flow, it will normally execute a <b>VMRESUME</b>, since he didn't know anythings, and feel it is normal trap only :) </br>
 
- #User Mode Test:  
+#User Mode Test:  
   
   Any everybreakpoint in the system will be work as follow:
 

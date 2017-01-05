@@ -20,7 +20,7 @@
 
 
 #define PrintVMCS(){ PrintAllField(__func__);}
-
+#define PrintVMCS12(vmcs12){ PrintAllFieldForVmcs12(__func__, vmcs12);}
 extern "C"
 {
 	VOID    BuildGernericVMCSMap();
@@ -55,6 +55,10 @@ extern "C"
 	VOID PrintHostStateField();
 	VOID PrintGuestStateField();
 	VOID PrintReadOnlyField();
-	VOID PrintAllField(const char* func);
+	VOID PrintAllField(const char* func); 
+
+	VOID PrintReadOnlyFieldForVmcs12(ULONG64 vmcs12_va);
+	VOID PrintAllFieldForVmcs12(const char* func, ULONG64 vmcs12);
+ 
 }
 #pragma once

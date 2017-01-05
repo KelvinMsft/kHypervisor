@@ -4,23 +4,57 @@
 #include "..\HyperPlatform\util.h" 
 #include "..\HyperPlatform\common.h"
 #include "..\HyperPlatform\asm.h"
-#include "..\HyperPlatform\log.h"  
+#include "..\HyperPlatform\log.h"   
 
+VOID PrintAllFieldForVmcs12(const char* func, ULONG64 vmcs12)
+{
+	HYPERPLATFORM_LOG_DEBUG("------------------------- Start Print VMCS12 by %s -----------------------------", func);
+	PrintReadOnlyFieldForVmcs12(vmcs12);
+	HYPERPLATFORM_LOG_DEBUG("------------------------- End Printed VMCS12 by %s -----------------------------", func);
 
+}
 VOID PrintAllField(const char* func)
 {
-	HYPERPLATFORM_LOG_DEBUG("------------------------- Start Printed by %s -----------------------------", func);
+	HYPERPLATFORM_LOG_DEBUG("------------------------- Start Printe Current VMCS by %s -----------------------------", func);
 	PrintControlField();
 	PrintHostStateField();
 	PrintGuestStateField();
 	PrintReadOnlyField();
-	HYPERPLATFORM_LOG_DEBUG("------------------------- End Printed by %s -----------------------------", func);
+	HYPERPLATFORM_LOG_DEBUG("------------------------- End Printed Current VMCS by %s -----------------------------", func);
 
 }
 extern "C" {
 
 	unsigned	g_vmcs_map[16][1 + VMX_HIGHEST_VMCS_ENCODING];
+	  
+	VOID	 PrintReadOnlyFieldForVmcs12(ULONG64 vmcs12_va) 
+	{
+		ULONG64 kVmInstructionError = 0;
+		ULONG64 kVmExitReason = 0; 
+		ULONG64 kVmExitIntrInfo = 0; 
+		ULONG64	kVmExitIntrErrorCode = 0;
+		ULONG64	kIdtVectoringInfoField = 0;
+		ULONG64	kIdtVectoringErrorCode = 0;
+		ULONG64	kVmExitInstructionLen = 0;
+		ULONG64	kVmxInstructionInfo = 0;
+		VmRead64(VmcsField::kVmInstructionError, vmcs12_va, &kVmInstructionError);
+		VmRead64(VmcsField::kVmExitReason     , vmcs12_va, &kVmExitReason);
+		VmRead64(VmcsField::kVmExitIntrInfo   , vmcs12_va, &kVmExitIntrInfo);
+		VmRead64(VmcsField::kVmExitIntrErrorCode, vmcs12_va, &kVmExitIntrErrorCode);
+		VmRead64(VmcsField::kIdtVectoringInfoField, vmcs12_va, &kIdtVectoringInfoField);
+		VmRead64(VmcsField::kIdtVectoringErrorCode, vmcs12_va, &kIdtVectoringErrorCode);
+		VmRead64(VmcsField::kVmExitInstructionLen, vmcs12_va, &kVmExitInstructionLen);
+		VmRead64(VmcsField::kVmxInstructionInfo, vmcs12_va, &kVmxInstructionInfo);
 
+		HYPERPLATFORM_LOG_DEBUG("kVmInstructionError	:%I64X  ", kVmInstructionError);
+		HYPERPLATFORM_LOG_DEBUG("kVmExitReason			:%I64X  ", kVmExitReason);
+		HYPERPLATFORM_LOG_DEBUG("kVmExitIntrInfo		:%I64X  ", kVmExitIntrInfo);
+		HYPERPLATFORM_LOG_DEBUG("kVmExitIntrErrorCode	:%I64X  ", kVmExitIntrErrorCode);
+		HYPERPLATFORM_LOG_DEBUG("kIdtVectoringInfoField	:%I64X  ", kIdtVectoringInfoField);
+		HYPERPLATFORM_LOG_DEBUG("kIdtVectoringErrorCode	:%I64X  ", kIdtVectoringErrorCode);
+		HYPERPLATFORM_LOG_DEBUG("kVmExitInstructionLen	:%I64X  ", kVmExitInstructionLen);
+		HYPERPLATFORM_LOG_DEBUG("kVmxInstructionInfo	:%I64X  ", kVmxInstructionInfo);
+	}
 	VOID PrintHostStateField()
 	{
 
@@ -1051,6 +1085,7 @@ extern "C" {
 		VmRead16(VmcsField::kGuestGsSelector, guest_vmcs_va, &vmcs12_gs_selector);
 		VmRead16(VmcsField::kGuestLdtrSelector, guest_vmcs_va, &vmcs12_ldtr_selector);
 		VmRead16(VmcsField::kGuestTrSelector, guest_vmcs_va, &vmcs12_tr_selector);
+
 		VmRead16(VmcsField::kGuestInterruptStatus, guest_vmcs_va, &vmcs12_guest_interrupt_status);
 		VmRead16(VmcsField::kGuestPmlIndex, guest_vmcs_va, &vmcs12_pmlindex);
 
@@ -1109,6 +1144,7 @@ extern "C" {
 		VmRead32(VmcsField::kGuestGsArBytes, guest_vmcs_va, &vmcs12_kGuestGsArBytes);
 		VmRead32(VmcsField::kGuestLdtrArBytes, guest_vmcs_va, &vmcs12_kGuestLdtrArBytes);
 		VmRead32(VmcsField::kGuestTrArBytes, guest_vmcs_va, &vmcs12_kGuestTrArBytes);
+
 		VmRead32(VmcsField::kGuestInterruptibilityInfo, guest_vmcs_va, &vmcs12_kGuestInterruptibilityInfo);
 		VmRead32(VmcsField::kGuestActivityState, guest_vmcs_va, &vmcs12_kGuestActivityState);
 		VmRead32(VmcsField::kGuestSysenterCs, guest_vmcs_va, &vmcs12_kGuestSysenterCs);

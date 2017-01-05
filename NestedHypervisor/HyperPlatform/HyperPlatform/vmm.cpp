@@ -372,7 +372,7 @@ _Use_decl_annotations_ static void VmmpHandleException(GuestContext *guest_conte
     } 
 	else
 	{
-		HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 0, 0,  0);
+		HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 1, 0,  0);
 	}
   }
   else if (static_cast<interruption_type>(exception.fields.interruption_type) == interruption_type::kSoftwareException) 
@@ -403,11 +403,11 @@ _Use_decl_annotations_ static void VmmpHandleException(GuestContext *guest_conte
 	}
 	else 
 	{
-		HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 0, 0, 0);
+		HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 2, 0, 0);
     }
   }
   else {
-	  HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 0, 0, 0);
+	  HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 3, 0, 0);
   }
 }//VMM異常捕?函數完
 

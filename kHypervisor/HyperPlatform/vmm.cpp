@@ -75,12 +75,12 @@ typedef struct NestedVmm
 	ULONG64 vmxon_region;
 	ULONG64 vmcs02_pa;				///VMCS02
 	ULONG64 vmcs12_pa;				///VMCS12 , i.e. L1 provided at the beginning
-	ULONG   CpuNumber;				///vCPU number
-	BOOLEAN blockINITsignal;			///NOT USED
-	BOOLEAN blockAndDisableA20M;			///NOT USED
+	ULONG   CpuNumber;				///VCPU number
+	BOOLEAN blockINITsignal;		///NOT USED
+	BOOLEAN blockAndDisableA20M;	///NOT USED
 	BOOLEAN inVMX;					///is it in VMX mode 
 	BOOLEAN inRoot;					///is it in root mode
-	USHORT	kVirtualProcessorId;
+	USHORT	kVirtualProcessorId; 
 }NestedVmm, *PNestedVmm;
 // Represents raw structure of stack of VMM when VmmVmExitHandler() is called
 struct VmmInitialStack {
@@ -205,7 +205,13 @@ static void VmmpInjectInterruption(_In_ InterruptionType interruption_type,
                                    _In_ bool deliver_error_code,
                                    _In_ ULONG32 error_code);
 
+
 VOID VMSucceed(FlagRegister *reg);
+VOID LEAVE_GUEST_MODE(NestedVmm* vm) { vm->inRoot = TRUE; }
+VOID ENTER_GUEST_MODE(NestedVmm* vm) { vm->inRoot = FALSE; }
+
+BOOLEAN IsRootMode(NestedVmm* vm) { return vm->inRoot; }
+
 ////////////////////////////////////////////////////////////////////////////////
 //
 // variables
@@ -224,12 +230,12 @@ ULONG32				 g_vmx_extensions_bitmask;
 // implementations
 //
 BOOLEAN nested = FALSE;
-ULONG64 GetCurrentVmcs12(
-	__inout_opt ULONG64* vmcs02_va = NULL
-)
+
+NestedVmm* GetCurrentCPU()
 {
 	ULONG64 vmcs12_va  = 0;
 	ULONG64 vmcs_pa;
+	NestedVmm* ret = NULL;
 	int i = 0;
 	__vmx_vmptrst(&vmcs_pa);
 	if (vmcs_pa)
@@ -239,36 +245,20 @@ ULONG64 GetCurrentVmcs12(
 			if (!g_vcpus[i]) 
 			{
 				break;
-			}
-			if (!g_vcpus[i]->vmcs02_pa || 
-				!g_vcpus[i]->vmcs12_pa)
-			{
+			} 
+			if ( g_vcpus[i]->vmcs02_pa == vmcs_pa)
+			{ 
+				ret = g_vcpus[i];  
 				break;
-			}
-
-			if (!g_vcpus[i]->vmcs02_pa == vmcs_pa)
-			{
-				continue;
-			}
-
-			if (vmcs02_va)
-			{
-				*vmcs02_va = (ULONG64)UtilVaFromPa(vmcs_pa);
-			}	
-			vmcs12_va = (ULONG64)UtilVaFromPa(g_vcpus[i]->vmcs12_pa);
-			break;
+			}   
+			 
 		}
-	}
-	return vmcs12_va;
+	} 
+	return ret;
 }
-VOID SaveExceptionInformationFromVmcs02(VmExitInformation exit_reason)
-{
-	ULONG64 guest_vmcs_va = GetCurrentVmcs12();
-	if (!guest_vmcs_va)
-	{
 
-		return;
-	}
+VOID SaveExceptionInformationFromVmcs02(VmExitInformation exit_reason, ULONG64 vmcs12_va)
+{ 
 
 	const VmExitInterruptionInformationField exception = {
 		static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrInfo))
@@ -276,100 +266,84 @@ VOID SaveExceptionInformationFromVmcs02(VmExitInformation exit_reason)
 
 	ULONG_PTR vmexit_qualification = UtilVmRead(VmcsField::kExitQualification);
 
-	VmWrite32(VmcsField::kVmExitIntrInfo, guest_vmcs_va, exception.all);
-	VmWrite32(VmcsField::kVmExitReason, guest_vmcs_va, exit_reason.all);
-	VmWrite32(VmcsField::kExitQualification, guest_vmcs_va, vmexit_qualification);
-	VmWrite32(VmcsField::kVmExitInstructionLen, guest_vmcs_va, UtilVmRead(VmcsField::kVmExitInstructionLen));
-	VmWrite32(VmcsField::kVmInstructionError, guest_vmcs_va, UtilVmRead(VmcsField::kVmInstructionError));
-	VmWrite32(VmcsField::kVmExitIntrErrorCode, guest_vmcs_va, UtilVmRead(VmcsField::kVmExitIntrErrorCode));
-	VmWrite32(VmcsField::kIdtVectoringInfoField, guest_vmcs_va, UtilVmRead(VmcsField::kIdtVectoringInfoField));
-	VmWrite32(VmcsField::kIdtVectoringErrorCode, guest_vmcs_va, UtilVmRead(VmcsField::kIdtVectoringErrorCode));
-	VmWrite32(VmcsField::kVmxInstructionInfo, guest_vmcs_va, UtilVmRead(VmcsField::kVmxInstructionInfo));
+	VmWrite32(VmcsField::kVmExitIntrInfo, vmcs12_va, exception.all);
+	VmWrite32(VmcsField::kVmExitReason, vmcs12_va, exit_reason.all);
+	VmWrite32(VmcsField::kExitQualification, vmcs12_va, vmexit_qualification);
+	VmWrite32(VmcsField::kVmExitInstructionLen, vmcs12_va, UtilVmRead(VmcsField::kVmExitInstructionLen));
+	VmWrite32(VmcsField::kVmInstructionError, vmcs12_va, UtilVmRead(VmcsField::kVmInstructionError));
+	VmWrite32(VmcsField::kVmExitIntrErrorCode, vmcs12_va, UtilVmRead(VmcsField::kVmExitIntrErrorCode));
+	VmWrite32(VmcsField::kIdtVectoringInfoField, vmcs12_va, UtilVmRead(VmcsField::kIdtVectoringInfoField));
+	VmWrite32(VmcsField::kIdtVectoringErrorCode, vmcs12_va, UtilVmRead(VmcsField::kIdtVectoringErrorCode));
+	VmWrite32(VmcsField::kVmxInstructionInfo, vmcs12_va, UtilVmRead(VmcsField::kVmxInstructionInfo));
+	 
 }
 
 
-VOID SaveGuestFieldFromVmcs02()
-{
-	ULONG64 guest_vmcs_va = GetCurrentVmcs12();
-	if (!guest_vmcs_va)
-	{
-		return;
-	}
+VOID SaveGuestFieldFromVmcs02(ULONG64 vmcs12_va)
+{ 
 	//all nested vm-exit should record 
-	VmWrite64(VmcsField::kGuestRip, guest_vmcs_va, UtilVmRead(VmcsField::kGuestRip));
-	VmWrite64(VmcsField::kGuestRsp, guest_vmcs_va, UtilVmRead(VmcsField::kGuestRsp));
-	VmWrite64(VmcsField::kGuestCr3, guest_vmcs_va, UtilVmRead(VmcsField::kGuestCr3));
-	VmWrite64(VmcsField::kGuestCr0, guest_vmcs_va, UtilVmRead(VmcsField::kGuestCr0));
-	VmWrite64(VmcsField::kGuestCr4, guest_vmcs_va, UtilVmRead(VmcsField::kGuestCr4));
-	VmWrite64(VmcsField::kGuestDr7, guest_vmcs_va, UtilVmRead(VmcsField::kGuestDr7));
-	VmWrite64(VmcsField::kGuestRflags, guest_vmcs_va, UtilVmRead(VmcsField::kGuestRflags));
+	VmWrite64(VmcsField::kGuestRip, vmcs12_va, UtilVmRead(VmcsField::kGuestRip));
+	VmWrite64(VmcsField::kGuestRsp, vmcs12_va, UtilVmRead(VmcsField::kGuestRsp));
+	VmWrite64(VmcsField::kGuestCr3, vmcs12_va, UtilVmRead(VmcsField::kGuestCr3));
+	VmWrite64(VmcsField::kGuestCr0, vmcs12_va, UtilVmRead(VmcsField::kGuestCr0));
+	VmWrite64(VmcsField::kGuestCr4, vmcs12_va, UtilVmRead(VmcsField::kGuestCr4));
+	VmWrite64(VmcsField::kGuestDr7, vmcs12_va, UtilVmRead(VmcsField::kGuestDr7));
+	VmWrite64(VmcsField::kGuestRflags, vmcs12_va, UtilVmRead(VmcsField::kGuestRflags));
 
 
-	VmWrite16(VmcsField::kGuestEsSelector, guest_vmcs_va, UtilVmRead(VmcsField::kGuestEsSelector));
-	VmWrite16(VmcsField::kGuestCsSelector, guest_vmcs_va, UtilVmRead(VmcsField::kGuestCsSelector));
-	VmWrite16(VmcsField::kGuestSsSelector, guest_vmcs_va, UtilVmRead(VmcsField::kGuestSsSelector));
-	VmWrite16(VmcsField::kGuestDsSelector, guest_vmcs_va, UtilVmRead(VmcsField::kGuestDsSelector));
-	VmWrite16(VmcsField::kGuestFsSelector, guest_vmcs_va, UtilVmRead(VmcsField::kGuestFsSelector));
-	VmWrite16(VmcsField::kGuestGsSelector, guest_vmcs_va, UtilVmRead(VmcsField::kGuestGsSelector));
-	VmWrite16(VmcsField::kGuestLdtrSelector, guest_vmcs_va, UtilVmRead(VmcsField::kGuestLdtrSelector));
-	VmWrite16(VmcsField::kGuestTrSelector, guest_vmcs_va, UtilVmRead(VmcsField::kGuestTrSelector));
+	VmWrite16(VmcsField::kGuestEsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestEsSelector));
+	VmWrite16(VmcsField::kGuestCsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestCsSelector));
+	VmWrite16(VmcsField::kGuestSsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestSsSelector));
+	VmWrite16(VmcsField::kGuestDsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestDsSelector));
+	VmWrite16(VmcsField::kGuestFsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestFsSelector));
+	VmWrite16(VmcsField::kGuestGsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestGsSelector));
+	VmWrite16(VmcsField::kGuestLdtrSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestLdtrSelector));
+	VmWrite16(VmcsField::kGuestTrSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestTrSelector));
 
-	VmWrite32(VmcsField::kGuestEsLimit, guest_vmcs_va, UtilVmRead(VmcsField::kGuestEsLimit));
-	VmWrite32(VmcsField::kGuestCsLimit, guest_vmcs_va, UtilVmRead(VmcsField::kGuestCsLimit));
-	VmWrite32(VmcsField::kGuestSsLimit, guest_vmcs_va, UtilVmRead(VmcsField::kGuestSsLimit));
-	VmWrite32(VmcsField::kGuestDsLimit, guest_vmcs_va, UtilVmRead(VmcsField::kGuestDsLimit));
-	VmWrite32(VmcsField::kGuestFsLimit, guest_vmcs_va, UtilVmRead(VmcsField::kGuestFsLimit));
-	VmWrite32(VmcsField::kGuestGsLimit, guest_vmcs_va, UtilVmRead(VmcsField::kGuestGsLimit));
-	VmWrite32(VmcsField::kGuestLdtrLimit, guest_vmcs_va, UtilVmRead(VmcsField::kGuestLdtrLimit));
-	VmWrite32(VmcsField::kGuestTrLimit, guest_vmcs_va, UtilVmRead(VmcsField::kGuestTrLimit));
-	VmWrite32(VmcsField::kGuestGdtrLimit, guest_vmcs_va, UtilVmRead(VmcsField::kGuestGdtrLimit));
-	VmWrite32(VmcsField::kGuestIdtrLimit, guest_vmcs_va, UtilVmRead(VmcsField::kGuestIdtrLimit));
-	VmWrite32(VmcsField::kGuestEsArBytes, guest_vmcs_va, UtilVmRead(VmcsField::kGuestEsArBytes));
-	VmWrite32(VmcsField::kGuestCsArBytes, guest_vmcs_va, UtilVmRead(VmcsField::kGuestCsArBytes));
-	VmWrite32(VmcsField::kGuestSsArBytes, guest_vmcs_va, UtilVmRead(VmcsField::kGuestSsArBytes));
-	VmWrite32(VmcsField::kGuestDsArBytes, guest_vmcs_va, UtilVmRead(VmcsField::kGuestDsArBytes));
-	VmWrite32(VmcsField::kGuestFsArBytes, guest_vmcs_va, UtilVmRead(VmcsField::kGuestFsArBytes));
-	VmWrite32(VmcsField::kGuestGsArBytes, guest_vmcs_va, UtilVmRead(VmcsField::kGuestGsArBytes));
-	VmWrite32(VmcsField::kGuestLdtrArBytes, guest_vmcs_va, UtilVmRead(VmcsField::kGuestLdtrArBytes));
-	VmWrite32(VmcsField::kGuestTrArBytes, guest_vmcs_va, UtilVmRead(VmcsField::kGuestTrArBytes));
-	VmWrite32(VmcsField::kGuestInterruptibilityInfo, guest_vmcs_va, UtilVmRead(VmcsField::kGuestInterruptibilityInfo));
-	VmWrite32(VmcsField::kGuestActivityState, guest_vmcs_va, UtilVmRead(VmcsField::kGuestActivityState));
-	VmWrite32(VmcsField::kGuestSysenterCs, guest_vmcs_va, UtilVmRead(VmcsField::kGuestSysenterCs));
+	VmWrite32(VmcsField::kGuestEsLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestEsLimit));
+	VmWrite32(VmcsField::kGuestCsLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestCsLimit));
+	VmWrite32(VmcsField::kGuestSsLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestSsLimit));
+	VmWrite32(VmcsField::kGuestDsLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestDsLimit));
+	VmWrite32(VmcsField::kGuestFsLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestFsLimit));
+	VmWrite32(VmcsField::kGuestGsLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestGsLimit));
+	VmWrite32(VmcsField::kGuestLdtrLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestLdtrLimit));
+	VmWrite32(VmcsField::kGuestTrLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestTrLimit));
+	VmWrite32(VmcsField::kGuestGdtrLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestGdtrLimit));
+	VmWrite32(VmcsField::kGuestIdtrLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestIdtrLimit));
+	VmWrite32(VmcsField::kGuestEsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestEsArBytes));
+	VmWrite32(VmcsField::kGuestCsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestCsArBytes));
+	VmWrite32(VmcsField::kGuestSsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestSsArBytes));
+	VmWrite32(VmcsField::kGuestDsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestDsArBytes));
+	VmWrite32(VmcsField::kGuestFsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestFsArBytes));
+	VmWrite32(VmcsField::kGuestGsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestGsArBytes));
+	VmWrite32(VmcsField::kGuestLdtrArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestLdtrArBytes));
+	VmWrite32(VmcsField::kGuestTrArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestTrArBytes));
+	VmWrite32(VmcsField::kGuestInterruptibilityInfo, vmcs12_va, UtilVmRead(VmcsField::kGuestInterruptibilityInfo));
+	VmWrite32(VmcsField::kGuestActivityState, vmcs12_va, UtilVmRead(VmcsField::kGuestActivityState));
+	VmWrite32(VmcsField::kGuestSysenterCs, vmcs12_va, UtilVmRead(VmcsField::kGuestSysenterCs));
 
-	VmWrite64(VmcsField::kGuestSysenterEsp,			 guest_vmcs_va, UtilVmRead(VmcsField::kGuestSysenterEsp));
-	VmWrite64(VmcsField::kGuestSysenterEip,			 guest_vmcs_va, UtilVmRead(VmcsField::kGuestSysenterEip));
-	VmWrite64(VmcsField::kGuestPendingDbgExceptions, guest_vmcs_va, UtilVmRead(VmcsField::kGuestPendingDbgExceptions));
-	VmWrite64(VmcsField::kGuestEsBase,		         guest_vmcs_va, UtilVmRead(VmcsField::kGuestEsBase));
-	VmWrite64(VmcsField::kGuestCsBase,		         guest_vmcs_va, UtilVmRead(VmcsField::kGuestCsBase));
-	VmWrite64(VmcsField::kGuestSsBase,		         guest_vmcs_va, UtilVmRead(VmcsField::kGuestSsBase));
-	VmWrite64(VmcsField::kGuestDsBase,		         guest_vmcs_va, UtilVmRead(VmcsField::kGuestDsBase));
-	VmWrite64(VmcsField::kGuestFsBase,		         guest_vmcs_va, UtilVmRead(VmcsField::kGuestFsBase));
-	VmWrite64(VmcsField::kGuestGsBase,		         guest_vmcs_va, UtilVmRead(VmcsField::kGuestGsBase));
-	VmWrite64(VmcsField::kGuestLdtrBase,	         guest_vmcs_va, UtilVmRead(VmcsField::kGuestLdtrBase));
-	VmWrite64(VmcsField::kGuestTrBase,		         guest_vmcs_va, UtilVmRead(VmcsField::kGuestTrBase));
-	VmWrite64(VmcsField::kGuestGdtrBase,	         guest_vmcs_va, UtilVmRead(VmcsField::kGuestGdtrBase));
-	VmWrite64(VmcsField::kGuestIdtrBase,	         guest_vmcs_va, UtilVmRead(VmcsField::kGuestIdtrBase));
+	VmWrite64(VmcsField::kGuestSysenterEsp,			 vmcs12_va, UtilVmRead(VmcsField::kGuestSysenterEsp));
+	VmWrite64(VmcsField::kGuestSysenterEip,			 vmcs12_va, UtilVmRead(VmcsField::kGuestSysenterEip));
+	VmWrite64(VmcsField::kGuestPendingDbgExceptions, vmcs12_va, UtilVmRead(VmcsField::kGuestPendingDbgExceptions));
+	VmWrite64(VmcsField::kGuestEsBase,		         vmcs12_va, UtilVmRead(VmcsField::kGuestEsBase));
+	VmWrite64(VmcsField::kGuestCsBase,		         vmcs12_va, UtilVmRead(VmcsField::kGuestCsBase));
+	VmWrite64(VmcsField::kGuestSsBase,		         vmcs12_va, UtilVmRead(VmcsField::kGuestSsBase));
+	VmWrite64(VmcsField::kGuestDsBase,		         vmcs12_va, UtilVmRead(VmcsField::kGuestDsBase));
+	VmWrite64(VmcsField::kGuestFsBase,		         vmcs12_va, UtilVmRead(VmcsField::kGuestFsBase));
+	VmWrite64(VmcsField::kGuestGsBase,		         vmcs12_va, UtilVmRead(VmcsField::kGuestGsBase));
+	VmWrite64(VmcsField::kGuestLdtrBase,	         vmcs12_va, UtilVmRead(VmcsField::kGuestLdtrBase));
+	VmWrite64(VmcsField::kGuestTrBase,		         vmcs12_va, UtilVmRead(VmcsField::kGuestTrBase));
+	VmWrite64(VmcsField::kGuestGdtrBase,	         vmcs12_va, UtilVmRead(VmcsField::kGuestGdtrBase));
+	VmWrite64(VmcsField::kGuestIdtrBase,	         vmcs12_va, UtilVmRead(VmcsField::kGuestIdtrBase));
 
-	//Read - only field
-	//Write to VMCS12 for vmread
-	const VmExitInformation exit_reason = { static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitReason)) };
-	const VmExitInterruptionInformationField exception = { static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrInfo)) };
-
-	SaveExceptionInformationFromVmcs02(exit_reason);
+	 
 
 }
 
-VOID EmulateVmExit(ULONG64 vmcs01)
+VOID EmulateVmExit(ULONG64 vmcs01, ULONG64 vmcs12_va)
 {
 
-	VmxStatus status;
-	
-	ULONG64 vmcs12 = GetCurrentVmcs12();
-	if (!vmcs12)
-	{
-
-		return;
-	}	
+	VmxStatus status; 
 	
 	ULONG64   VMCS_VMEXIT_HANDLER = 0;
 	ULONG64   VMCS_VMEXIT_STACK = 0;
@@ -418,33 +392,33 @@ VOID EmulateVmExit(ULONG64 vmcs01)
 		HYPERPLATFORM_LOG_DEBUG("Error vmptrld error code :%x , %x", status, error);
 	}
 
-	//Read from VMCS12 get it host vmexit handler
-	VmRead64(VmcsField::kHostRip, vmcs12, &VMCS_VMEXIT_HANDLER);
-	VmRead64(VmcsField::kHostRsp, vmcs12, &VMCS_VMEXIT_STACK);
-	VmRead64(VmcsField::kHostCr0, vmcs12, &VMCS_VMEXIT_CR0);
-	VmRead64(VmcsField::kHostCr3, vmcs12, &VMCS_VMEXIT_CR3);
-	VmRead64(VmcsField::kHostCr4, vmcs12, &VMCS_VMEXIT_CR4);
+	//Read from vmcs12_va get it host vmexit handler
+	VmRead64(VmcsField::kHostRip, vmcs12_va, &VMCS_VMEXIT_HANDLER);
+	VmRead64(VmcsField::kHostRsp, vmcs12_va, &VMCS_VMEXIT_STACK);
+	VmRead64(VmcsField::kHostCr0, vmcs12_va, &VMCS_VMEXIT_CR0);
+	VmRead64(VmcsField::kHostCr3, vmcs12_va, &VMCS_VMEXIT_CR3);
+	VmRead64(VmcsField::kHostCr4, vmcs12_va, &VMCS_VMEXIT_CR4);
 
 
-	VmRead64(VmcsField::kHostCsSelector, vmcs12, &VMCS_VMEXIT_CS);
-	VmRead64(VmcsField::kHostSsSelector, vmcs12, &VMCS_VMEXIT_SS);
-	VmRead64(VmcsField::kHostDsSelector, vmcs12, &VMCS_VMEXIT_DS);
-	VmRead64(VmcsField::kHostEsSelector, vmcs12, &VMCS_VMEXIT_ES);
-	VmRead64(VmcsField::kHostFsSelector, vmcs12, &VMCS_VMEXIT_FS);
-	VmRead64(VmcsField::kHostGsSelector, vmcs12, &VMCS_VMEXIT_GS);
-	VmRead64(VmcsField::kHostTrSelector, vmcs12, &VMCS_VMEXIT_TR);
+	VmRead64(VmcsField::kHostCsSelector, vmcs12_va, &VMCS_VMEXIT_CS);
+	VmRead64(VmcsField::kHostSsSelector, vmcs12_va, &VMCS_VMEXIT_SS);
+	VmRead64(VmcsField::kHostDsSelector, vmcs12_va, &VMCS_VMEXIT_DS);
+	VmRead64(VmcsField::kHostEsSelector, vmcs12_va, &VMCS_VMEXIT_ES);
+	VmRead64(VmcsField::kHostFsSelector, vmcs12_va, &VMCS_VMEXIT_FS);
+	VmRead64(VmcsField::kHostGsSelector, vmcs12_va, &VMCS_VMEXIT_GS);
+	VmRead64(VmcsField::kHostTrSelector, vmcs12_va, &VMCS_VMEXIT_TR);
 
 
-	VmRead32(VmcsField::kHostIa32SysenterCs, vmcs12, &VMCS_VMEXIT_SYSENTER_CS);
-	VmRead64(VmcsField::kHostIa32SysenterEip, vmcs12, &VMCS_VMEXIT_SYSENTER_RSP);
-	VmRead64(VmcsField::kHostIa32SysenterEsp, vmcs12, &VMCS_VMEXIT_SYSENTER_RIP);
+	VmRead32(VmcsField::kHostIa32SysenterCs, vmcs12_va, &VMCS_VMEXIT_SYSENTER_CS);
+	VmRead64(VmcsField::kHostIa32SysenterEip, vmcs12_va, &VMCS_VMEXIT_SYSENTER_RSP);
+	VmRead64(VmcsField::kHostIa32SysenterEsp, vmcs12_va, &VMCS_VMEXIT_SYSENTER_RIP);
 
 
-	VmRead64(VmcsField::kHostFsBase, vmcs12, &VMCS_VMEXIT_HOST_FS);
-	VmRead64(VmcsField::kHostGsBase, vmcs12, &VMCS_VMEXIT_HOST_GS);
-	VmRead64(VmcsField::kHostTrBase, vmcs12, &VMCS_VMEXIT_HOST_TR);
+	VmRead64(VmcsField::kHostFsBase, vmcs12_va, &VMCS_VMEXIT_HOST_FS);
+	VmRead64(VmcsField::kHostGsBase, vmcs12_va, &VMCS_VMEXIT_HOST_GS);
+	VmRead64(VmcsField::kHostTrBase, vmcs12_va, &VMCS_VMEXIT_HOST_TR);
 
-	VmRead64(VmcsField::kGuestRflags, vmcs12, &VMCS_VMEXIT_RFLAGs);
+	VmRead64(VmcsField::kGuestRflags, vmcs12_va, &VMCS_VMEXIT_RFLAGs);
 
 	//Write VMCS01 for L1's VMExit handler
 	UtilVmWrite(VmcsField::kGuestRflags, VMCS_VMEXIT_RFLAGs);
@@ -475,20 +449,22 @@ VOID EmulateVmExit(ULONG64 vmcs01)
 	HYPERPLATFORM_LOG_DEBUG("[EmulateVmExit]VMCS01: kGuestRip :%I64x , kGuestRsp %I64x ", UtilVmRead(VmcsField::kGuestRip), UtilVmRead(VmcsField::kGuestRsp));
 	HYPERPLATFORM_LOG_DEBUG("[EmulateVmExit]VMCS01: kHostRip :%I64x , kHostRsp %I64x ", UtilVmRead(VmcsField::kHostRip), UtilVmRead(VmcsField::kHostRsp));
 
+
+	PrintVMCS12(vmcs12_va);
+
 }
 //Nested breakpoint dispatcher
-VOID NestedBreakpointHandler(GuestContext* guest_context)
+VOID NestedBreakpointHandler(GuestContext* guest_context, ULONG64 vmcs12_va)
 {
 	const VmExitInformation exit_reason = { static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitReason)) };
-
-	//except vmcs01 
-	ULONG64 guest_vmcs_va = GetCurrentVmcs12();
-	if (guest_vmcs_va)
+	 
+	if (vmcs12_va)
 	{
 		ULONG64   vmcs01 = UtilPaFromVa((void*)guest_context->stack->processor_data->vmcs_region);
 		HYPERPLATFORM_LOG_DEBUG("VMCS id %x", UtilVmRead(VmcsField::kVirtualProcessorId));
 		//use vmcs01 to emulate (vmresume) from L2 to L1 ( actually , it is L0 to L1 by vmresume)
-		EmulateVmExit(vmcs01);
+		EmulateVmExit(vmcs01, vmcs12_va);
+ 
 		return;
 	}
 
@@ -586,34 +562,62 @@ _Use_decl_annotations_ static void VmmpHandleVmExit(GuestContext *guest_context)
       index = 0;
     }
   }
+  ULONG64 vmcs12_va = 0;
+  NestedVmm* vm = NULL;
+  do 
+  {
+	  vm = GetCurrentCPU();
+	  if (!vm)  
+	  {
+		  break;
+	  }
+
+	  const VmExitInterruptionInformationField exception =
+	  {
+		  static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrInfo))
+	  };
+	   
+	  /*
+			We need to emulate the exception if and only if the vCPU mode is Guest Mode , and only the exception is somethings we want to redirect to L1 for handle it.  
+	  */
+	  if ( !IsRootMode(vm) && 
+			 static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kBreakpointException)	 
+	  {
+
+		  if (!vm->vmcs02_pa || !vm->vmcs12_pa ||
+			  vm->vmcs12_pa == ~0x0 || vm->vmcs02_pa == ~0x0
+			  )
+		  { 
+
+			  HYPERPLATFORM_LOG_DEBUG("cannot find vmcs \r\n"); 
+			  break;
+		  }
+		   
+		  // Emulated VMExit 
+		  LEAVE_GUEST_MODE(vm);
+
+		  vmcs12_va = (ULONG64)UtilVaFromPa(vm->vmcs12_pa);
+
+		  if (vmcs12_va)
+		  {
+			  SaveGuestFieldFromVmcs02(vmcs12_va);
+			  SaveExceptionInformationFromVmcs02(exit_reason, vmcs12_va); 
+			  // by assumption L1 (DDIMON) need this exception
+			  NestedBreakpointHandler(guest_context, vmcs12_va);
+			  ENTER_GUEST_MODE(vm);
+		  }
+		  else
+		  {
+			  HYPERPLATFORM_COMMON_DBG_BREAK();
+		  }
+		  return ;
+	  }
+  } while (0);
 
    switch (exit_reason.fields.reason) 
   {
 	case VmxExitReason::kExceptionOrNmi:
-	{
-		  const VmExitInterruptionInformationField exception =
-		  {
-			  static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrInfo))
-		  };
-
-		  if (static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kBreakpointException)
-		  {
-			  // Save if and only if trapped by VMCS02
-			  ULONG64 guest_vmcs_va = GetCurrentVmcs12();
-			  if (guest_vmcs_va)
-			  {
-				  SaveGuestFieldFromVmcs02();
-			  }
-	  
-			  // by assumption L1 (DDIMON) need this exception
-			  NestedBreakpointHandler(guest_context);
-			  break;
-		  }
-		  else
-		  {
-			  VmmpHandleException(guest_context);
-		  }
-	 }
+	  VmmpHandleException(guest_context); 
 	break;
     case VmxExitReason::kTripleFault:
       VmmpHandleTripleFault(guest_context);
@@ -683,7 +687,7 @@ _Use_decl_annotations_ static void VmmpHandleVmExit(GuestContext *guest_context)
     default:
       VmmpHandleUnexpectedExit(guest_context);
       break;
-  }
+  }  
 }
 
 // Triple fault VM-exit. Fatal error.
@@ -1902,7 +1906,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
   }
 
 
-  ULONG64 DecodeOrVmclearOrVmptrldOrVmptrstOrVmxon(GuestContext* guest_context)
+  ULONG64 DecodeVmclearOrVmptrldOrVmptrstOrVmxon(GuestContext* guest_context)
   {
 	  const VMInstructionQualificationForClearOrPtrldOrPtrstOrVmxon exit_qualification =
 	  {
@@ -2038,10 +2042,11 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 	  {
 		  ULONG64				InstructionPointer = { UtilVmRead64(VmcsField::kGuestRip) };
 		  ULONG64				StackPointer = { UtilVmRead64(VmcsField::kGuestRsp) };
-		  ULONG64				vmxon_region_pa = *(PULONG64)DecodeOrVmclearOrVmptrldOrVmptrstOrVmxon(guest_context);
-		  ULONG64				debug_vmxon_region_pa = DecodeOrVmclearOrVmptrldOrVmptrstOrVmxon(guest_context);
-		  VmControlStructure* vmxon_region_struct = (VmControlStructure*)UtilVaFromPa(vmxon_region_pa);
-		  PROCESSOR_NUMBER    number;
+		  ULONG64				vmxon_region_pa = *(PULONG64)DecodeVmclearOrVmptrldOrVmptrstOrVmxon(guest_context);
+		  ULONG64				debug_vmxon_region_pa = DecodeVmclearOrVmptrldOrVmptrstOrVmxon(guest_context);
+		  VmControlStructure*   vmxon_region_struct = (VmControlStructure*)UtilVaFromPa(vmxon_region_pa);
+		  PROCESSOR_NUMBER      number;
+		 
 		  HYPERPLATFORM_LOG_DEBUG("UtilVmRead: %I64X", &UtilVmRead);
 		  HYPERPLATFORM_LOG_DEBUG("UtilVmRead64: %I64X", &UtilVmRead64);
 		  HYPERPLATFORM_LOG_DEBUG("UtilVmWrite: %I64X", &UtilVmWrite);
@@ -2052,6 +2057,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  HYPERPLATFORM_LOG_DEBUG("VmWrite: %I64X", &VmWrite16);
 		  HYPERPLATFORM_LOG_DEBUG("VmWrite32: %I64X", &VmWrite32);
 		  HYPERPLATFORM_LOG_DEBUG("VmWrite64: %I64X", &VmWrite64);
+		
 		  // VMXON_REGION IS NULL
 		  if (!vmxon_region_pa)
 		  {
@@ -2061,7 +2067,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 			  break;
 		  }
 
-		  // If already vCPU run in VMX operation
+		  // If already VCPU run in VMX operation
 		  if (g_vcpus[KeGetCurrentProcessorNumberEx(&number)])
 		  {
 			  ///TODO: 
@@ -2211,8 +2217,8 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 	  {
 		  ULONG64				InstructionPointer = { UtilVmRead64(VmcsField::kGuestRip) };
 		  ULONG64				StackPointer = { UtilVmRead64(VmcsField::kGuestRsp) };
-		  ULONG64				vmcs_region_pa = *(PULONG64)DecodeOrVmclearOrVmptrldOrVmptrstOrVmxon(guest_context);//*(PULONG64)(StackPointer + offset);				//May need to be fixed later
-		  ULONG64				debug_vmcs_region_pa = DecodeOrVmclearOrVmptrldOrVmptrstOrVmxon(guest_context);
+		  ULONG64				vmcs_region_pa = *(PULONG64)DecodeVmclearOrVmptrldOrVmptrstOrVmxon(guest_context);//*(PULONG64)(StackPointer + offset);				//May need to be fixed later
+		  ULONG64				debug_vmcs_region_pa = DecodeVmclearOrVmptrldOrVmptrstOrVmxon(guest_context);
 		  PROCESSOR_NUMBER	procnumber = {};
 		  VmControlStructure* vmcs_region_va = (VmControlStructure*)UtilVaFromPa(vmcs_region_pa);
 		  ULONG				vcpu_index = KeGetCurrentProcessorNumberEx(&procnumber);
@@ -2226,7 +2232,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 			  break;
 		  }
 
-		  //If vCPU is not run in VMX mode
+		  //If VCPU is not run in VMX mode
 		  if (!g_vcpus[vcpu_index]->inVMX)
 		  {
 			  HYPERPLATFORM_LOG_DEBUG(("VMXCLEAR: VMXON is required ! \r\n"));
@@ -2310,6 +2316,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  {
 			  g_vcpus[vcpu_index]->vmcs12_pa = 0xFFFFFFFFFFFFFFFF;
 		  }
+
 		  __vmx_vmclear(&g_vcpus[vcpu_index]->vmcs02_pa); 
 		  g_vcpus[vcpu_index]->vmcs02_pa = 0xFFFFFFFFFFFFFFFF;
 
@@ -2335,18 +2342,18 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  PROCESSOR_NUMBER	procnumber = {};
 		  ULONG64				InstructionPointer = { UtilVmRead64(VmcsField::kGuestRip) };
 		  ULONG64				StackPointer = { UtilVmRead64(VmcsField::kGuestRsp) };
-		  ULONG64				vmcs_region_pa = *(PULONG64)DecodeOrVmclearOrVmptrldOrVmptrstOrVmxon(guest_context);
-		  VmControlStructure* vmcs_region_va = (VmControlStructure*)UtilVaFromPa(vmcs_region_pa);
+		  ULONG64				vmcs12_region_pa = *(PULONG64)DecodeVmclearOrVmptrldOrVmptrstOrVmxon(guest_context);
+		  VmControlStructure*   vmcs12_region_va = (VmControlStructure*)UtilVaFromPa(vmcs12_region_pa);
 		  ULONG				vcpu_index = KeGetCurrentProcessorNumberEx(&procnumber);
 		  // if vmcs region is NULL
-		  if (!vmcs_region_pa)
+		  if (!vmcs12_region_va)
 		  {
 			  HYPERPLATFORM_LOG_DEBUG(("kVmptrld: Parameter is NULL ! \r\n"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
 		  }
-		  // if vCPU not run in VMX mode 
+		  // if VCPU not run in VMX mode 
 		  if (!g_vcpus[vcpu_index]->inVMX)
 		  {
 			  HYPERPLATFORM_LOG_DEBUG(("kVmptrld: VMXON is required ! \r\n"));
@@ -2387,8 +2394,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 			  }
 		  }
 
-		  ///TODO: If in VMX non-root operation, should be VM Exit
-
+		  ///TODO: If in VMX non-root operation, should be VM Exit 
 		  //Get Guest CPL
 		  if (GetGuestCPL() > 0)
 		  {
@@ -2397,60 +2403,56 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 			  break;
 		  }
 		  //if is it not page aglined
-		  if (!CheckPageAlgined(vmcs_region_pa))
+		  if (!CheckPageAlgined(vmcs12_region_pa))
 		  {
 			  HYPERPLATFORM_LOG_DEBUG(("kVmptrld: not page aligned physical address %I64X ! \r\n"),
-				  vmcs_region_pa);
+				  vmcs12_region_pa);
 
 			  VMfailInvalid(&guest_context->flag_reg);
 			  break;
 		  }
 
 		  //if IA32_VMX_BASIC[48] == 1 it is not support 64bit addressing, so address[32] to address[63] supposed = 0
-		  if (!CheckPhysicalAddress(vmcs_region_pa))
+		  if (!CheckPhysicalAddress(vmcs12_region_pa))
 		  {
 			  HYPERPLATFORM_LOG_DEBUG(("kVmptrld: invalid physical address %I64X ! \r\n"),
-				  vmcs_region_pa);
+				  vmcs12_region_pa);
 
 			  VMfailInvalid(&guest_context->flag_reg);
 			  break;
 		  }
 
-		  if (g_vcpus[vcpu_index] && (vmcs_region_pa == g_vcpus[vcpu_index]->vmxon_region))
+		  if (g_vcpus[vcpu_index] && (vmcs12_region_pa == g_vcpus[vcpu_index]->vmxon_region))
 		  {
 			  HYPERPLATFORM_LOG_DEBUG(("kVmptrld: VMCS region %I64X same as VMXON region %I64X ! \r\n"),
-				  vmcs_region_pa, g_vcpus[vcpu_index]->vmxon_region);
+				  vmcs12_region_pa, g_vcpus[vcpu_index]->vmxon_region);
 
 			  VMfailInvalid(&guest_context->flag_reg);
 			  break;
 		  }
 
 		  //VMCS id is not supported
-		  if (vmcs_region_va->revision_identifier != GetVMCSRevisionIdentifier())
+		  if (vmcs12_region_va->revision_identifier != GetVMCSRevisionIdentifier())
 		  {
 			  HYPERPLATFORM_LOG_DEBUG(("VMPTRLD: VMCS revision identifier is not supported,  CPU supports identifier is : %x !"), GetVMCSRevisionIdentifier());
 			  VMfailInvalid(&guest_context->flag_reg);
 			  break;
 		  }
 
-		  PUCHAR			  vmcs_region_rw_va = (PUCHAR)ExAllocatePool(NonPagedPoolNx, PAGE_SIZE);
-		  ULONG64			  vmcs_region_rw_pa = UtilPaFromVa(vmcs_region_rw_va);
+		  PUCHAR			  vmcs02_region_va = (PUCHAR)ExAllocatePool(NonPagedPoolNx, PAGE_SIZE);
+		  ULONG64			  vmcs02_region_pa = UtilPaFromVa(vmcs02_region_va);
 
-		  RtlFillMemory(vmcs_region_rw_va, PAGE_SIZE, 0x0);
+		  RtlFillMemory(vmcs02_region_va, PAGE_SIZE, 0x0);
  
-		  g_vcpus[vcpu_index]->vmcs02_pa = vmcs_region_rw_pa;		//vmcs02' physical address - DIRECT VMREAD/WRITE
-		  g_vcpus[vcpu_index]->vmcs12_pa   = vmcs_region_pa;		    //vmcs12' physical address - we will control its structure in Vmread/Vmwrite
+		  g_vcpus[vcpu_index]->vmcs02_pa = vmcs02_region_pa;		    //vmcs02' physical address - DIRECT VMREAD/WRITE
+		  g_vcpus[vcpu_index]->vmcs12_pa = vmcs12_region_pa;		    //vmcs12' physical address - we will control its structure in Vmread/Vmwrite
 		  g_vcpus[vcpu_index]->kVirtualProcessorId = (USHORT)KeGetCurrentProcessorNumberEx(nullptr) + 1;
 
-		  HYPERPLATFORM_LOG_DEBUG("VMPTRLD: Guest Instruction Pointer %I64X Guest Stack Pointer: %I64X  Guest VMCS PA: %I64X Guest VMCS VA : %I64X Run VMCS PA : %I64X Run VMCS VA : %I64X \r\n",
-			  InstructionPointer, StackPointer, vmcs_region_pa, vmcs_region_va, vmcs_region_rw_pa, vmcs_region_rw_va);
-
-		  HYPERPLATFORM_LOG_DEBUG("VMPTRLD: Run Successfully with VMCS_Region:  %I64X Total Vitrualized Core: %x  Current Cpu: %x in Cpu Group : %x  Number: %x \r\n",
-			  vmcs_region_pa, g_VM_Core_Count, g_vcpus[vcpu_index]->CpuNumber, procnumber.Group, procnumber.Number);
-
-		  HYPERPLATFORM_LOG_DEBUG("VMPTRLD: VCPU No.: %i Mode: %s Current VMCS : %I64X VMXON Region : %I64X  ",
-			  g_vcpus[vcpu_index]->CpuNumber, (g_vcpus[vcpu_index]->inVMX) ? "VMX" : "No VMX", g_vcpus[vcpu_index]->vmcs02_pa, g_vcpus[vcpu_index]->vmxon_region);
-
+		  HYPERPLATFORM_LOG_DEBUG("[VMPTRLD] Run Successfully \r\n");
+		  HYPERPLATFORM_LOG_DEBUG("[VMPTRLD] VMCS02 PA: %I64X VA: %I64X  \r\n", vmcs02_region_pa, vmcs02_region_va);
+		  HYPERPLATFORM_LOG_DEBUG("[VMPTRLD] VMCS12 PA: %I64X VA: %I64X \r\n" , vmcs12_region_pa, vmcs12_region_va);
+		  HYPERPLATFORM_LOG_DEBUG("[VMPTRLD] Current Cpu: %x in Cpu Group : %x  Number: %x \r\n",  g_vcpus[vcpu_index]->CpuNumber, procnumber.Group, procnumber.Number);
+		   
 		  VMSucceed(&guest_context->flag_reg);
 
 	  } while (FALSE);
@@ -2467,7 +2469,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  ULONG64			  vmcs12_pa = g_vcpus[vcpu_index]->vmcs12_pa;
 		  ULONG64			  vmcs12_va = (ULONG64)UtilVaFromPa(vmcs12_pa);
 
-		  // if vCPU not run in VMX mode
+		  // if VCPU not run in VMX mode
 		  if (!g_vcpus[vcpu_index]->inVMX)
 		  {
 			  HYPERPLATFORM_LOG_DEBUG(("VMREAD: VMXON is required ! \r\n"));
@@ -2542,13 +2544,13 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  }
 
 
-		  if (!g_vcpus[vcpu_index]->inRoot)
+		/*  if (!g_vcpus[vcpu_index]->inRoot)
 		  {
 			  ///TODO: Should INJECT vmexit to L1
 			  ///	   And Handle it well
 			  break;
 		  }
-
+		  */
 		  auto operand_size = VMCS_FIELD_WIDTH((int)field);
 
 
@@ -2606,7 +2608,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  ULONG64			  vmcs12_pa = (ULONG64)g_vcpus[vcpu_index]->vmcs12_pa;
 		  ULONG64			  vmcs12_va = (ULONG64)UtilVaFromPa(vmcs12_pa);
 
-		  // if vCPU not run in VMX mode
+		  // if VCPU not run in VMX mode
 		  if (!g_vcpus[vcpu_index]->inVMX)
 		  {
 			  HYPERPLATFORM_LOG_DEBUG(("VMWRITE: VMXON is required ! \r\n"));
@@ -2671,12 +2673,12 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 			  break;
 		  }
 
-		  if (!g_vcpus[vcpu_index]->inRoot)
+		  /*if (!g_vcpus[vcpu_index]->inRoot)
 		  {
 			  ///TODO: Should INJECT vmexit to L1
 			  ///	   And Handle it well
 			  break;
-		  }
+		  }*/
 		  auto operand_size = VMCS_FIELD_WIDTH((int)field);
 		  if (operand_size == VMCS_FIELD_WIDTH_16BIT)
 		  {
@@ -2801,12 +2803,16 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  }
 
 
+		  ENTER_GUEST_MODE(g_vcpus[vcpu_index]);
+
+		  /*
 		  if (!g_vcpus[vcpu_index]->inRoot)
 		  {
 			  ///TODO: Should INJECT vmexit to L1
 			  ///	   And Handle it well
 			  break;
 		  }
+		  */
 		  //Get vmcs02 / vmcs12
 		
 
@@ -2879,8 +2885,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 			  HYPERPLATFORM_COMMON_DBG_BREAK();
 		  }
 
-		  HYPERPLATFORM_LOG_DEBUG("Error vmclear error code :%x , %x ", 0, 0);
-
+		  HYPERPLATFORM_LOG_DEBUG("Error vmclear error code :%x , %x ", 0, 0); 
 		  return;
 	  } while (FALSE);
 
@@ -2945,6 +2950,10 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 			  ThrowGerneralFaultInterrupt();
 			  break;
 		  }
+
+
+		  ENTER_GUEST_MODE(g_vcpus[vcpu_index]);
+
 		  auto    vmcs02_pa = g_vcpus[vcpu_index]->vmcs02_pa;
 		  auto	  vmcs12_pa = g_vcpus[vcpu_index]->vmcs12_pa;
 
@@ -2974,7 +2983,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  VmControlStructure* ptr = (VmControlStructure*)vmcs02_va;
 		  ptr->revision_identifier = vmx_basic_msr.fields.revision_identifier;
 
-		  HYPERPLATFORM_LOG_DEBUG("vmcs02_pa: %I64X", vmcs12_va);
+		  HYPERPLATFORM_LOG_DEBUG("vmcs02_va: %I64X", vmcs12_va);
 
 		  //Mixing AND checking Control Field 
 		  //Current VMCS is VMCS01
@@ -3023,6 +3032,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  // Explicitly write once again. It is important and will be cause the system hang.
 		  ULONG64   rip = 0;
 		  VmRead64(VmcsField::kGuestRip, vmcs12_va, &rip);
+
 		  HYPERPLATFORM_LOG_DEBUG("VMCS12 Guest rip : %I64x guest_context->irql: %i", rip, guest_context->irql);
 
 		  ULONG64   rsp = 0;
@@ -3034,6 +3044,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 
 
 		  UtilVmWrite(VmcsField::kGuestRip, rip);
+		   
 		  UtilVmWrite(VmcsField::kGuestRsp, rsp);
 		  UtilVmWrite(VmcsField::kGuestRflags, rflags);
 
@@ -3042,10 +3053,13 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  HYPERPLATFORM_LOG_DEBUG("VMCS02: kGuestRip :%I64x , kGuestRsp %I64x ", UtilVmRead(VmcsField::kGuestRip), UtilVmRead(VmcsField::kGuestRsp));
 		  HYPERPLATFORM_LOG_DEBUG("VMCS02: kHostRip :%I64x  , kHostRsp  %I64x ", UtilVmRead(VmcsField::kHostRip), UtilVmRead(VmcsField::kHostRsp));
 
-		   if (guest_context->irql < DISPATCH_LEVEL)
+		  
+		  if (guest_context->irql < DISPATCH_LEVEL)
 		   {
 		 	  KeLowerIrql(guest_context->irql);
-		   } 
+		   }
+		   
+		   
 
 		  HYPERPLATFORM_COMMON_DBG_BREAK();
 	  } while (FALSE);

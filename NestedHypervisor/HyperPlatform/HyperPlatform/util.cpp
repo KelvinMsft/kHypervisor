@@ -422,7 +422,7 @@ UtilGetPhysicalMemoryRanges() {
 _Use_decl_annotations_ NTSTATUS UtilForEachProcessor(NTSTATUS (*callback_routine)(void *), void *context) {
   const auto number_of_processors = KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
 
-  for (ULONG processor_index = 0; processor_index < number_of_processors-1; processor_index++) {
+  for (ULONG processor_index = 0; processor_index < number_of_processors ; processor_index++) {
     PROCESSOR_NUMBER processor_number = {};
     auto status = KeGetProcessorNumberFromIndex(processor_index, &processor_number);
     if (!NT_SUCCESS(status)) {

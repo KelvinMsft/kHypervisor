@@ -6,11 +6,10 @@ kHypervisor is an Open Source light-weighted Nested-Virtual Machine Monitor in W
 - Windows SDK 10
 - Windowr Driver Kit 10
 - Single Core Processor (Temporarily)
-- VMware 12 with EPT environment.
-- Windbg
+- VMware 12 with EPT environment. 
 
 #Description
-The kHypervisor is not yet completed, and it will be rapidly update on progress, please using a windbg+vmware 12 for debugging kHypervisor. Otherwise, it will be bugcheck by driver verifier(0xC4)
+The kHypervisor is not yet completed, and it will be rapidly update on progress, please using a windbg+vmware 12 for debugging kHypervisor.  
 
 #Progress
 2016-10-19 :  First commit, Supporting nested itself only, and nested software breakpoint exception from Level 2. And the nested-Vmm is able to dispatch this exception to L1 and help L1 to resume to L2.

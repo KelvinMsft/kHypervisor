@@ -39,8 +39,9 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
  <img src="https://cloud.githubusercontent.com/assets/22551808/21606548/47069716-d1eb-11e6-9620-4c7262aad172.png" width="50%" height="50%"> </img>
 
 #Expected Output
-
- #Kenrel mode Test: 
+ kHypervisor can be tested by kernel/user mode with Single-Core Processor Configuration 
+ 
+#Kenrel mode Test: 
  
  1. During the installion we could able to see a result, since we set a breakpoint as soon as the DdiMon's virtualization. </br>
  <img src="https://cloud.githubusercontent.com/assets/22551808/21608786/796ca796-d1f9-11e6-98c7-853933c7447b.png" width="70%" height="70%"> </img>

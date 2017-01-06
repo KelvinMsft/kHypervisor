@@ -397,7 +397,6 @@ _Use_decl_annotations_ static void VmmpHandleException(GuestContext *guest_conte
 		inject.fields.deliver_error_code = false;
 		inject.fields.valid = true;
 		UtilVmWrite(VmcsField::kVmEntryIntrInfoField, inject.all);
-		UtilVmWrite(VmcsField::kVmEntryInstructionLen, 1);
 		HYPERPLATFORM_LOG_DEBUG("L1 GuestIp= %p, #TF ", guest_context->ip);
 
 	}

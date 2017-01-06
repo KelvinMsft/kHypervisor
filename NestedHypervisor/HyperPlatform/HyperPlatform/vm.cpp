@@ -578,8 +578,9 @@ _Use_decl_annotations_ static bool VmpSetupVMCS(
     cr4_mask.fields.pse = true;
     cr4_mask.fields.smep = true;
   } 
-  const auto exception_bitmap =
-      1 << InterruptionVector::kBreakpointException  |  0;
+  const auto exception_bitmap = 
+		1 << InterruptionVector::kTrapFlags |
+		1 << InterruptionVector::kBreakpointException |   0	  ;
 
   // clang-format off
   /* 16-Bit Control Field */

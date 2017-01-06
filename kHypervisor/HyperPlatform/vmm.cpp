@@ -257,6 +257,23 @@ NestedVmm* GetCurrentCPU()
 	return ret;
 }
 
+/*
+Descritpion:
+
+	1. Call before emulate a VMExit, Read All VMExit related-Information
+	   From VMCS0-2, And backup it into VMCS1-2, the purpose is for 
+	   emulate VMExit, 
+		  
+	2. Actually the Emulation of VMExit is that we RESUME the L0 to L1, 
+	   so when L1 make any VMREAD/WRITE,  will trap by us, we return a 
+	   VMCS1-2 to its.
+
+Parameters:
+
+	1. VMExit Reason
+	2. Physical Address for VMCS1-2
+
+*/
 VOID SaveExceptionInformationFromVmcs02(VmExitInformation exit_reason, ULONG64 vmcs12_va)
 { 
 
@@ -278,7 +295,17 @@ VOID SaveExceptionInformationFromVmcs02(VmExitInformation exit_reason, ULONG64 v
 	 
 }
 
+/*
+ Descritpion:
+	1.  Call before emulate a VMExit, Read All Guest Field From VMCS0-2, 
+		And backup into VMCS1-2, the purpose is for emulated VMExit, but 
+		actually we RESUME the VM to L1, when L1 make any VMREAD/WRITE, 
+		we return a VMCS1-2 to its.
 
+  Parameters:
+	1.	Physical Address for VMCS1-2
+
+*/
 VOID SaveGuestFieldFromVmcs02(ULONG64 vmcs12_va)
 { 
 	//all nested vm-exit should record 
@@ -340,6 +367,19 @@ VOID SaveGuestFieldFromVmcs02(ULONG64 vmcs12_va)
 
 }
 
+/*
+Descritpion:
+	1.  Emulate a VMExit, After Saving All Guest Field and Exception Information 
+	    From VMCS0-2, And backup into VMCS1-2, We need to modify VMCS0-1 and get
+		ready to back VMCS0-1.
+
+		The VMCS0-1's Guest RIP, RSP,CR0,CR3,CR4 should be modified to VMCS1-2's Host RIP 
+		(Since L1 will fill the VMExit Handler when initialization stage) 
+
+	Parameters:
+	1.	Physical Address for VMCS1-2
+
+*/
 VOID EmulateVmExit(ULONG64 vmcs01, ULONG64 vmcs12_va)
 {
 
@@ -418,10 +458,10 @@ VOID EmulateVmExit(ULONG64 vmcs01, ULONG64 vmcs12_va)
 	VmRead64(VmcsField::kHostGsBase, vmcs12_va, &VMCS_VMEXIT_HOST_GS);
 	VmRead64(VmcsField::kHostTrBase, vmcs12_va, &VMCS_VMEXIT_HOST_TR);
 
-	VmRead64(VmcsField::kGuestRflags, vmcs12_va, &VMCS_VMEXIT_RFLAGs);
+	//VmRead64(VmcsField::kGuestRflags, vmcs12_va, &VMCS_VMEXIT_RFLAGs);
 
 	//Write VMCS01 for L1's VMExit handler
-	UtilVmWrite(VmcsField::kGuestRflags, VMCS_VMEXIT_RFLAGs);
+	//UtilVmWrite(VmcsField::kGuestRflags, VMCS_VMEXIT_RFLAGs);
 	UtilVmWrite(VmcsField::kGuestRip, VMCS_VMEXIT_HANDLER);
 	UtilVmWrite(VmcsField::kGuestRsp, VMCS_VMEXIT_STACK);
 	UtilVmWrite(VmcsField::kGuestCr0, VMCS_VMEXIT_CR0);
@@ -578,12 +618,26 @@ _Use_decl_annotations_ static void VmmpHandleVmExit(GuestContext *guest_context)
 	  };
 	   
 	  /*
-			We need to emulate the exception if and only if the vCPU mode is Guest Mode , and only the exception is somethings we want to redirect to L1 for handle it.  
+			We need to emulate the exception if and only if the vCPU mode is Guest Mode , 
+			and only the exception is somethings we want to redirect to L1 for handle it.  
+			IsRootMode:
+			{
+				Root Mode:
+				- if the Guest's vCPU is root mode , that means he dun expected the action will be trap.
+				  so that action should not give its VMExit handler, otherwise.
+				Guest Mode:
+				- If the Guest's vCPU is in guest mode, that means he expected the action will be trapped 
+				  And handle by its VMExit handler
+			}
+
+			We desginated the L1 wants to handle any breakpoint exception but the others.
+			So that we only nested it for testing purpose.
 	  */
 	  if ( !IsRootMode(vm) && 
 			 static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kBreakpointException)	 
 	  {
 
+		  // Since VMXON, but VMPTRLD 
 		  if (!vm->vmcs02_pa || !vm->vmcs12_pa ||
 			  vm->vmcs12_pa == ~0x0 || vm->vmcs02_pa == ~0x0
 			  )

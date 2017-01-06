@@ -1068,9 +1068,7 @@ extern "C" {
 		USHORT vmcs12_fs_selector;
 		USHORT vmcs12_gs_selector;
 		USHORT vmcs12_ldtr_selector;
-		USHORT vmcs12_tr_selector;
-		USHORT vmcs12_guest_interrupt_status;
-		USHORT vmcs12_pmlindex;
+		USHORT vmcs12_tr_selector; 
 
 		/*
 		Guest 16bit state field
@@ -1085,9 +1083,7 @@ extern "C" {
 		VmRead16(VmcsField::kGuestGsSelector, guest_vmcs_va, &vmcs12_gs_selector);
 		VmRead16(VmcsField::kGuestLdtrSelector, guest_vmcs_va, &vmcs12_ldtr_selector);
 		VmRead16(VmcsField::kGuestTrSelector, guest_vmcs_va, &vmcs12_tr_selector);
-
-		VmRead16(VmcsField::kGuestInterruptStatus, guest_vmcs_va, &vmcs12_guest_interrupt_status);
-		VmRead16(VmcsField::kGuestPmlIndex, guest_vmcs_va, &vmcs12_pmlindex);
+		 
 
 		UtilVmWrite(VmcsField::kGuestEsSelector, vmcs12_es_selector);
 		UtilVmWrite(VmcsField::kGuestCsSelector, vmcs12_cs_selector);
@@ -1096,9 +1092,7 @@ extern "C" {
 		UtilVmWrite(VmcsField::kGuestFsSelector, vmcs12_fs_selector);
 		UtilVmWrite(VmcsField::kGuestGsSelector, vmcs12_gs_selector);
 		UtilVmWrite(VmcsField::kGuestLdtrSelector, vmcs12_ldtr_selector);
-		UtilVmWrite(VmcsField::kGuestTrSelector, vmcs12_tr_selector);
-		UtilVmWrite(VmcsField::kGuestInterruptStatus, vmcs12_guest_interrupt_status);
-		UtilVmWrite(VmcsField::kGuestPmlIndex, vmcs12_pmlindex);
+		UtilVmWrite(VmcsField::kGuestTrSelector, vmcs12_tr_selector); 
 
 		/*
 		Guest 32bit state field
@@ -1159,6 +1153,7 @@ extern "C" {
 		UtilVmWrite(VmcsField::kGuestTrLimit, vmcs12_kGuestTrLimit);
 		UtilVmWrite(VmcsField::kGuestGdtrLimit, vmcs12_kGuestGdtrLimit);
 		UtilVmWrite(VmcsField::kGuestIdtrLimit, vmcs12_kGuestIdtrLimit);
+
 		UtilVmWrite(VmcsField::kGuestEsArBytes, vmcs12_kGuestEsArBytes);
 		UtilVmWrite(VmcsField::kGuestCsArBytes, vmcs12_kGuestCsArBytes);
 		UtilVmWrite(VmcsField::kGuestSsArBytes, vmcs12_kGuestSsArBytes);
@@ -1167,6 +1162,7 @@ extern "C" {
 		UtilVmWrite(VmcsField::kGuestGsArBytes, vmcs12_kGuestGsArBytes);
 		UtilVmWrite(VmcsField::kGuestLdtrArBytes, vmcs12_kGuestLdtrArBytes);
 		UtilVmWrite(VmcsField::kGuestTrArBytes, vmcs12_kGuestTrArBytes);
+
 		UtilVmWrite(VmcsField::kGuestInterruptibilityInfo, vmcs12_kGuestInterruptibilityInfo);
 		UtilVmWrite(VmcsField::kGuestActivityState, vmcs12_kGuestActivityState);
 		UtilVmWrite(VmcsField::kGuestSysenterCs, vmcs12_kGuestSysenterCs);
@@ -1200,9 +1196,9 @@ extern "C" {
 		ULONG64	vmcs12_kGuestCr0;
 		ULONG64	vmcs12_kGuestCr3;
 		ULONG64	vmcs12_kGuestCr4;
-
-
-
+		ULONG64	vmcs12_kGuestRip;
+		ULONG64	vmcs12_kGuestRsp;
+		ULONG64	vmcs12_kGuestRlags;
 
 		VmRead64(VmcsField::kGuestSysenterEsp, guest_vmcs_va, &vmcs12_kGuestSysenterEsp);
 		VmRead64(VmcsField::kGuestSysenterEip, guest_vmcs_va, &vmcs12_kGuestSysenterEip);
@@ -1223,7 +1219,9 @@ extern "C" {
 		VmRead64(VmcsField::kGuestCr3, guest_vmcs_va, &vmcs12_kGuestCr3);
 		VmRead64(VmcsField::kGuestCr4, guest_vmcs_va, &vmcs12_kGuestCr4);
 
-		HYPERPLATFORM_LOG_DEBUG("Vmcs12 GuestCr3: %I64X  Vmcs02 GuestCr3: %I64X", vmcs12_kGuestCr3, UtilVmRead64(VmcsField::kGuestCr3));
+		VmRead64(VmcsField::kGuestRip, guest_vmcs_va, &vmcs12_kGuestRip);
+		VmRead64(VmcsField::kGuestRsp, guest_vmcs_va, &vmcs12_kGuestRsp);
+		VmRead64(VmcsField::kGuestRflags, guest_vmcs_va, &vmcs12_kGuestRlags); 
 
 		UtilVmWrite(VmcsField::kGuestSysenterEsp, vmcs12_kGuestSysenterEsp);
 		UtilVmWrite(VmcsField::kGuestSysenterEip, vmcs12_kGuestSysenterEip);
@@ -1242,7 +1240,11 @@ extern "C" {
 		UtilVmWrite(VmcsField::kGuestRflags, vmcs12_kGuestRflags);
 		UtilVmWrite(VmcsField::kGuestCr0, vmcs12_kGuestCr0);
 		UtilVmWrite(VmcsField::kGuestCr3, vmcs12_kGuestCr3);
-		UtilVmWrite(VmcsField::kGuestCr4, vmcs12_kGuestCr4);
+		UtilVmWrite(VmcsField::kGuestCr4, vmcs12_kGuestCr4);   
+		UtilVmWrite(VmcsField::kGuestRip, vmcs12_kGuestRip);
+		UtilVmWrite(VmcsField::kGuestRsp, vmcs12_kGuestRsp);
+		UtilVmWrite(VmcsField::kGuestRflags, vmcs12_kGuestRlags);
+
 		/*
 		Guest stated field END
 		*--------------------------------------------------------------------------------------------------------------*/

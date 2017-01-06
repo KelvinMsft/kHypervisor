@@ -309,6 +309,7 @@ VOID SaveExceptionInformationFromVmcs02(VmExitInformation exit_reason, ULONG64 v
 VOID SaveGuestFieldFromVmcs02(ULONG64 vmcs12_va)
 { 
 	//all nested vm-exit should record 
+
 	VmWrite64(VmcsField::kGuestRip, vmcs12_va, UtilVmRead(VmcsField::kGuestRip));
 	VmWrite64(VmcsField::kGuestRsp, vmcs12_va, UtilVmRead(VmcsField::kGuestRsp));
 	VmWrite64(VmcsField::kGuestCr3, vmcs12_va, UtilVmRead(VmcsField::kGuestCr3));
@@ -337,6 +338,7 @@ VOID SaveGuestFieldFromVmcs02(ULONG64 vmcs12_va)
 	VmWrite32(VmcsField::kGuestTrLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestTrLimit));
 	VmWrite32(VmcsField::kGuestGdtrLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestGdtrLimit));
 	VmWrite32(VmcsField::kGuestIdtrLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestIdtrLimit));
+	
 	VmWrite32(VmcsField::kGuestEsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestEsArBytes));
 	VmWrite32(VmcsField::kGuestCsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestCsArBytes));
 	VmWrite32(VmcsField::kGuestSsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestSsArBytes));
@@ -345,6 +347,7 @@ VOID SaveGuestFieldFromVmcs02(ULONG64 vmcs12_va)
 	VmWrite32(VmcsField::kGuestGsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestGsArBytes));
 	VmWrite32(VmcsField::kGuestLdtrArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestLdtrArBytes));
 	VmWrite32(VmcsField::kGuestTrArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestTrArBytes));
+	
 	VmWrite32(VmcsField::kGuestInterruptibilityInfo, vmcs12_va, UtilVmRead(VmcsField::kGuestInterruptibilityInfo));
 	VmWrite32(VmcsField::kGuestActivityState, vmcs12_va, UtilVmRead(VmcsField::kGuestActivityState));
 	VmWrite32(VmcsField::kGuestSysenterCs, vmcs12_va, UtilVmRead(VmcsField::kGuestSysenterCs));
@@ -458,10 +461,10 @@ VOID EmulateVmExit(ULONG64 vmcs01, ULONG64 vmcs12_va)
 	VmRead64(VmcsField::kHostGsBase, vmcs12_va, &VMCS_VMEXIT_HOST_GS);
 	VmRead64(VmcsField::kHostTrBase, vmcs12_va, &VMCS_VMEXIT_HOST_TR);
 
-	//VmRead64(VmcsField::kGuestRflags, vmcs12_va, &VMCS_VMEXIT_RFLAGs);
+	VmRead64(VmcsField::kGuestRflags, vmcs12_va, &VMCS_VMEXIT_RFLAGs);
 
 	//Write VMCS01 for L1's VMExit handler
-	//UtilVmWrite(VmcsField::kGuestRflags, VMCS_VMEXIT_RFLAGs);
+	UtilVmWrite(VmcsField::kGuestRflags, VMCS_VMEXIT_RFLAGs);
 	UtilVmWrite(VmcsField::kGuestRip, VMCS_VMEXIT_HANDLER);
 	UtilVmWrite(VmcsField::kGuestRsp, VMCS_VMEXIT_STACK);
 	UtilVmWrite(VmcsField::kGuestCr0, VMCS_VMEXIT_CR0);
@@ -3083,25 +3086,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 
 		  //--------------------------------------------------------------------------------------//
 
-		  // Explicitly write once again. It is important and will be cause the system hang.
-		  ULONG64   rip = 0;
-		  VmRead64(VmcsField::kGuestRip, vmcs12_va, &rip);
-
-		  HYPERPLATFORM_LOG_DEBUG("VMCS12 Guest rip : %I64x guest_context->irql: %i", rip, guest_context->irql);
-
-		  ULONG64   rsp = 0;
-		  VmRead64(VmcsField::kGuestRsp, vmcs12_va, &rsp);
-		  HYPERPLATFORM_LOG_DEBUG("VMCS12 Guest rsp : %I64x ", rsp);
-		  ULONG64   rflags = 0;
-		  VmRead64(VmcsField::kGuestRflags, vmcs12_va, &rflags);
-		  HYPERPLATFORM_LOG_DEBUG("VMCS12 Guest rsp : %I64x ", rflags);
-
-
-		  UtilVmWrite(VmcsField::kGuestRip, rip);
-		   
-		  UtilVmWrite(VmcsField::kGuestRsp, rsp);
-		  UtilVmWrite(VmcsField::kGuestRflags, rflags);
-
+		  
 		  PrintVMCS();
 
 		  HYPERPLATFORM_LOG_DEBUG("VMCS02: kGuestRip :%I64x , kGuestRsp %I64x ", UtilVmRead(VmcsField::kGuestRip), UtilVmRead(VmcsField::kGuestRsp));

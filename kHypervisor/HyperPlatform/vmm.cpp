@@ -15,9 +15,6 @@
 #include "performance.h"
 #include "vmcs.h"
 #pragma warning(disable: 4505)
-
- 
-
 extern "C" {
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -62,13 +59,6 @@ static const long kVmmpNumberOfRecords = 100;
 // How many processors are supported for recording
 static const long kVmmpNumberOfProcessors = 2;
 
-
-#define SOFTWARE_EXCEPTION_NOTHANDLE 0x1206
-#define HARDWARE_EXCEPTION_NOTHANDLE 0x1207 
-#define  UNKNOWN_EXCEPTION_NOTHANDLE 0x1208 
-#define CONTROL_REGISTER_MOVFROM_ERR 0x1209
-#define  CONTROL_REGISTER_MOVETO_ERR 0x1210
-#define    DEBUG_REGISTER_MOVETO_ERR 0x1211
 ////////////////////////////////////////////////////////////////////////////////
 //
 // types
@@ -815,7 +805,8 @@ _Use_decl_annotations_ static void VmmpHandleException(
        
 
     } else {
-		HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, HARDWARE_EXCEPTION_NOTHANDLE, exception.fields.vector, 0); 
+      HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 0, 0,
+                                     0);
     }
 
   } else if (interruption_type == InterruptionType::kSoftwareException) {
@@ -826,11 +817,13 @@ _Use_decl_annotations_ static void VmmpHandleException(
       HYPERPLATFORM_LOG_INFO_SAFE("GuestIp= %p, #BP ", guest_context->ip);
       UtilVmWrite(VmcsField::kVmEntryInstructionLen, 1);
 
-    } else { 
-		HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, SOFTWARE_EXCEPTION_NOTHANDLE, exception.fields.vector, 0);
+    } else {
+      HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 0, 0,
+                                     0);
     }
   } else {
-	  HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, UNKNOWN_EXCEPTION_NOTHANDLE, exception.fields.vector, 0); 
+    HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 0, 0,
+                                   0);
   }
 }
 
@@ -1202,7 +1195,7 @@ _Use_decl_annotations_ static void VmmpHandleDrAccess(
       // clang-format on
       break;
     default:
-      HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, DEBUG_REGISTER_MOVETO_ERR, 0,
+      HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 0, 0,
                                      0);
       break;
   }
@@ -1383,7 +1376,7 @@ _Use_decl_annotations_ static void VmmpHandleCrAccess(
         }
 
         default:
-          HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, CONTROL_REGISTER_MOVETO_ERR,
+          HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 0,
                                          0, 0);
           break;
       }
@@ -1406,7 +1399,7 @@ _Use_decl_annotations_ static void VmmpHandleCrAccess(
         }
 
         default:
-          HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, CONTROL_REGISTER_MOVFROM_ERR,
+          HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 0,
                                          0, 0);
           break;
       }
@@ -3098,9 +3091,16 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 
 		  HYPERPLATFORM_LOG_DEBUG("VMCS02: kGuestRip :%I64x , kGuestRsp %I64x ", UtilVmRead(VmcsField::kGuestRip), UtilVmRead(VmcsField::kGuestRsp));
 		  HYPERPLATFORM_LOG_DEBUG("VMCS02: kHostRip :%I64x  , kHostRsp  %I64x ", UtilVmRead(VmcsField::kHostRip), UtilVmRead(VmcsField::kHostRsp));
-		   
-  
 
+		  
+		  if (guest_context->irql < DISPATCH_LEVEL)
+		   {
+		 	  KeLowerIrql(guest_context->irql);
+		   }
+		   
+		   
+
+		  HYPERPLATFORM_COMMON_DBG_BREAK();
 	  } while (FALSE);
   }
    
@@ -3182,14 +3182,9 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //- So we need to help L1 to resume to L2
 		  //- We saved the vmcs02 GuestRip into VMCS12 our VMExit Handler, 
 		  //- because when L1 is executing VMRESUME, it is running on VMCS01
-		  VmresumeEmulate(guest_context); 
-
-		  const auto exit_inst_length = UtilVmRead(VmcsField::kVmExitInstructionLen);
-		  UtilVmWrite(VmcsField::kGuestRip, UtilVmRead(VmcsField::kGuestRip) + exit_inst_length);
-
+		  VmresumeEmulate(guest_context);
 		  return;
 	  }
-
 	  break;
 
 	  case VmxExitReason::kVmxPreemptionTime:

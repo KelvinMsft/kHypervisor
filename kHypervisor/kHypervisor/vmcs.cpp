@@ -1237,7 +1237,6 @@ extern "C" {
 		UtilVmWrite(VmcsField::kGuestGdtrBase, vmcs12_kGuestGdtrBase);
 		UtilVmWrite(VmcsField::kGuestIdtrBase, vmcs12_kGuestIdtrBase);
 		UtilVmWrite(VmcsField::kGuestDr7, vmcs12_kGuestDr7);
-		UtilVmWrite(VmcsField::kGuestRflags, vmcs12_kGuestRflags);
 		UtilVmWrite(VmcsField::kGuestCr0, vmcs12_kGuestCr0);
 		UtilVmWrite(VmcsField::kGuestCr3, vmcs12_kGuestCr3);
 		UtilVmWrite(VmcsField::kGuestCr4, vmcs12_kGuestCr4);   

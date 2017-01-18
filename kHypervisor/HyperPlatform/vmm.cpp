@@ -366,8 +366,12 @@ VOID SaveGuestFieldFromVmcs02(ULONG64 vmcs12_va)
 	VmWrite64(VmcsField::kGuestGdtrBase,	         vmcs12_va, UtilVmRead(VmcsField::kGuestGdtrBase));
 	VmWrite64(VmcsField::kGuestIdtrBase,	         vmcs12_va, UtilVmRead(VmcsField::kGuestIdtrBase));
 
-	 
 
+	/*VmWrite64(VmcsField::kGuestPdptr0, vmcs12_va, UtilVmRead(VmcsField::kGuestPdptr0));
+	VmWrite64(VmcsField::kGuestPdptr1, vmcs12_va, UtilVmRead(VmcsField::kGuestPdptr1));
+	VmWrite64(VmcsField::kGuestPdptr2, vmcs12_va, UtilVmRead(VmcsField::kGuestPdptr2));
+	VmWrite64(VmcsField::kGuestPdptr3, vmcs12_va, UtilVmRead(VmcsField::kGuestPdptr3));
+	*/
 }
 
 /*
@@ -497,39 +501,18 @@ VOID EmulateVmExit(ULONG64 vmcs01, ULONG64 vmcs12_va)
 
 }
 //Nested breakpoint dispatcher
-VOID NestedBreakpointHandler(GuestContext* guest_context, ULONG64 vmcs12_va)
+VOID Nested_VmExit(GuestContext* guest_context, ULONG64 vmcs12_va)
 {
 	const VmExitInformation exit_reason = { static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitReason)) };
-	 
+	ULONG64   vmcs01 = UtilPaFromVa((void*)guest_context->stack->processor_data->vmcs_region);
 	if (vmcs12_va)
-	{
-		ULONG64   vmcs01 = UtilPaFromVa((void*)guest_context->stack->processor_data->vmcs_region);
-		HYPERPLATFORM_LOG_DEBUG("VMCS id %x", UtilVmRead(VmcsField::kVirtualProcessorId));
-		//use vmcs01 to emulate (vmresume) from L2 to L1 ( actually , it is L0 to L1 by vmresume)
-		EmulateVmExit(vmcs01, vmcs12_va);
- 
-		return;
-	}
+	{ 
+		SaveGuestFieldFromVmcs02(vmcs12_va);
+		SaveExceptionInformationFromVmcs02(exit_reason, vmcs12_va);     
+		EmulateVmExit(vmcs01, vmcs12_va); 
 
-	//Trapped by VMCS01 / L1 , normally handle it
-	else 
-	{
-		const VmExitInterruptionInformationField exception = {
-			static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrInfo))
-		};
-
-		HYPERPLATFORM_LOG_DEBUG("VMCS id %x", UtilVmRead(VmcsField::kVirtualProcessorId));
-		HYPERPLATFORM_LOG_DEBUG("Trapped by %I64X ", UtilVmRead(VmcsField::kGuestRip));
-		HYPERPLATFORM_LOG_DEBUG("Trapped Reason: %I64X ", exit_reason.fields.reason);
-		HYPERPLATFORM_LOG_DEBUG("Trapped Intrreupt: %I64X ", exception.fields.interruption_type);
-		HYPERPLATFORM_LOG_DEBUG("Trapped Intrreupt vector: %I64X ", exception.fields.vector);
-		HYPERPLATFORM_LOG_DEBUG("Trapped kVmExitInstructionLen: %I64X ", UtilVmRead(VmcsField::kVmExitInstructionLen));
-
-		VMSucceed(&guest_context->flag_reg);
-		UtilVmWrite(VmcsField::kGuestRip, UtilVmRead(VmcsField::kGuestRip) + UtilVmRead(VmcsField::kVmExitInstructionLen));
-		UtilVmWrite(VmcsField::kGuestRflags, guest_context->flag_reg.all);
-		return;
-	}
+	} 
+	return;
 }
 // A high level VMX handler called from AsmVmExitHandler().
 // Return true for vmresume, or return false for vmxoff.
@@ -553,12 +536,12 @@ _Use_decl_annotations_ bool __stdcall VmmVmExitHandler(VmmInitialStack *stack) {
                                 true};
   guest_context.gp_regs->sp = UtilVmRead(VmcsField::kGuestRsp);
 
-  //VmmpSaveExtendedProcessorState(&guest_context);
+  VmmpSaveExtendedProcessorState(&guest_context);
 
   // Dispatch the current VM-exit event
   VmmpHandleVmExit(&guest_context);
 
-  //VmmpRestoreExtendedProcessorState(&guest_context);
+  VmmpRestoreExtendedProcessorState(&guest_context);
 
   // See: Guidelines for Use of the INVVPID Instruction, and Guidelines for Use
   // of the INVEPT Instruction
@@ -580,7 +563,6 @@ _Use_decl_annotations_ bool __stdcall VmmVmExitHandler(VmmInitialStack *stack) {
   return guest_context.vm_continue;
 }
 #pragma warning(pop)
-
 // Dispatches VM-exit to a corresponding handler
 _Use_decl_annotations_ static void VmmpHandleVmExit(GuestContext *guest_context) 
 {
@@ -605,70 +587,67 @@ _Use_decl_annotations_ static void VmmpHandleVmExit(GuestContext *guest_context)
       index = 0;
     }
   }
+ 
   ULONG64 vmcs12_va = 0;
-  NestedVmm* vm = NULL;
+  NestedVmm* vm = NULL;	   
+
+ /*
+ 	We need to emulate the exception if and only if the vCPU mode is Guest Mode , 
+ 	and only the exception is somethings we want to redirect to L1 for handle it.  
+ 	IsRootMode:
+ 	{
+ 		Root Mode:
+ 		- if the Guest's vCPU is root mode , that means he dun expected the action will be trap.
+ 		  so that action should not give its VMExit handler, otherwise.
+ 		Guest Mode:
+ 		- If the Guest's vCPU is in guest mode, that means he expected the action will be trapped 
+ 		  And handle by its VMExit handler
+ 	}
+ 
+ 	We desginated the L1 wants to handle any breakpoint exception but the others.
+ 	So that we only nested it for testing purpose.
+ */
   do 
   {
-	  vm = GetCurrentCPU();
-	  if (!vm)  
-	  {
-		  break;
-	  }
-
-	  const VmExitInterruptionInformationField exception =
-	  {
+	 const VmExitInterruptionInformationField exception =
+	 {
 		  static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrInfo))
-	  };
-	   
-	  /*
-			We need to emulate the exception if and only if the vCPU mode is Guest Mode , 
-			and only the exception is somethings we want to redirect to L1 for handle it.  
-			IsRootMode:
-			{
-				Root Mode:
-				- if the Guest's vCPU is root mode , that means he dun expected the action will be trap.
-				  so that action should not give its VMExit handler, otherwise.
-				Guest Mode:
-				- If the Guest's vCPU is in guest mode, that means he expected the action will be trapped 
-				  And handle by its VMExit handler
-			}
+	 };
+	
+	
+	 vm = GetCurrentCPU();
+	 if (!vm)  
+	 {
+		  break;
+	 }
+	
+	// Since VMXON, but VMPTRLD 
+	if (!vm->vmcs02_pa || !vm->vmcs12_pa || vm->vmcs12_pa == ~0x0 || vm->vmcs02_pa == ~0x0  )
+	{  
+	  HYPERPLATFORM_LOG_DEBUG("cannot find vmcs \r\n"); 
+	  break;
+	} 
+	 
+	vmcs12_va = (ULONG64)UtilVaFromPa(vm->vmcs12_pa);
 
-			We desginated the L1 wants to handle any breakpoint exception but the others.
-			So that we only nested it for testing purpose.
-	  */
-	  if ( !IsRootMode(vm) && 
-			 static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kBreakpointException)	 
-	  {
-
-		  // Since VMXON, but VMPTRLD 
-		  if (!vm->vmcs02_pa || !vm->vmcs12_pa ||
-			  vm->vmcs12_pa == ~0x0 || vm->vmcs02_pa == ~0x0
-			  )
-		  { 
-
-			  HYPERPLATFORM_LOG_DEBUG("cannot find vmcs \r\n"); 
-			  break;
-		  }
-		   
-		  // Emulated VMExit 
-		  LEAVE_GUEST_MODE(vm);
-
-		  vmcs12_va = (ULONG64)UtilVaFromPa(vm->vmcs12_pa);
-
-		  if (vmcs12_va)
-		  {
-			  SaveGuestFieldFromVmcs02(vmcs12_va);
-			  SaveExceptionInformationFromVmcs02(exit_reason, vmcs12_va); 
-			  // by assumption L1 (DDIMON) need this exception
-			  NestedBreakpointHandler(guest_context, vmcs12_va);
-			  ENTER_GUEST_MODE(vm);
-		  }
-		  else
-		  {
-			  HYPERPLATFORM_COMMON_DBG_BREAK();
-		  }
-		  return ;
-	  }
+	if (static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kPageFaultException)
+	{
+		break;
+	}
+	if (!IsRootMode(vm) && 
+		static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kBreakpointException)	 
+	{
+	    // Emulated VMExit 
+	    LEAVE_GUEST_MODE(vm);
+ 		Nested_VmExit(guest_context, vmcs12_va);
+		ENTER_GUEST_MODE(vm);
+		return;
+	 }
+	 else
+	 {
+		  HYPERPLATFORM_COMMON_DBG_BREAK();
+		  break;
+	 } 
   } while (0);
 
    switch (exit_reason.fields.reason) 
@@ -1352,7 +1331,8 @@ _Use_decl_annotations_ static void VmmpHandleCrAccess(
           }
           UtilInvvpidSingleContextExceptGlobal(
               static_cast<USHORT>(KeGetCurrentProcessorNumberEx(nullptr) + 1));
-          UtilVmWrite(VmcsField::kGuestCr3, *register_used);
+          
+		  UtilVmWrite(VmcsField::kGuestCr3, *register_used);
           break;
         }
 
@@ -3092,12 +3072,6 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  HYPERPLATFORM_LOG_DEBUG("VMCS02: kGuestRip :%I64x , kGuestRsp %I64x ", UtilVmRead(VmcsField::kGuestRip), UtilVmRead(VmcsField::kGuestRsp));
 		  HYPERPLATFORM_LOG_DEBUG("VMCS02: kHostRip :%I64x  , kHostRsp  %I64x ", UtilVmRead(VmcsField::kHostRip), UtilVmRead(VmcsField::kHostRsp));
 
-		  
-		  if (guest_context->irql < DISPATCH_LEVEL)
-		   {
-		 	  KeLowerIrql(guest_context->irql);
-		   }
-		   
 		   
 
 		  HYPERPLATFORM_COMMON_DBG_BREAK();

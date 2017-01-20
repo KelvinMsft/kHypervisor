@@ -225,6 +225,8 @@ extern "C" {
 		HYPERPLATFORM_LOG_DEBUG("kGuestRflags: %I64X  ", UtilVmRead(VmcsField::kGuestRflags));
 		HYPERPLATFORM_LOG_DEBUG("kGuestSysenterEsp: %I64X  ", UtilVmRead(VmcsField::kGuestSysenterEsp));
 		HYPERPLATFORM_LOG_DEBUG("kGuestSysenterEip: %I64X  ", UtilVmRead(VmcsField::kGuestSysenterEip));
+		HYPERPLATFORM_LOG_DEBUG("kGuestRip: %I64X  ", UtilVmRead(VmcsField::kGuestRip));
+		HYPERPLATFORM_LOG_DEBUG("kGuestRsp: %I64X  ", UtilVmRead(VmcsField::kGuestRsp));
 
 	}
 
@@ -814,7 +816,7 @@ extern "C" {
 	}
 
 	//---------------------------------------------------------------------------------------------------------------------// 
-	VOID MixControlFieldWithVmcs01AndVmcs12(ULONG_PTR vmcs12_va, ULONG_PTR vmcs02_pa, BOOLEAN isLaunch)
+	VOID PrepareHostAndControlField(ULONG_PTR vmcs12_va, ULONG_PTR vmcs02_pa, BOOLEAN isLaunch)
 	{
 
 
@@ -925,7 +927,33 @@ extern "C" {
 		pml_address = UtilVmRead64(VmcsField::kPmlAddress);
 		pause_loop_exiting_gap = (ULONG32)UtilVmRead(VmcsField::kPleGap);
 		pause_loop_exiting_window = (ULONG32)UtilVmRead(VmcsField::kPleWindow);
-		guest_vpid = (USHORT)UtilVmRead(VmcsField::kVirtualProcessorId);
+		guest_vpid = (USHORT)UtilVmRead(VmcsField::kVirtualProcessorId); 
+
+		ULONG_PTR	kHostCsSelector = UtilVmRead(VmcsField::kHostCsSelector);
+		ULONG_PTR	kHostDsSelector = UtilVmRead(VmcsField::kHostDsSelector);
+		ULONG_PTR	kHostEsSelector = UtilVmRead(VmcsField::kHostEsSelector);
+		ULONG_PTR	kHostSsSelector = UtilVmRead(VmcsField::kHostSsSelector);
+		ULONG_PTR	kHostFsSelector = UtilVmRead(VmcsField::kHostFsSelector);
+		ULONG_PTR	kHostGsSelector = UtilVmRead(VmcsField::kHostGsSelector);
+		ULONG_PTR	kHostTrSelector = UtilVmRead(VmcsField::kHostTrSelector);
+
+		ULONG_PTR kHostCr0 = UtilVmRead(VmcsField::kHostCr0);
+		ULONG_PTR kHostCr3 = UtilVmRead(VmcsField::kHostCr3);
+		ULONG_PTR kHostCr4 = UtilVmRead(VmcsField::kHostCr4);
+
+		ULONG_PTR kHostFsBase = UtilVmRead(VmcsField::kHostFsBase);
+		ULONG_PTR kHostGsBase = UtilVmRead(VmcsField::kHostGsBase);
+		ULONG_PTR kHostTrBase = UtilVmRead(VmcsField::kHostTrBase);
+		ULONG_PTR kHostGdtrBase = UtilVmRead(VmcsField::kHostGdtrBase);
+		ULONG_PTR kHostIdtrBase = UtilVmRead(VmcsField::kHostIdtrBase);
+		ULONG_PTR kHostIa32SysenterEsp= UtilVmRead(VmcsField::kHostIa32SysenterEsp);
+		ULONG_PTR kHostIa32SysenterEip= UtilVmRead(VmcsField::kHostIa32SysenterEip);
+		ULONG_PTR kHostIa32SysenterCs = UtilVmRead(VmcsField::kHostIa32SysenterCs);
+
+		ULONG_PTR kHostRsp = UtilVmRead( VmcsField::kHostRsp );
+		ULONG_PTR kHostRip = UtilVmRead( VmcsField::kHostRip ); 
+ 
+
 
 		const auto use_true_msrs = Ia32VmxBasicMsr{ UtilReadMsr64(Msr::kIa32VmxBasic) }.fields.vmx_capability_hint;
 
@@ -948,6 +976,40 @@ extern "C" {
 			HYPERPLATFORM_LOG_DEBUG("Error vmptrld error code :%x , %x", status, error);
 			HYPERPLATFORM_COMMON_DBG_BREAK();
 		}
+
+		/*
+		Host 16 bit State field
+		*/
+		UtilVmWrite(VmcsField::kHostCsSelector, kHostCsSelector);
+		UtilVmWrite(VmcsField::kHostDsSelector, kHostDsSelector);
+		UtilVmWrite(VmcsField::kHostEsSelector, kHostEsSelector);
+		UtilVmWrite(VmcsField::kHostSsSelector, kHostSsSelector);
+		UtilVmWrite(VmcsField::kHostFsSelector, kHostFsSelector);
+		UtilVmWrite(VmcsField::kHostGsSelector, kHostGsSelector);
+		UtilVmWrite(VmcsField::kHostTrSelector, kHostTrSelector);
+
+		/*
+		Host 32 bit state field
+		*/
+		UtilVmWrite(VmcsField::kHostIa32SysenterCs, kHostIa32SysenterCs);
+
+		/*
+		Host Natural width state field
+		*/
+		UtilVmWrite64(VmcsField::kHostCr0, kHostCr0);
+		UtilVmWrite64(VmcsField::kHostCr3, kHostCr3);
+		UtilVmWrite64(VmcsField::kHostCr4, kHostCr4);
+
+		UtilVmWrite64(VmcsField::kHostFsBase, kHostFsBase);
+		UtilVmWrite64(VmcsField::kHostGsBase, kHostGsBase);
+		UtilVmWrite64(VmcsField::kHostTrBase, kHostTrBase);
+		UtilVmWrite64(VmcsField::kHostGdtrBase, kHostGdtrBase);
+		UtilVmWrite64(VmcsField::kHostIdtrBase, kHostIdtrBase);
+		UtilVmWrite64(VmcsField::kHostIa32SysenterEsp, kHostIa32SysenterEsp);
+		UtilVmWrite64(VmcsField::kHostIa32SysenterEip, kHostIa32SysenterEip);
+
+		UtilVmWrite64(VmcsField::kHostRsp, kHostRsp);
+		UtilVmWrite64(VmcsField::kHostRip, kHostRip);
 
 		//-----------------------------------------------------------------------------------------------------------//	
 		//  Start Mixing Control field with VMCS01 and VMCS12 into VMCS02
@@ -1257,38 +1319,7 @@ extern "C" {
 		Idtr idtr = {};
 		__sidt(&idtr);
 
-		/*
-		Host 16 bit State field
-		*/
-		UtilVmWrite(VmcsField::kHostCsSelector, AsmReadCS() & 0xF8);
-		UtilVmWrite(VmcsField::kHostDsSelector, AsmReadDS() & 0xF8);
-		UtilVmWrite(VmcsField::kHostEsSelector, AsmReadES() & 0xF8);
-		UtilVmWrite(VmcsField::kHostSsSelector, AsmReadSS() & 0xF8);
-		UtilVmWrite(VmcsField::kHostFsSelector, AsmReadFS() & 0xF8);
-		UtilVmWrite(VmcsField::kHostGsSelector, AsmReadGS() & 0xF8);
-		UtilVmWrite(VmcsField::kHostTrSelector, AsmReadTR() & 0xF8);
-
-		/*
-		Host 32 bit state field
-		*/
-		UtilVmWrite(VmcsField::kHostIa32SysenterCs, UtilReadMsr(Msr::kIa32SysenterCs));
-
-		/*
-		Host Natural width state field
-		*/
-		UtilVmWrite64(VmcsField::kHostCr0, __readcr0());
-		UtilVmWrite64(VmcsField::kHostCr3, __readcr3());
-		UtilVmWrite64(VmcsField::kHostCr4, __readcr4());
-		UtilVmWrite64(VmcsField::kHostFsBase, UtilReadMsr(Msr::kIa32FsBase));
-		UtilVmWrite64(VmcsField::kHostGsBase, UtilReadMsr(Msr::kIa32GsBase));
-		UtilVmWrite64(VmcsField::kHostTrBase, GetSegmentBase(gdtr.base, AsmReadTR()));
-		UtilVmWrite64(VmcsField::kHostGdtrBase, gdtr.base);
-		UtilVmWrite64(VmcsField::kHostIdtrBase, idtr.base);
-		UtilVmWrite64(VmcsField::kHostIa32SysenterEsp, UtilReadMsr(Msr::kIa32SysenterEsp));
-		UtilVmWrite64(VmcsField::kHostIa32SysenterEip, UtilReadMsr(Msr::kIa32SysenterEip));
-
-		UtilVmWrite64(VmcsField::kHostRsp, vmcs01_rsp);
-		UtilVmWrite64(VmcsField::kHostRip, vmcs01_rip);
+		 
 	}
 
 }

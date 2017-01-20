@@ -735,7 +735,7 @@ enum class VmcsField : unsigned __int32
 	// 32-Bit Read-Only Data Fields
 	kVmInstructionError = 0x00004400,
 	kVmExitReason = 0x00004402,
-	kVmExitIntrInfo = 0x00004404,
+	 kVmExitIntrInfo = 0x00004404,
 	kVmExitIntrErrorCode = 0x00004406,
 	kIdtVectoringInfoField = 0x00004408,
 	kIdtVectoringErrorCode = 0x0000440a,
@@ -1598,6 +1598,22 @@ union VmEntryInterruptionInformationField {
   } fields;
 };
 static_assert(sizeof(VmEntryInterruptionInformationField) == 4, "Size check");
+
+
+/// See: Format of the IDT-Vectoring Information Field
+union IdtVectoringInformationField {
+	ULONG32 all;
+	struct {
+		ULONG32 vector : 8;              //!< [0:7]
+		ULONG32 interruption_type : 3;   //!< [8:10]
+		ULONG32 deliver_error_code : 1;  //!< [11]
+		ULONG32 undefined : 1;			 //!< [12]
+		ULONG32 reserved : 18;           //!< [13:30]
+		ULONG32 valid : 1;               //!< [31]
+	} fields;
+};
+static_assert(sizeof(IdtVectoringInformationField) == 4, "Size check");
+
 
 /// @copydoc VmEntryInterruptionInformationField
 enum class InterruptionType {

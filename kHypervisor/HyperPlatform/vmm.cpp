@@ -784,10 +784,8 @@ _Use_decl_annotations_ static void VmmpHandleException(
       const auto fault_address = UtilVmRead(VmcsField::kExitQualification);
  
 	  VmmpInjectInterruption(interruption_type, vector, exception.fields.error_code_valid, fault_code.all);
-	  if (!KdDebuggerNotPresent)
-	  {
-		  if (UtilVmRead(VmcsField::kGuestRip) > 0xFFFFF80003E7EA00)
-		  {
+	  if (KdDebuggerNotPresent)
+	  { 
 			  HYPERPLATFORM_LOG_INFO(" | kGuestCr3: %I64X |  Gs: %x  |  GuestGsBase: %I64x  | Msr_gs_base: %I64X | Msr_kernel_gs_base: %I64X | fault_code: %I64X  | fault_address: %I64X | RIP Address: %I64X | \r\n",
 				  UtilVmRead(VmcsField::kGuestCr3),
 				  UtilVmRead(VmcsField::kGuestGsSelector),
@@ -797,8 +795,7 @@ _Use_decl_annotations_ static void VmmpHandleException(
 				  fault_code,
 				  fault_address,
 				  UtilVmRead(VmcsField::kGuestRip)
-			  );
-		  }
+			  ); 
 	  }
       AsmWriteCR2(fault_address);
 

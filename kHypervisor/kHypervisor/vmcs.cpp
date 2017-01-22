@@ -19,7 +19,8 @@ VOID PrintAllField(const char* func)
 	PrintControlField();
 	PrintHostStateField();
 	PrintGuestStateField();
-	PrintReadOnlyField();
+	PrintReadOnlyField(); 
+	HYPERPLATFORM_LOG_DEBUG("kIa32GsBase: %I64X kIa32KernelGsBase: %I64X \r\n", UtilReadMsr(Msr::kIa32GsBase), UtilReadMsr(Msr::kIa32KernelGsBase));
 	HYPERPLATFORM_LOG_DEBUG("------------------------- End Printed Current VMCS by %s -----------------------------", func);
 
 }

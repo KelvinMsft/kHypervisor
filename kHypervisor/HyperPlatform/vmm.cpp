@@ -510,7 +510,7 @@ VOID Nested_VmExit(GuestContext* guest_context, ULONG64 vmcs12_va)
 	ULONG64   vmcs01 = UtilPaFromVa((void*)guest_context->stack->processor_data->vmcs_region);
 	if (vmcs12_va)
 	{  
-		EmulateVmExit(vmcs01, vmcs12_va);  
+		EmulateVmExit(vmcs01, vmcs12_va);
 	} 
 	return;
 }
@@ -2231,8 +2231,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  HYPERPLATFORM_LOG_DEBUG("VmWrite: %I64X", &VmWrite16);
 		  HYPERPLATFORM_LOG_DEBUG("VmWrite32: %I64X", &VmWrite32);
 		  HYPERPLATFORM_LOG_DEBUG("VmWrite64: %I64X", &VmWrite64);
-		
-		  // VMXON_REGION IS NULL
+	      // VMXON_REGION IS NULL 
 		  if (!vmxon_region_pa)
 		  {
 			  HYPERPLATFORM_LOG_DEBUG(("VMXON: Parameter is NULL !"));
@@ -3134,6 +3133,10 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 			  break;
 		  }
 
+
+
+		  PrintVMCS();
+
 		  auto    vmcs02_va = (ULONG64)UtilVaFromPa(vmcs02_pa);
 		  auto    vmcs12_va = (ULONG64)UtilVaFromPa(vmcs12_pa);
 
@@ -3181,9 +3184,14 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 
 		  
 		  PrintVMCS(); 
-
-		  HYPERPLATFORM_LOG_DEBUG("kIa32GsBase: %I64X kIa32KernelGsBase: %I64X \r\n", UtilReadMsr(Msr::kIa32GsBase),UtilReadMsr(Msr::kIa32KernelGsBase));
-		  UtilWriteMsr(Msr::kIa32KernelGsBase, UtilReadMsr(Msr::kIa32GsBase));
+		  // in case Vmcs_GuestGsbase == MSR_KernelGsbase
+		  // it must be collpased, such as, INT 3 breakpoint handler
+		  // it will call SAWPGS, and anythings won't swapped, since 
+		  // they are same, so we need to clarify and avoid this situation. 
+		  if (UtilReadMsr(Msr::kIa32KernelGsBase) == UtilVmRead(VmcsField::kGuestGsBase)) 
+		  {
+			  UtilWriteMsr(Msr::kIa32KernelGsBase, UtilReadMsr(Msr::kIa32GsBase)); 
+		  } 
 
 		  HYPERPLATFORM_COMMON_DBG_BREAK();
 	  } while (FALSE);

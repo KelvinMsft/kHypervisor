@@ -518,27 +518,29 @@ VOID Nested_VmExit(GuestContext* guest_context, ULONG64 vmcs12_va)
 // Return true for vmresume, or return false for vmxoff.
 #pragma warning(push)
 #pragma warning(disable : 28167)
-_Use_decl_annotations_ bool __stdcall VmmVmExitHandler(VmmInitialStack *stack) {
+_Use_decl_annotations_ bool __stdcall VmmVmExitHandler(VmmInitialStack *stack) 
+{
+
   // Save guest's context and raise IRQL as quick as possible
   const auto guest_irql = KeGetCurrentIrql();
   const auto guest_cr8 = IsX64() ? __readcr8() : 0;
   if (guest_irql < DISPATCH_LEVEL) {
-    KeRaiseIrqlToDpcLevel();
+  	KeRaiseIrqlToDpcLevel();
   }
   NT_ASSERT(stack->reserved == MAXULONG_PTR);
 
-  // Capture the current guest state
-  GuestContext guest_context = {stack,
-                                UtilVmRead(VmcsField::kGuestRflags),
-                                UtilVmRead(VmcsField::kGuestRip),
-                                guest_cr8,
-                                guest_irql,
-                                true};
+	// Capture the current guest state
+  GuestContext guest_context = { stack,
+  							  UtilVmRead(VmcsField::kGuestRflags),
+  							  UtilVmRead(VmcsField::kGuestRip),
+  							  guest_cr8,
+  							  guest_irql,
+  							  true };
   guest_context.gp_regs->sp = UtilVmRead(VmcsField::kGuestRsp);
-
+  
   VmmpSaveExtendedProcessorState(&guest_context);
-
-  // Dispatch the current VM-exit event
+ 
+	// Dispatch the current VM-exit event
   VmmpHandleVmExit(&guest_context);
 
   VmmpRestoreExtendedProcessorState(&guest_context);
@@ -756,10 +758,19 @@ _Use_decl_annotations_ static void VmmpHandleUnexpectedExit(
 // MTF VM-exit
 _Use_decl_annotations_ static void VmmpHandleMonitorTrap(
     GuestContext *guest_context) {
-  VmmpDumpGuestSelectors();
-  HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnexpectedVmExit,
-                                 reinterpret_cast<ULONG_PTR>(guest_context), 0,
-                                 0);
+ 
+	HYPERPLATFORM_LOG_DEBUG("[MTF]GustRip: %I64X GuestGsBase: %I64x Gs_base: %I64X Kernel Gs Base: %I64X \r\n",UtilVmRead(VmcsField::kGuestRip),UtilVmRead(VmcsField::kGuestGsBase),UtilReadMsr(Msr::kIa32GsBase),UtilReadMsr(Msr::kIa32KernelGsBase));
+	VmmpAdjustGuestInstructionPointer(guest_context);
+}
+
+
+// Set MTF on the current processor
+_Use_decl_annotations_ static void SetMonitorTrapFlag( bool enable) 
+{
+	VmxProcessorBasedControls vm_procctl = {
+		static_cast<unsigned int>(UtilVmRead(VmcsField::kCpuBasedVmExecControl)) };
+	vm_procctl.fields.monitor_trap_flag = enable;
+	UtilVmWrite(VmcsField::kCpuBasedVmExecControl, vm_procctl.all);
 }
 
 // Interrupt
@@ -784,9 +795,8 @@ _Use_decl_annotations_ static void VmmpHandleException(
       const auto fault_address = UtilVmRead(VmcsField::kExitQualification);
  
 	  VmmpInjectInterruption(interruption_type, vector, exception.fields.error_code_valid, fault_code.all);
-	  if (!KdDebuggerNotPresent)
-	  { 
-			  HYPERPLATFORM_LOG_INFO(" | kGuestCr3: %I64X |  Gs: %x  |  GuestGsBase: %I64x  | Msr_gs_base: %I64X | Msr_kernel_gs_base: %I64X | fault_code: %I64X  | fault_address: %I64X | RIP Address: %I64X | \r\n",
+	  
+	 /* HYPERPLATFORM_LOG_INFO(" | kGuestCr3: %I64X |  Gs: %x  |  GuestGsBase: %I64x  | Msr_gs_base: %I64X | Msr_kernel_gs_base: %I64X | fault_code: %I64X  | fault_address: %I64X | RIP Address: %I64X | \r\n",
 				  UtilVmRead(VmcsField::kGuestCr3),
 				  UtilVmRead(VmcsField::kGuestGsSelector),
 				  UtilVmRead(VmcsField::kGuestGsBase),
@@ -796,8 +806,8 @@ _Use_decl_annotations_ static void VmmpHandleException(
 				  fault_address,
 				  UtilVmRead(VmcsField::kGuestRip)
 			  ); 
-	  }
-      AsmWriteCR2(fault_address);
+			  */
+      AsmWriteCR2(fault_address); 
 
     } else if (vector == InterruptionVector::kGeneralProtectionException) {
       // # GP
@@ -3155,8 +3165,6 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  /*
 		  VM Guest state field End
 		  */
-		   
-			
 		  //--------------------------------------------------------------------------------------//
 
 		  /*
@@ -3172,12 +3180,10 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //--------------------------------------------------------------------------------------//
 
 		  
-		  PrintVMCS();
+		  PrintVMCS(); 
 
-		  HYPERPLATFORM_LOG_DEBUG("VMCS02: kGuestRip :%I64x , kGuestRsp %I64x ", UtilVmRead(VmcsField::kGuestRip), UtilVmRead(VmcsField::kGuestRsp));
-		  HYPERPLATFORM_LOG_DEBUG("VMCS02: kHostRip :%I64x  , kHostRsp  %I64x ", UtilVmRead(VmcsField::kHostRip), UtilVmRead(VmcsField::kHostRsp));
-
-		   
+		  HYPERPLATFORM_LOG_DEBUG("kIa32GsBase: %I64X kIa32KernelGsBase: %I64X \r\n", UtilReadMsr(Msr::kIa32GsBase),UtilReadMsr(Msr::kIa32KernelGsBase));
+		  UtilWriteMsr(Msr::kIa32KernelGsBase, UtilReadMsr(Msr::kIa32GsBase));
 
 		  HYPERPLATFORM_COMMON_DBG_BREAK();
 	  } while (FALSE);

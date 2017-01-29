@@ -235,7 +235,8 @@ ULONG32				 g_vmx_extensions_bitmask;
 ////////////////////////////////////////////////////////////////////////////////
 //
 // implementations
-//
+
+//---------------------------------------------------------------------------------------------------------------------//
 static void vmx_save_guest_msrs(NestedVmm* vcpu)
 {
 	/*
@@ -245,12 +246,14 @@ static void vmx_save_guest_msrs(NestedVmm* vcpu)
 	vcpu->guest_gs_kernel_base = UtilReadMsr64(Msr::kIa32KernelGsBase);
 	HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Save GS base: %I64X \r\n ", vcpu->guest_gs_kernel_base);
 }
+//---------------------------------------------------------------------------------------------------------------------//
 static void vmx_restore_guest_msrs(NestedVmm* vcpu)
 {
 	UtilWriteMsr64(Msr::kIa32KernelGsBase, vcpu->guest_gs_kernel_base);
 	HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Restore GS base: %I64X \r\n ", vcpu->guest_gs_kernel_base);
 }
 
+//---------------------------------------------------------------------------------------------------------------------//
 NestedVmm* GetCurrentCPU(bool IsNested = true)
 {
 	ULONG64 vmcs12_va  = 0;
@@ -287,6 +290,7 @@ NestedVmm* GetCurrentCPU(bool IsNested = true)
 	} 
 	return ret;
 }
+//---------------------------------------------------------------------------------------------------------------------//
 void DumpVcpu()
 {
 	ULONG64 vmcs12_va = 0;
@@ -306,6 +310,8 @@ void DumpVcpu()
 		}
 	} 
 }
+//---------------------------------------------------------------------------------------------------------------------//
+
 /*
 Descritpion:
 
@@ -343,6 +349,7 @@ VOID SaveExceptionInformationFromVmcs02(VmExitInformation exit_reason, ULONG64 v
 	VmWrite32(VmcsField::kVmxInstructionInfo, vmcs12_va, UtilVmRead(VmcsField::kVmxInstructionInfo));
 	 
 }
+//---------------------------------------------------------------------------------------------------------------------//
 
 /*
  Descritpion:
@@ -423,6 +430,7 @@ VOID SaveGuestFieldFromVmcs02(ULONG64 vmcs12_va)
 	*/
 
 }
+//---------------------------------------------------------------------------------------------------------------------//
 
 /*
 Descritpion:
@@ -551,6 +559,9 @@ VOID EmulateVmExit(ULONG64 vmcs01, ULONG64 vmcs12_va)
 	PrintVMCS();  
 	PrintVMCS12(vmcs12_va); 
 }
+//---------------------------------------------------------------------------------------------------------------------//
+
+
 //Nested breakpoint dispatcher
 VOID Nested_VmExit(GuestContext* guest_context, ULONG64 vmcs12_va)
 {
@@ -562,6 +573,9 @@ VOID Nested_VmExit(GuestContext* guest_context, ULONG64 vmcs12_va)
   	} 
 	return;
 }
+//---------------------------------------------------------------------------------------------------------------------//
+
+
 // A high level VMX handler called from AsmVmExitHandler().
 // Return true for vmresume, or return false for vmxoff.
 #pragma warning(push)
@@ -615,6 +629,7 @@ _Use_decl_annotations_ bool __stdcall VmmVmExitHandler(VmmInitialStack *stack)
   return guest_context.vm_continue;
 }
 #pragma warning(pop)
+//---------------------------------------------------------------------------------------------------------------------//
 // Dispatches VM-exit to a corresponding handler
 _Use_decl_annotations_ static void VmmpHandleVmExit(GuestContext *guest_context) 
 {
@@ -661,6 +676,7 @@ _Use_decl_annotations_ static void VmmpHandleVmExit(GuestContext *guest_context)
  	We desginated the L1 wants to handle any breakpoint exception but the others.
  	So that we only nested it for testing purpose.
  */
+  // Unit-Test with nested INT 3 exception
   do 
   {
 	 const VmExitInterruptionInformationField exception =
@@ -682,17 +698,8 @@ _Use_decl_annotations_ static void VmmpHandleVmExit(GuestContext *guest_context)
 	  break;
 	} 
 
-
-
 	vmcs12_va = (ULONG64)UtilVaFromPa(vm->vmcs12_pa);
 		
-	if (vmcs12_va)
-	{
-		SaveGuestFieldFromVmcs02(vmcs12_va);
-		SaveExceptionInformationFromVmcs02(exit_reason, vmcs12_va);
-	}
-
-	
 	if (static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kPageFaultException)
 	{
 		break;
@@ -700,7 +707,11 @@ _Use_decl_annotations_ static void VmmpHandleVmExit(GuestContext *guest_context)
 	if (!IsRootMode(vm) && 
 		static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kBreakpointException)	 
 	{
-
+		if (vmcs12_va)
+		{
+			SaveGuestFieldFromVmcs02(vmcs12_va);
+			SaveExceptionInformationFromVmcs02(exit_reason, vmcs12_va);
+		}
 	    // Emulated VMExit 
 	    LEAVE_GUEST_MODE(vm);
 
@@ -794,6 +805,7 @@ _Use_decl_annotations_ static void VmmpHandleVmExit(GuestContext *guest_context)
       break;
   }  
 }
+//---------------------------------------------------------------------------------------------------------------------//
 
 // Triple fault VM-exit. Fatal error.
 _Use_decl_annotations_ static void VmmpHandleTripleFault(
@@ -816,8 +828,7 @@ _Use_decl_annotations_ static void VmmpHandleUnexpectedExit(
 // MTF VM-exit
 _Use_decl_annotations_ static void VmmpHandleMonitorTrap(GuestContext *guest_context) 
 {
-	UNREFERENCED_PARAMETER(guest_context);
-	
+	UNREFERENCED_PARAMETER(guest_context);	
 }
 
 
@@ -843,18 +854,7 @@ _Use_decl_annotations_ static void VmmpHandleException(
       const auto fault_address = UtilVmRead(VmcsField::kExitQualification);
  
 	  VmmpInjectInterruption(interruption_type, vector, exception.fields.error_code_valid, fault_code.all);
-	  
-	 /* HYPERPLATFORM_LOG_INFO(" | kGuestCr3: %I64X |  Gs: %x  |  GuestGsBase: %I64x  | Msr_gs_base: %I64X | Msr_kernel_gs_base: %I64X | fault_code: %I64X  | fault_address: %I64X | RIP Address: %I64X | \r\n",
-				  UtilVmRead(VmcsField::kGuestCr3),
-				  UtilVmRead(VmcsField::kGuestGsSelector),
-				  UtilVmRead(VmcsField::kGuestGsBase),
-				  UtilReadMsr(Msr::kIa32GsBase),
-				  UtilReadMsr(Msr::kIa32KernelGsBase),
-				  fault_code,
-				  fault_address,
-				  UtilVmRead(VmcsField::kGuestRip)
-			  ); 
-			  */
+	
       AsmWriteCR2(fault_address); 
 
     } else if (vector == InterruptionVector::kGeneralProtectionException) {

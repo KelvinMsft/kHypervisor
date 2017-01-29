@@ -114,20 +114,6 @@ static_assert(sizeof(GuestContext) == 40, "Size check");
 static_assert(sizeof(GuestContext) == 20, "Size check");
 #endif
 
-static void vmx_save_guest_msrs(NestedVmm* vcpu)
-{
-	/*
-	* We cannot cache SHADOW_GS_BASE while the VCPU runs, as it can
-	* be updated at any time via SWAPGS, which we cannot trap.
-	*/
-	vcpu->guest_gs_kernel_base = UtilReadMsr64(Msr::kIa32KernelGsBase);
-	HYPERPLATFORM_LOG_DEBUG("DEBUG###Save GS base: %I64X \r\n ", vcpu->guest_gs_kernel_base);
-}
-static void vmx_restore_guest_msrs(NestedVmm* vcpu)
-{
-	UtilWriteMsr64(Msr::kIa32KernelGsBase, vcpu->guest_gs_kernel_base);
-	HYPERPLATFORM_LOG_DEBUG("DEBUG###Restore GS base: %I64X \r\n ", vcpu->guest_gs_kernel_base);
-}
 // Context at the moment of vmexit
 struct VmExitHistory {
   GpRegisters gp_regs;
@@ -237,8 +223,7 @@ BOOLEAN IsRootMode(NestedVmm* vm) { return vm->inRoot; }
 ////////////////////////////////////////////////////////////////////////////////
 //
 // variables
-//
-bool isPrintMsr = false;
+// 
 // Those variables are all for diagnostic purpose
 static ULONG g_vmmp_next_history_index[kVmmpNumberOfProcessors];
 static VmExitHistory g_vmmp_vm_exit_history[kVmmpNumberOfProcessors]
@@ -251,7 +236,20 @@ ULONG32				 g_vmx_extensions_bitmask;
 //
 // implementations
 //
-BOOLEAN nested = FALSE;
+static void vmx_save_guest_msrs(NestedVmm* vcpu)
+{
+	/*
+	* We cannot cache SHADOW_GS_BASE while the VCPU runs, as it can
+	* be updated at any time via SWAPGS, which we cannot trap.
+	*/
+	vcpu->guest_gs_kernel_base = UtilReadMsr64(Msr::kIa32KernelGsBase);
+	HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Save GS base: %I64X \r\n ", vcpu->guest_gs_kernel_base);
+}
+static void vmx_restore_guest_msrs(NestedVmm* vcpu)
+{
+	UtilWriteMsr64(Msr::kIa32KernelGsBase, vcpu->guest_gs_kernel_base);
+	HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Restore GS base: %I64X \r\n ", vcpu->guest_gs_kernel_base);
+}
 
 NestedVmm* GetCurrentCPU(bool IsNested = true)
 {

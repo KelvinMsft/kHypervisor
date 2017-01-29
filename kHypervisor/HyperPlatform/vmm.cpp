@@ -20,6 +20,7 @@ extern "C" {
 //
 // macro utilities
 //
+
 #define MY_VMX_TPR_SHADOW            (1 <<  0)              /* TPR shadow */
 #define MY_VMX_VIRTUAL_NMI           (1 <<  1)              /* Virtual NMI */
 #define MY_VMX_APIC_VIRTUALIZATION   (1 <<  2)              /* APIC Access Virtualization */
@@ -72,15 +73,18 @@ enum VMX_state
 
 typedef struct NestedVmm
 {
-	ULONG64 vmxon_region;
-	ULONG64 vmcs02_pa;				///VMCS02
-	ULONG64 vmcs12_pa;				///VMCS12 , i.e. L1 provided at the beginning
-	ULONG   CpuNumber;				///VCPU number
-	BOOLEAN blockINITsignal;		///NOT USED
-	BOOLEAN blockAndDisableA20M;	///NOT USED
-	BOOLEAN inVMX;					///is it in VMX mode 
-	BOOLEAN inRoot;					///is it in root mode
-	USHORT	kVirtualProcessorId; 
+	ULONG64   vmxon_region;
+	ULONG64   vmcs02_pa;				///VMCS02
+	ULONG64   vmcs12_pa;				///VMCS12 , i.e. L1 provided at the beginning
+	ULONG64   vmcs01_pa;
+	ULONG     CpuNumber;				///VCPU number
+	BOOLEAN   blockINITsignal;			///NOT USED
+	BOOLEAN   blockAndDisableA20M;		///NOT USED
+	BOOLEAN   inVMX;					///is it in VMX mode 
+	BOOLEAN   inRoot;					///is it in root mode
+	USHORT	  kVirtualProcessorId; 
+	ULONG_PTR guest_gs_kernel_base;		///guest_gs_kernel_base
+
 }NestedVmm, *PNestedVmm;
 // Represents raw structure of stack of VMM when VmmVmExitHandler() is called
 struct VmmInitialStack {
@@ -90,6 +94,7 @@ struct VmmInitialStack {
 };
 
 // Things need to be read and written by each VM-exit handler
+#pragma pack(8)
 struct GuestContext {
   union {
     VmmInitialStack *stack;
@@ -100,13 +105,29 @@ struct GuestContext {
   ULONG_PTR cr8;
   KIRQL irql;
   bool vm_continue;
-};
+ };
+#pragma pack()
+
 #if defined(_AMD64_)
 static_assert(sizeof(GuestContext) == 40, "Size check");
 #else
 static_assert(sizeof(GuestContext) == 20, "Size check");
 #endif
 
+static void vmx_save_guest_msrs(NestedVmm* vcpu)
+{
+	/*
+	* We cannot cache SHADOW_GS_BASE while the VCPU runs, as it can
+	* be updated at any time via SWAPGS, which we cannot trap.
+	*/
+	vcpu->guest_gs_kernel_base = UtilReadMsr64(Msr::kIa32KernelGsBase);
+	HYPERPLATFORM_LOG_DEBUG("DEBUG###Save GS base: %I64X \r\n ", vcpu->guest_gs_kernel_base);
+}
+static void vmx_restore_guest_msrs(NestedVmm* vcpu)
+{
+	UtilWriteMsr64(Msr::kIa32KernelGsBase, vcpu->guest_gs_kernel_base);
+	HYPERPLATFORM_LOG_DEBUG("DEBUG###Restore GS base: %I64X \r\n ", vcpu->guest_gs_kernel_base);
+}
 // Context at the moment of vmexit
 struct VmExitHistory {
   GpRegisters gp_regs;
@@ -217,7 +238,7 @@ BOOLEAN IsRootMode(NestedVmm* vm) { return vm->inRoot; }
 //
 // variables
 //
-
+bool isPrintMsr = false;
 // Those variables are all for diagnostic purpose
 static ULONG g_vmmp_next_history_index[kVmmpNumberOfProcessors];
 static VmExitHistory g_vmmp_vm_exit_history[kVmmpNumberOfProcessors]
@@ -232,7 +253,7 @@ ULONG32				 g_vmx_extensions_bitmask;
 //
 BOOLEAN nested = FALSE;
 
-NestedVmm* GetCurrentCPU()
+NestedVmm* GetCurrentCPU(bool IsNested = true)
 {
 	ULONG64 vmcs12_va  = 0;
 	ULONG64 vmcs_pa;
@@ -243,21 +264,50 @@ NestedVmm* GetCurrentCPU()
 	{
 		for (i = 0; i < (int)KeQueryMaximumProcessorCount(); i++)
 		{
-			if (!g_vcpus[i]) 
+			if (!g_vcpus[i])
 			{
 				break;
-			} 
-			if ( g_vcpus[i]->vmcs02_pa == vmcs_pa)
-			{ 
-				ret = g_vcpus[i];  
-				break;
-			}   
-			 
+			}
+			if (IsNested)
+			{
+				if (g_vcpus[i]->vmcs02_pa == vmcs_pa ||		//L2
+					g_vcpus[i]->vmcs01_pa == vmcs_pa)			//L1
+				{
+					ret = g_vcpus[i];
+					break;
+				}
+			}
+			else
+			{
+				if (g_vcpus[i]->vmcs02_pa == vmcs_pa)		//L2
+				{
+					ret = g_vcpus[i];
+					break;
+				}
+			}
 		}
 	} 
 	return ret;
 }
-
+void DumpVcpu()
+{
+	ULONG64 vmcs12_va = 0;
+	ULONG64 vmcs_pa;
+	NestedVmm* ret = NULL;
+	int i = 0;
+	__vmx_vmptrst(&vmcs_pa);
+	if (vmcs_pa)
+	{
+		for (i = 0; i < (int)KeQueryMaximumProcessorCount(); i++)
+		{
+			if (!g_vcpus[i])
+			{
+				break;
+			}
+			HYPERPLATFORM_LOG_DEBUG("Current Vmcs: %I64X i:%d vmcs02: %I64X", vmcs_pa, i, g_vcpus[i]->vmcs02_pa); 
+		}
+	} 
+}
 /*
 Descritpion:
 
@@ -367,13 +417,13 @@ VOID SaveGuestFieldFromVmcs02(ULONG64 vmcs12_va)
 	VmWrite64(VmcsField::kGuestGdtrBase,	         vmcs12_va, UtilVmRead(VmcsField::kGuestGdtrBase));
 	VmWrite64(VmcsField::kGuestIdtrBase,	         vmcs12_va, UtilVmRead(VmcsField::kGuestIdtrBase));
 
-
 	/*
 	VmWrite64(VmcsField::kGuestPdptr0, vmcs12_va, UtilVmRead(VmcsField::kGuestPdptr0));
 	VmWrite64(VmcsField::kGuestPdptr1, vmcs12_va, UtilVmRead(VmcsField::kGuestPdptr1));
 	VmWrite64(VmcsField::kGuestPdptr2, vmcs12_va, UtilVmRead(VmcsField::kGuestPdptr2));
 	VmWrite64(VmcsField::kGuestPdptr3, vmcs12_va, UtilVmRead(VmcsField::kGuestPdptr3));
 	*/
+
 }
 
 /*
@@ -428,17 +478,17 @@ VOID EmulateVmExit(ULONG64 vmcs01, ULONG64 vmcs12_va)
 	/*
 		1. Print about trapped reason
 	*/
-	HYPERPLATFORM_LOG_DEBUG("[EmulateVmExit]VMCS id %x", UtilVmRead(VmcsField::kVirtualProcessorId));
-	HYPERPLATFORM_LOG_DEBUG("[EmulateVmExit]Trapped by %I64X ", UtilVmRead(VmcsField::kGuestRip));
-	HYPERPLATFORM_LOG_DEBUG("[EmulateVmExit]Trapped Reason: %I64X ", exit_reason.fields.reason);
-	HYPERPLATFORM_LOG_DEBUG("[EmulateVmExit]Trapped Intrreupt: %I64X ", exception.fields.interruption_type);
-	HYPERPLATFORM_LOG_DEBUG("[EmulateVmExit]Trapped Intrreupt vector: %I64X ", exception.fields.vector);
-	HYPERPLATFORM_LOG_DEBUG("[EmulateVmExit]Trapped kVmExitInstructionLen: %I64X ", UtilVmRead(VmcsField::kVmExitInstructionLen));
+	HYPERPLATFORM_LOG_DEBUG_SAFE("[EmulateVmExit]VMCS id %x", UtilVmRead(VmcsField::kVirtualProcessorId));
+	HYPERPLATFORM_LOG_DEBUG_SAFE("[EmulateVmExit]Trapped by %I64X ", UtilVmRead(VmcsField::kGuestRip));
+	HYPERPLATFORM_LOG_DEBUG_SAFE("[EmulateVmExit]Trapped Reason: %I64X ", exit_reason.fields.reason);
+	HYPERPLATFORM_LOG_DEBUG_SAFE("[EmulateVmExit]Trapped Intrreupt: %I64X ", exception.fields.interruption_type);
+	HYPERPLATFORM_LOG_DEBUG_SAFE("[EmulateVmExit]Trapped Intrreupt vector: %I64X ", exception.fields.vector);
+	HYPERPLATFORM_LOG_DEBUG_SAFE("[EmulateVmExit]Trapped kVmExitInstructionLen: %I64X ", UtilVmRead(VmcsField::kVmExitInstructionLen));
 
 	if (VmxStatus::kOk != (status = static_cast<VmxStatus>(__vmx_vmptrld(&vmcs01))))
 	{
 		VmxInstructionError error = static_cast<VmxInstructionError>(UtilVmRead(VmcsField::kVmInstructionError));
-		HYPERPLATFORM_LOG_DEBUG("Error vmptrld error code :%x , %x", status, error);
+		HYPERPLATFORM_LOG_DEBUG_SAFE("Error vmptrld error code :%x , %x", status, error);
 	}
 
 	//Read from vmcs12_va get it host vmexit handler
@@ -494,14 +544,14 @@ VOID EmulateVmExit(ULONG64 vmcs01, ULONG64 vmcs12_va)
 	UtilVmWrite(VmcsField::kGuestGsBase, VMCS_VMEXIT_HOST_GS);
 	UtilVmWrite(VmcsField::kGuestTrBase, VMCS_VMEXIT_HOST_TR);
 
-	PrintVMCS();
+	VmWrite32(VmcsField::kVmEntryIntrInfoField, vmcs12_va ,0 );
+	VmWrite32(VmcsField::kVmEntryExceptionErrorCode, vmcs12_va, 0);
 
-	HYPERPLATFORM_LOG_DEBUG("[EmulateVmExit]VMCS01: kGuestRip :%I64x , kGuestRsp %I64x ", UtilVmRead(VmcsField::kGuestRip), UtilVmRead(VmcsField::kGuestRsp));
-	HYPERPLATFORM_LOG_DEBUG("[EmulateVmExit]VMCS01: kHostRip :%I64x , kHostRsp %I64x ", UtilVmRead(VmcsField::kHostRip), UtilVmRead(VmcsField::kHostRsp));
+	UtilVmWrite(VmcsField::kVmEntryIntrInfoField,  0);
+	UtilVmWrite(VmcsField::kVmEntryExceptionErrorCode, 0);
 
-
-	PrintVMCS12(vmcs12_va);
-
+	PrintVMCS();  
+	PrintVMCS12(vmcs12_va); 
 }
 //Nested breakpoint dispatcher
 VOID Nested_VmExit(GuestContext* guest_context, ULONG64 vmcs12_va)
@@ -510,8 +560,8 @@ VOID Nested_VmExit(GuestContext* guest_context, ULONG64 vmcs12_va)
 	ULONG64   vmcs01 = UtilPaFromVa((void*)guest_context->stack->processor_data->vmcs_region);
 	if (vmcs12_va)
 	{  
-		EmulateVmExit(vmcs01, vmcs12_va);
-	} 
+		EmulateVmExit(vmcs01, vmcs12_va); 
+  	} 
 	return;
 }
 // A high level VMX handler called from AsmVmExitHandler().
@@ -536,11 +586,12 @@ _Use_decl_annotations_ bool __stdcall VmmVmExitHandler(VmmInitialStack *stack)
   							  guest_cr8,
   							  guest_irql,
   							  true };
+
   guest_context.gp_regs->sp = UtilVmRead(VmcsField::kGuestRsp);
   
   VmmpSaveExtendedProcessorState(&guest_context);
  
-	// Dispatch the current VM-exit event
+  // Dispatch the current VM-exit event
   VmmpHandleVmExit(&guest_context);
 
   VmmpRestoreExtendedProcessorState(&guest_context);
@@ -554,7 +605,8 @@ _Use_decl_annotations_ bool __stdcall VmmVmExitHandler(VmmInitialStack *stack)
   }
 
   // Restore guest's context
-  if (guest_context.irql < DISPATCH_LEVEL) {
+  if (guest_context.irql < DISPATCH_LEVEL) 
+  {
     KeLowerIrql(guest_context.irql);
   }
 
@@ -619,7 +671,7 @@ _Use_decl_annotations_ static void VmmpHandleVmExit(GuestContext *guest_context)
 	 };
 	
 	
-	 vm = GetCurrentCPU();
+	 vm = GetCurrentCPU(false);
 	 if (!vm)  
 	 {
 		  break;
@@ -628,20 +680,21 @@ _Use_decl_annotations_ static void VmmpHandleVmExit(GuestContext *guest_context)
 	// Since VMXON, but VMPTRLD 
 	if (!vm->vmcs02_pa || !vm->vmcs12_pa || vm->vmcs12_pa == ~0x0 || vm->vmcs02_pa == ~0x0  )
 	{  
-	  HYPERPLATFORM_LOG_DEBUG("cannot find vmcs \r\n"); 
+	  HYPERPLATFORM_LOG_DEBUG_SAFE("cannot find vmcs \r\n"); 
 	  break;
 	} 
 
 
 
 	vmcs12_va = (ULONG64)UtilVaFromPa(vm->vmcs12_pa);
-
+		
 	if (vmcs12_va)
 	{
 		SaveGuestFieldFromVmcs02(vmcs12_va);
 		SaveExceptionInformationFromVmcs02(exit_reason, vmcs12_va);
 	}
 
+	
 	if (static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kPageFaultException)
 	{
 		break;
@@ -649,10 +702,17 @@ _Use_decl_annotations_ static void VmmpHandleVmExit(GuestContext *guest_context)
 	if (!IsRootMode(vm) && 
 		static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kBreakpointException)	 
 	{
+
 	    // Emulated VMExit 
 	    LEAVE_GUEST_MODE(vm);
+
+		vmx_save_guest_msrs(vm);
+
  		Nested_VmExit(guest_context, vmcs12_va);
+
+		//SetMonitorTrapFlag_1(true);
 		ENTER_GUEST_MODE(vm);
+
 		return;
 	 }
 	 else
@@ -756,22 +816,12 @@ _Use_decl_annotations_ static void VmmpHandleUnexpectedExit(
 }
 
 // MTF VM-exit
-_Use_decl_annotations_ static void VmmpHandleMonitorTrap(
-    GuestContext *guest_context) {
- 
-	HYPERPLATFORM_LOG_DEBUG("[MTF]GustRip: %I64X GuestGsBase: %I64x Gs_base: %I64X Kernel Gs Base: %I64X \r\n",UtilVmRead(VmcsField::kGuestRip),UtilVmRead(VmcsField::kGuestGsBase),UtilReadMsr(Msr::kIa32GsBase),UtilReadMsr(Msr::kIa32KernelGsBase));
-	VmmpAdjustGuestInstructionPointer(guest_context);
-}
-
-
-// Set MTF on the current processor
-_Use_decl_annotations_ static void SetMonitorTrapFlag( bool enable) 
+_Use_decl_annotations_ static void VmmpHandleMonitorTrap(GuestContext *guest_context) 
 {
-	VmxProcessorBasedControls vm_procctl = {
-		static_cast<unsigned int>(UtilVmRead(VmcsField::kCpuBasedVmExecControl)) };
-	vm_procctl.fields.monitor_trap_flag = enable;
-	UtilVmWrite(VmcsField::kCpuBasedVmExecControl, vm_procctl.all);
+	UNREFERENCED_PARAMETER(guest_context);
+	
 }
+
 
 // Interrupt
 _Use_decl_annotations_ static void VmmpHandleException(
@@ -955,12 +1005,11 @@ _Use_decl_annotations_ static void VmmpHandleMsrAccess(
 	}
 	case Msr::kIa32KernelGsBase:
 	{
-		vmcs_field = VmcsField::kHostFsBase;
-		transfer_to_vmcs = true; 
+		transfer_to_vmcs = false;
 		break;
 	}
     case Msr::kIa32FsBase:
-      vmcs_field = VmcsField::kGuestFsBase;
+		vmcs_field = VmcsField::kGuestFsBase;
       break;
     default:
       break;
@@ -973,7 +1022,6 @@ _Use_decl_annotations_ static void VmmpHandleMsrAccess(
    
   LARGE_INTEGER msr_value = {};
   if (read_access) {
-
     if (transfer_to_vmcs) {
       if (is_64bit_vmcs) {
         msr_value.QuadPart = UtilVmRead64(vmcs_field);
@@ -981,9 +1029,7 @@ _Use_decl_annotations_ static void VmmpHandleMsrAccess(
         msr_value.QuadPart = UtilVmRead(vmcs_field);
       }
     } else { 
-		 
 			msr_value.QuadPart = UtilReadMsr64(msr);
- 
 	}	
 	if (msr == Msr::kIa32VmxEptVpidCap)
 	 {
@@ -1647,6 +1693,8 @@ _Use_decl_annotations_ static void VmmpSaveExtendedProcessorState(
     _fxsave(guest_context->stack->processor_data->fxsave_area + alignment);
   }
   __writecr0(old_cr0.all);
+
+  
 }
 
 // Restores all supported user state components (x87, SSE, AVX states)
@@ -1836,7 +1884,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		const auto fault_address = UtilVmRead(VmcsField::kExitQualification);
 
 		PrintVMCS();
-		NestedVmm* vm = GetCurrentCPU();
+		NestedVmm* vm = GetCurrentCPU(false);
 		if (vm)
 		{
 			if (vm->vmcs12_pa)
@@ -2132,7 +2180,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 	  }
 	  const auto guest_cr3 = UtilVmRead(VmcsField::kGuestCr3);
 	  const auto vmm_cr3 = __readcr3();
-	  HYPERPLATFORM_LOG_DEBUG("operation_address= %I64x + %I64x + %I64x = %I64x \r\n", base_value, index_value, displacement, operation_address);
+	  HYPERPLATFORM_LOG_DEBUG_SAFE("operation_address= %I64x + %I64x + %I64x = %I64x \r\n", base_value, index_value, displacement, operation_address);
 	  HYPERPLATFORM_COMMON_DBG_BREAK();
 	  return operation_address;
 
@@ -2192,14 +2240,14 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 	  {
 		  if (eptptr & 0x40)
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("is_eptptr_valid: EPTPTR A/D enabled when not supported by CPU"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("is_eptptr_valid: EPTPTR A/D enabled when not supported by CPU"));
 			  return FALSE;
 		  }
 	  }
 
 #define BX_EPTPTR_RESERVED_BITS 0xf80 /* bits 11:7 are reserved */
 	  if (eptptr & BX_EPTPTR_RESERVED_BITS) {
-		  HYPERPLATFORM_LOG_DEBUG(("is_eptptr_valid: EPTPTR reserved bits set"));
+		  HYPERPLATFORM_LOG_DEBUG_SAFE(("is_eptptr_valid: EPTPTR reserved bits set"));
 		  return FALSE;
 	  }
 
@@ -2221,20 +2269,20 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  VmControlStructure*   vmxon_region_struct = (VmControlStructure*)UtilVaFromPa(vmxon_region_pa);
 		  PROCESSOR_NUMBER      number;
 		 
-		  HYPERPLATFORM_LOG_DEBUG("UtilVmRead: %I64X", &UtilVmRead);
-		  HYPERPLATFORM_LOG_DEBUG("UtilVmRead64: %I64X", &UtilVmRead64);
-		  HYPERPLATFORM_LOG_DEBUG("UtilVmWrite: %I64X", &UtilVmWrite);
-		  HYPERPLATFORM_LOG_DEBUG("UtilVmWrite64: %I64X", &UtilVmWrite64);
-		  HYPERPLATFORM_LOG_DEBUG("VmRead: %I64X", &VmRead16);
-		  HYPERPLATFORM_LOG_DEBUG("VmRead32: %I64X", &VmRead32);
-		  HYPERPLATFORM_LOG_DEBUG("VmRead64: %I64X", &VmRead64);
-		  HYPERPLATFORM_LOG_DEBUG("VmWrite: %I64X", &VmWrite16);
-		  HYPERPLATFORM_LOG_DEBUG("VmWrite32: %I64X", &VmWrite32);
-		  HYPERPLATFORM_LOG_DEBUG("VmWrite64: %I64X", &VmWrite64);
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("UtilVmRead: %I64X", &UtilVmRead);
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("UtilVmRead64: %I64X", &UtilVmRead64);
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("UtilVmWrite: %I64X", &UtilVmWrite);
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("UtilVmWrite64: %I64X", &UtilVmWrite64);
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("VmRead: %I64X", &VmRead16);
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("VmRead32: %I64X", &VmRead32);
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("VmRead64: %I64X", &VmRead64);
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("VmWrite: %I64X", &VmWrite16);
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("VmWrite32: %I64X", &VmWrite32);
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("VmWrite64: %I64X", &VmWrite64);
 	      // VMXON_REGION IS NULL 
 		  if (!vmxon_region_pa)
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMXON: Parameter is NULL !"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXON: Parameter is NULL !"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
@@ -2246,14 +2294,14 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 			  ///TODO: 
 			  ///if( it is non root ) 
 			  ///	VM Exit 
-			  HYPERPLATFORM_LOG_DEBUG("VMX: Cpu is already in VMXON Mode, should be VM Exit here \r\n");
+			  HYPERPLATFORM_LOG_DEBUG_SAFE("VMX: Cpu is already in VMXON Mode, should be VM Exit here \r\n");
 			  break;
 		  }
 
 		  //CR0.PE = 0;
 		  if (!IsGuestInProtectedMode())
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMXON: Please running in Protected Mode !"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXON: Please running in Protected Mode !"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
@@ -2262,7 +2310,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //CR4.VMXE = 0;
 		  if (!IsGuestSupportVMX())
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMXON: Guest is not supported VMX !"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXON: Guest is not supported VMX !"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
@@ -2271,7 +2319,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //RFLAGS.VM = 1
 		  if (IsGuestInVirtual8086())
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMXON: Guest is running in virtual-8086 mode !"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXON: Guest is running in virtual-8086 mode !"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
@@ -2283,7 +2331,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 			  //If CS.L == 0 , means compability mode (32bit addressing), CS.L == 1 is 64bit mode , default operand is 32bit
 			  if (!IsGuestinCompatibliltyMode())
 			  {
-				  HYPERPLATFORM_LOG_DEBUG(("VMXON: Guest is IA-32e mode but not in 64bit mode !"));
+				  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXON: Guest is IA-32e mode but not in 64bit mode !"));
 				  //#UD
 				  ThrowInvalidCodeException();
 				  break;
@@ -2292,7 +2340,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //Get Guest CPL
 		  if (GetGuestCPL() > 0)
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMXON: Need run in Ring-0 !"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXON: Need run in Ring-0 !"));
 			  //#gp
 			  ThrowGerneralFaultInterrupt();
 			  break;
@@ -2301,7 +2349,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //Ia32_Feature_Control.lock = 0
 		  if (!IsLockbitClear())
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMXON: IsLockbitClear !"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXON: IsLockbitClear !"));
 			  //#gp
 			  ThrowGerneralFaultInterrupt();
 			  break;
@@ -2310,7 +2358,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //Run outside of SMX mode, and Ia32_Feature_Control.enable_vmxon = 1
 		  if (!IsGuestEnableVMXOnInstruction())
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMXON: Guest is not enable VMXON instruction !"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXON: Guest is not enable VMXON instruction !"));
 			  //#gp
 			  ThrowGerneralFaultInterrupt();
 			  break;
@@ -2319,7 +2367,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //CR0.NE = 0
 		  if (!IsGuestSetNumericErrorBit())
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMXON: has not set numberic error bit of CR0 register !"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXON: has not set numberic error bit of CR0 register !"));
 			  //#gp
 			  ThrowGerneralFaultInterrupt();
 			  break;
@@ -2327,14 +2375,14 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //if is it not page aglined
 		  if (!CheckPageAlgined(vmxon_region_pa))
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMXON: not page aligned physical address %I64X !"), vmxon_region_pa);
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXON: not page aligned physical address %I64X !"), vmxon_region_pa);
 			  VMfailInvalid(&guest_context->flag_reg);
 			  break;
 		  }
 		  //if IA32_VMX_BASIC[48] == 1 it is not support 64bit addressing, so address[32] to address[63] supposed = 0
 		  if (!CheckPhysicalAddress(vmxon_region_pa))
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMXON: invalid physical address %I64X !"), vmxon_region_pa);
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXON: invalid physical address %I64X !"), vmxon_region_pa);
 			  VMfailInvalid(&guest_context->flag_reg);
 			  break;
 		  }
@@ -2342,7 +2390,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //VMCS id is not supported
 		  if (vmxon_region_struct->revision_identifier != GetVMCSRevisionIdentifier())
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMXON: VMCS revision identifier is not supported,  CPU supports identifier is : %x !"), GetVMCSRevisionIdentifier());
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXON: VMCS revision identifier is not supported,  CPU supports identifier is : %x !"), GetVMCSRevisionIdentifier());
 			  VMfailInvalid(&guest_context->flag_reg);
 			  break;
 		  }
@@ -2356,16 +2404,17 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  vm->blockAndDisableA20M = TRUE;
 		  vm->vmcs02_pa = 0xFFFFFFFFFFFFFFFF;
 		  vm->vmcs12_pa = 0xFFFFFFFFFFFFFFFF;
+		  __vmx_vmptrst(&vm->vmcs01_pa);
 		  vm->vmxon_region = vmxon_region_pa;
 		  vm->CpuNumber = KeGetCurrentProcessorNumberEx(&number);
 		  g_vcpus[vm->CpuNumber] = vm;
-		  HYPERPLATFORM_LOG_DEBUG("VMXON: Guest Instruction Pointer %I64X Guest Stack Pointer: %I64X  Guest VMXON_Region: %I64X stored at %I64x physical address\r\n",
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("VMXON: Guest Instruction Pointer %I64X Guest Stack Pointer: %I64X  Guest VMXON_Region: %I64X stored at %I64x physical address\r\n",
 			  InstructionPointer, StackPointer, vmxon_region_pa, debug_vmxon_region_pa);
 
-		  HYPERPLATFORM_LOG_DEBUG("VMXON: Run Successfully with VMXON_Region:  %I64X Total Vitrualized Core: %x  Current Cpu: %x in Cpu Group : %x  Number: %x \r\n",
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("VMXON: Run Successfully with VMXON_Region:  %I64X Total Vitrualized Core: %x  Current Cpu: %x in Cpu Group : %x  Number: %x \r\n",
 			  vmxon_region_pa, g_VM_Core_Count, vm->CpuNumber, number.Group, number.Number);
 
-		  HYPERPLATFORM_LOG_DEBUG("VMXON: VCPU No.: %i Mode: %s Current VMCS : %I64X VMXON Region : %I64X  ",
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("VMXON: VCPU No.: %i Mode: %s Current VMCS : %I64X VMXON Region : %I64X  ",
 			  g_vcpus[vm->CpuNumber]->CpuNumber, (g_vcpus[vm->CpuNumber]->inVMX) ? "VMX" : "No VMX", g_vcpus[vm->CpuNumber]->vmcs02_pa, g_vcpus[vm->CpuNumber]->vmxon_region);
 
 		  //a group of CPU maximum is 64 core
@@ -2394,21 +2443,28 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  ULONG64				debug_vmcs_region_pa = DecodeVmclearOrVmptrldOrVmptrstOrVmxon(guest_context);
 		  PROCESSOR_NUMBER	procnumber = {};
 		  VmControlStructure* vmcs_region_va = (VmControlStructure*)UtilVaFromPa(vmcs_region_pa);
-		  ULONG				vcpu_index = KeGetCurrentProcessorNumberEx(&procnumber);
+		  NestedVmm*				vm = GetCurrentCPU();
+
+		  if (!vm)
+		  {
+			  DumpVcpu();
+			  HYPERPLATFORM_COMMON_DBG_BREAK();
+			  break;
+		  }
 
 		  //If parameter is NULL
 		  if (!vmcs_region_pa)
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMXCLEAR: Parameter is NULL ! \r\n"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXCLEAR: Parameter is NULL ! \r\n"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
 		  }
 
 		  //If VCPU is not run in VMX mode
-		  if (!g_vcpus[vcpu_index]->inVMX)
+		  if (!vm->inVMX)
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMXCLEAR: VMXON is required ! \r\n"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXCLEAR: VMXON is required ! \r\n"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
@@ -2417,7 +2473,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //CR0.PE = 0;
 		  if (!IsGuestInProtectedMode())
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMXCLEAR: Please running in Protected Mode ! \r\n"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXCLEAR: Please running in Protected Mode ! \r\n"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
@@ -2427,7 +2483,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //RFLAGS.VM = 1
 		  if (IsGuestInVirtual8086())
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMXCLEAR: Guest is running in virtual-8086 mode ! \r\n"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXCLEAR: Guest is running in virtual-8086 mode ! \r\n"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
@@ -2440,7 +2496,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 			  //If CS.L == 0 , means compability mode (32bit addressing), CS.L == 1 is 64bit mode , default operand is 32bit
 			  if (!IsGuestinCompatibliltyMode())
 			  {
-				  HYPERPLATFORM_LOG_DEBUG(("VMXCLEAR: Guest is IA-32e mode but not in 64bit mode ! \r\n"));
+				  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXCLEAR: Guest is IA-32e mode but not in 64bit mode ! \r\n"));
 				  //#UD
 				  ThrowInvalidCodeException();
 				  break;
@@ -2450,7 +2506,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //Get Guest CPL
 		  if (GetGuestCPL() > 0)
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMXCLEAR: Need running in Ring - 0 ! \r\n")); 	  //#gp
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXCLEAR: Need running in Ring - 0 ! \r\n")); 	  //#gp
 			  ThrowGerneralFaultInterrupt();
 			  break;
 		  }
@@ -2458,7 +2514,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //if is it not page aglined
 		  if (!CheckPageAlgined(vmcs_region_pa))
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMXCLEAR: not page aligned physical address %I64X ! \r\n"),
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXCLEAR: not page aligned physical address %I64X ! \r\n"),
 				  vmcs_region_pa);
 
 			  VMfailInvalid(&guest_context->flag_reg);
@@ -2468,39 +2524,39 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //if IA32_VMX_BASIC[48] == 1 it is not support 64bit addressing, so address[32] to address[63] supposed = 0
 		  if (!CheckPhysicalAddress(vmcs_region_pa))
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMXCLEAR: invalid physical address %I64X ! \r\n"),
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXCLEAR: invalid physical address %I64X ! \r\n"),
 				  vmcs_region_pa);
 
 			  VMfailInvalid(&guest_context->flag_reg);
 			  break;
 		  }
 		  //if vmcs != vmregion 
-		  if (g_vcpus[vcpu_index] && (vmcs_region_pa == g_vcpus[vcpu_index]->vmxon_region))
+		  if (vm && (vmcs_region_pa == vm->vmxon_region))
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMXCLEAR: VMCS region %I64X same as VMXON region %I64X ! \r\n"),
-				  vmcs_region_pa, g_vcpus[vcpu_index]->vmxon_region);
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXCLEAR: VMCS region %I64X same as VMXON region %I64X ! \r\n"),
+				  vmcs_region_pa, vm->vmxon_region);
 
 			  VMfailInvalid(&guest_context->flag_reg);
 			  break;
 		  }
 
 		  *(PLONG)(&vmcs_region_va->data) = VMCS_STATE_CLEAR;
-		  if (vmcs_region_pa == g_vcpus[vcpu_index]->vmcs12_pa)
+		  if (vmcs_region_pa == vm->vmcs12_pa)
 		  {
-			  g_vcpus[vcpu_index]->vmcs12_pa = 0xFFFFFFFFFFFFFFFF;
+			  vm->vmcs12_pa = 0xFFFFFFFFFFFFFFFF;
 		  }
 
-		  __vmx_vmclear(&g_vcpus[vcpu_index]->vmcs02_pa); 
-		  g_vcpus[vcpu_index]->vmcs02_pa = 0xFFFFFFFFFFFFFFFF;
+		  __vmx_vmclear(&vm->vmcs02_pa); 
+		  vm->vmcs02_pa = 0xFFFFFFFFFFFFFFFF;
 
-		  HYPERPLATFORM_LOG_DEBUG("VMCLEAR: Guest Instruction Pointer %I64X Guest Stack Pointer: %I64X  Guest vmcs region: %I64X stored at %I64x on stack\r\n",
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("VMCLEAR: Guest Instruction Pointer %I64X Guest Stack Pointer: %I64X  Guest vmcs region: %I64X stored at %I64x on stack\r\n",
 			  InstructionPointer, StackPointer, vmcs_region_pa, debug_vmcs_region_pa);
 
-		  HYPERPLATFORM_LOG_DEBUG("VMCLEAR: Run Successfully with VMCS_Region:  %I64X Total Vitrualized Core: %x  Current Cpu: %x in Cpu Group : %x  Number: %x \r\n",
-			  vmcs_region_pa, g_VM_Core_Count, g_vcpus[vcpu_index]->CpuNumber, procnumber.Group, procnumber.Number);
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("VMCLEAR: Run Successfully with VMCS_Region:  %I64X Total Vitrualized Core: %x  Current Cpu: %x in Cpu Group : %x  Number: %x \r\n",
+			  vmcs_region_pa, g_VM_Core_Count,vm->CpuNumber, procnumber.Group, procnumber.Number);
 
-		  HYPERPLATFORM_LOG_DEBUG("VMCLEAR: VCPU No.: %i Mode: %s Current VMCS : %I64X VMXON Region : %I64X  ",
-			  g_vcpus[vcpu_index]->CpuNumber, (g_vcpus[vcpu_index]->inVMX) ? "VMX" : "No VMX", g_vcpus[vcpu_index]->vmcs02_pa, g_vcpus[vcpu_index]->vmxon_region);
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("VMCLEAR: VCPU No.: %i Mode: %s Current VMCS : %I64X VMXON Region : %I64X  ",
+			  vm->CpuNumber, (vm->inVMX) ? "VMX" : "No VMX", vm->vmcs02_pa, vm->vmxon_region);
 
 		  VMSucceed(&guest_context->flag_reg);
 	  } while (FALSE);
@@ -2517,19 +2573,27 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  ULONG64				StackPointer = { UtilVmRead64(VmcsField::kGuestRsp) };
 		  ULONG64				vmcs12_region_pa = *(PULONG64)DecodeVmclearOrVmptrldOrVmptrstOrVmxon(guest_context);
 		  VmControlStructure*   vmcs12_region_va = (VmControlStructure*)UtilVaFromPa(vmcs12_region_pa);
-		  ULONG				vcpu_index = KeGetCurrentProcessorNumberEx(&procnumber);
+		  NestedVmm*				vm = GetCurrentCPU();
+
+		  if (!vm)
+		  {
+			  DumpVcpu();
+			  HYPERPLATFORM_COMMON_DBG_BREAK();
+			  break;
+		  }
+		  
 		  // if vmcs region is NULL
 		  if (!vmcs12_region_va)
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("kVmptrld: Parameter is NULL ! \r\n"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("kVmptrld: Parameter is NULL ! \r\n"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
 		  }
 		  // if VCPU not run in VMX mode 
-		  if (!g_vcpus[vcpu_index]->inVMX)
+		  if (!vm->inVMX)
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("kVmptrld: VMXON is required ! \r\n"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("kVmptrld: VMXON is required ! \r\n"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
@@ -2537,7 +2601,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //CR0.PE = 0;
 		  if (!IsGuestInProtectedMode())
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("kVmptrld: Please running in Protected Mode ! \r\n"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("kVmptrld: Please running in Protected Mode ! \r\n"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
@@ -2547,7 +2611,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //RFLAGS.VM = 1
 		  if (IsGuestInVirtual8086())
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("kVmptrld: Guest is running in virtual-8086 mode ! \r\n"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("kVmptrld: Guest is running in virtual-8086 mode ! \r\n"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
@@ -2560,7 +2624,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 			  //If CS.L == 0 , means compability mode (32bit addressing), CS.L == 1 is 64bit mode , default operand is 32bit
 			  if (!IsGuestinCompatibliltyMode())
 			  {
-				  HYPERPLATFORM_LOG_DEBUG(("kVmptrld: Guest is IA-32e mode but not in 64bit mode ! \r\n"));
+				  HYPERPLATFORM_LOG_DEBUG_SAFE(("kVmptrld: Guest is IA-32e mode but not in 64bit mode ! \r\n"));
 				  //#UD
 				  ThrowInvalidCodeException();
 				  break;
@@ -2571,14 +2635,14 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //Get Guest CPL
 		  if (GetGuestCPL() > 0)
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("kVmptrld: Need running in Ring - 0 ! \r\n")); 	  //#gp
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("kVmptrld: Need running in Ring - 0 ! \r\n")); 	  //#gp
 			  ThrowGerneralFaultInterrupt();
 			  break;
 		  }
 		  //if is it not page aglined
 		  if (!CheckPageAlgined(vmcs12_region_pa))
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("kVmptrld: not page aligned physical address %I64X ! \r\n"),
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("kVmptrld: not page aligned physical address %I64X ! \r\n"),
 				  vmcs12_region_pa);
 
 			  VMfailInvalid(&guest_context->flag_reg);
@@ -2588,17 +2652,17 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //if IA32_VMX_BASIC[48] == 1 it is not support 64bit addressing, so address[32] to address[63] supposed = 0
 		  if (!CheckPhysicalAddress(vmcs12_region_pa))
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("kVmptrld: invalid physical address %I64X ! \r\n"),
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("kVmptrld: invalid physical address %I64X ! \r\n"),
 				  vmcs12_region_pa);
 
 			  VMfailInvalid(&guest_context->flag_reg);
 			  break;
 		  }
 
-		  if (g_vcpus[vcpu_index] && (vmcs12_region_pa == g_vcpus[vcpu_index]->vmxon_region))
+		  if (vm && (vmcs12_region_pa == vm->vmxon_region))
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("kVmptrld: VMCS region %I64X same as VMXON region %I64X ! \r\n"),
-				  vmcs12_region_pa, g_vcpus[vcpu_index]->vmxon_region);
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("kVmptrld: VMCS region %I64X same as VMXON region %I64X ! \r\n"),
+				  vmcs12_region_pa, vm->vmxon_region);
 
 			  VMfailInvalid(&guest_context->flag_reg);
 			  break;
@@ -2607,7 +2671,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //VMCS id is not supported
 		  if (vmcs12_region_va->revision_identifier != GetVMCSRevisionIdentifier())
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMPTRLD: VMCS revision identifier is not supported,  CPU supports identifier is : %x !"), GetVMCSRevisionIdentifier());
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMPTRLD: VMCS revision identifier is not supported,  CPU supports identifier is : %x !"), GetVMCSRevisionIdentifier());
 			  VMfailInvalid(&guest_context->flag_reg);
 			  break;
 		  }
@@ -2617,14 +2681,15 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 
 		  RtlFillMemory(vmcs02_region_va, PAGE_SIZE, 0x0);
  
-		  g_vcpus[vcpu_index]->vmcs02_pa = vmcs02_region_pa;		    //vmcs02' physical address - DIRECT VMREAD/WRITE
-		  g_vcpus[vcpu_index]->vmcs12_pa = vmcs12_region_pa;		    //vmcs12' physical address - we will control its structure in Vmread/Vmwrite
-		  g_vcpus[vcpu_index]->kVirtualProcessorId = (USHORT)KeGetCurrentProcessorNumberEx(nullptr) + 1;
+		  vm->vmcs02_pa = vmcs02_region_pa;		    //vmcs02' physical address - DIRECT VMREAD/WRITE
+		  vm->vmcs12_pa = vmcs12_region_pa;		    //vmcs12' physical address - we will control its structure in Vmread/Vmwrite
+		  vm->kVirtualProcessorId = (USHORT)KeGetCurrentProcessorNumberEx(nullptr) + 1;
 
-		  HYPERPLATFORM_LOG_DEBUG("[VMPTRLD] Run Successfully \r\n");
-		  HYPERPLATFORM_LOG_DEBUG("[VMPTRLD] VMCS02 PA: %I64X VA: %I64X  \r\n", vmcs02_region_pa, vmcs02_region_va);
-		  HYPERPLATFORM_LOG_DEBUG("[VMPTRLD] VMCS12 PA: %I64X VA: %I64X \r\n" , vmcs12_region_pa, vmcs12_region_va);
-		  HYPERPLATFORM_LOG_DEBUG("[VMPTRLD] Current Cpu: %x in Cpu Group : %x  Number: %x \r\n",  g_vcpus[vcpu_index]->CpuNumber, procnumber.Group, procnumber.Number);
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("[VMPTRLD] Run Successfully \r\n");
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("[VMPTRLD] VMCS02 PA: %I64X VA: %I64X  \r\n", vmcs02_region_pa, vmcs02_region_va);
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("[VMPTRLD] VMCS12 PA: %I64X VA: %I64X \r\n" , vmcs12_region_pa, vmcs12_region_va);
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("[VMPTRLD] VMCS01 PA: %I64X VA: %I64X \r\n", vm->vmcs01_pa);
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("[VMPTRLD] Current Cpu: %x in Cpu Group : %x  Number: %x \r\n",  vm->CpuNumber, procnumber.Group, procnumber.Number);
 		   
 		  VMSucceed(&guest_context->flag_reg);
 
@@ -2638,14 +2703,19 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 	  do
 	  {
 		  PROCESSOR_NUMBER  procnumber = { 0 };
-		  ULONG				 vcpu_index = KeGetCurrentProcessorNumberEx(&procnumber);
-		  ULONG64			  vmcs12_pa = g_vcpus[vcpu_index]->vmcs12_pa;
+		  NestedVmm*				 vm = GetCurrentCPU();
+		  ULONG64			  vmcs12_pa = vm->vmcs12_pa;
 		  ULONG64			  vmcs12_va = (ULONG64)UtilVaFromPa(vmcs12_pa);
-
-		  // if VCPU not run in VMX mode
-		  if (!g_vcpus[vcpu_index]->inVMX)
+		  if (!vm)
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMREAD: VMXON is required ! \r\n"));
+			  DumpVcpu();
+			  HYPERPLATFORM_COMMON_DBG_BREAK();
+			  break;
+		  }
+ 		  // if VCPU not run in VMX mode
+		  if (!vm->inVMX)
+		  {
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMREAD: VMXON is required ! \r\n"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
@@ -2653,7 +2723,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //CR0.PE = 0;
 		  if (!IsGuestInProtectedMode())
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMREAD: Please running in Protected Mode ! \r\n"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMREAD: Please running in Protected Mode ! \r\n"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
@@ -2663,7 +2733,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //RFLAGS.VM = 1
 		  if (IsGuestInVirtual8086())
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMREAD: Guest is running in virtual-8086 mode ! \r\n"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMREAD: Guest is running in virtual-8086 mode ! \r\n"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
@@ -2676,7 +2746,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 			  //If CS.L == 0 , means compability mode (32bit addressing), CS.L == 1 is 64bit mode , default operand is 32bit
 			  if (!IsGuestinCompatibliltyMode())
 			  {
-				  HYPERPLATFORM_LOG_DEBUG(("VMREAD: Guest is IA-32e mode but not in 64bit mode ! \r\n"));
+				  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMREAD: Guest is IA-32e mode but not in 64bit mode ! \r\n"));
 				  //#UD
 				  ThrowInvalidCodeException();
 				  break;
@@ -2688,7 +2758,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //Get Guest CPLvm
 		  if (GetGuestCPL() > 0)
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMREAD: Need running in Ring - 0 ! \r\n")); 	  //#gp
+			  HYPERPLATFORM_LOG_DEBUG_SAFE("VMREAD: Need running in Ring - 0 ! , now is cs.cpi: %x \r\n", GetGuestCPL()); 	  //#gp
 			  ThrowGerneralFaultInterrupt();
 			  break;
 		  }
@@ -2704,14 +2774,14 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 
 		  if (!is_vmcs_field_supported(field))
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMREAD: Need running in Ring - 0 ! \r\n")); 	  //#gp
+			  HYPERPLATFORM_LOG_DEBUG_SAFE("VMREAD: Virtual VT-x is not supported this feature [field: %I64X] \r\n", field); 	  //#gp
 			  VMfailInvalid(&guest_context->flag_reg);
 			  break;
 		  }
 
 		  if ((ULONG64)vmcs12_va == 0xFFFFFFFFFFFFFFFF)
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMREAD: 0xFFFFFFFFFFFFFFFF		 ! \r\n")); 	  //#gp
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMREAD: 0xFFFFFFFFFFFFFFFF		 ! \r\n")); 	  //#gp
 			  VMfailInvalid(&guest_context->flag_reg);
 			  break;
 		  }
@@ -2733,18 +2803,18 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 			  if (operand_size == VMCS_FIELD_WIDTH_16BIT)
 			  {
 				  VmRead16(field, vmcs12_va, (PUSHORT)reg);
-				  HYPERPLATFORM_LOG_DEBUG("VMREAD16: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PUSHORT)reg);
+				  HYPERPLATFORM_LOG_DEBUG_SAFE("VMREAD16: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PUSHORT)reg);
 
 			  }
 			  if (operand_size == VMCS_FIELD_WIDTH_32BIT)
 			  {
 				  VmRead32(field, vmcs12_va, (PULONG32)reg);
-				  HYPERPLATFORM_LOG_DEBUG("VMREAD32: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PULONG32)reg);
+				  HYPERPLATFORM_LOG_DEBUG_SAFE("VMREAD32: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PULONG32)reg);
 			  }
 			  if (operand_size == VMCS_FIELD_WIDTH_64BIT || operand_size == VMCS_FIELD_WIDTH_NATURAL_WIDTH)
 			  {
 				  VmRead64(field, vmcs12_va, (PULONG64)reg);
-				  HYPERPLATFORM_LOG_DEBUG("VMREAD64: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PULONG64)reg);
+				  HYPERPLATFORM_LOG_DEBUG_SAFE("VMREAD64: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PULONG64)reg);
 			  }
 
 		  }
@@ -2753,17 +2823,17 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 			  if (operand_size == VMCS_FIELD_WIDTH_16BIT)
 			  {
 				  VmRead16(field, vmcs12_va, (PUSHORT)memAddress);
-				  HYPERPLATFORM_LOG_DEBUG("VMREAD16: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PUSHORT)memAddress);
+				  HYPERPLATFORM_LOG_DEBUG_SAFE("VMREAD16: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PUSHORT)memAddress);
 			  }
 			  if (operand_size == VMCS_FIELD_WIDTH_32BIT)
 			  {
 				  VmRead32(field, vmcs12_va, (PULONG32)memAddress);
-				  HYPERPLATFORM_LOG_DEBUG("VMREAD32: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PULONG32)memAddress);
+				  HYPERPLATFORM_LOG_DEBUG_SAFE("VMREAD32: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PULONG32)memAddress);
 			  }
 			  if (operand_size == VMCS_FIELD_WIDTH_64BIT || operand_size == VMCS_FIELD_WIDTH_NATURAL_WIDTH)
 			  {
 				  VmRead64(field, vmcs12_va, (PULONG64)memAddress);
-				  HYPERPLATFORM_LOG_DEBUG("VMREAD64: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PULONG64)memAddress);
+				  HYPERPLATFORM_LOG_DEBUG_SAFE("VMREAD64: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PULONG64)memAddress);
 			  }
 		  }
 		  VMSucceed(&guest_context->flag_reg);
@@ -2774,17 +2844,23 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 
   VOID VmwriteEmulate(GuestContext* guest_context)
   {
+	   
 	  do
 	  {
 		  PROCESSOR_NUMBER    procnumber = { 0 };
-		  ULONG				  vcpu_index = KeGetCurrentProcessorNumberEx(&procnumber);
-		  ULONG64			  vmcs12_pa = (ULONG64)g_vcpus[vcpu_index]->vmcs12_pa;
+		  NestedVmm*				 vm = GetCurrentCPU();
+		  ULONG64			  vmcs12_pa = (ULONG64)vm->vmcs12_pa;
 		  ULONG64			  vmcs12_va = (ULONG64)UtilVaFromPa(vmcs12_pa);
-
-		  // if VCPU not run in VMX mode
-		  if (!g_vcpus[vcpu_index]->inVMX)
+		  if (!vm)
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMWRITE: VMXON is required ! \r\n"));
+			  DumpVcpu();
+			  HYPERPLATFORM_COMMON_DBG_BREAK();
+			  break;
+		  }
+		  // if VCPU not run in VMX mode
+		  if (!vm->inVMX)
+		  {
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: VMXON is required ! \r\n"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
@@ -2792,7 +2868,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //CR0.PE = 0;
 		  if (!IsGuestInProtectedMode())
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMWRITE: Please running in Protected Mode ! \r\n"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: Please running in Protected Mode ! \r\n"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
@@ -2802,7 +2878,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //RFLAGS.VM = 1
 		  if (IsGuestInVirtual8086())
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMWRITE: Guest is running in virtual-8086 mode ! \r\n"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: Guest is running in virtual-8086 mode ! \r\n"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
@@ -2815,7 +2891,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 			  //If CS.L == 0 , means compability mode (32bit addressing), CS.L == 1 is 64bit mode , default operand is 32bit
 			  if (!IsGuestinCompatibliltyMode())
 			  {
-				  HYPERPLATFORM_LOG_DEBUG(("VMWRITE: Guest is IA-32e mode but not in 64bit mode ! \r\n"));
+				  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: Guest is IA-32e mode but not in 64bit mode ! \r\n"));
 				  //#UD
 				  ThrowInvalidCodeException();
 				  break;
@@ -2827,7 +2903,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //Get Guest CPL
 		  if (GetGuestCPL() > 0)
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMWRITE: Need running in Ring - 0 ! \r\n")); 	  //#gp
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: Need running in Ring - 0 ! \r\n")); 	  //#gp
 			  ThrowGerneralFaultInterrupt();
 			  break;
 		  }
@@ -2841,7 +2917,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 
 		  if (!is_vmcs_field_supported(field))
 		  {
-			  HYPERPLATFORM_LOG_DEBUG("VMWRITE: IS NOT SUPPORT %X ! \r\n", field); 	  //#gp
+			  HYPERPLATFORM_LOG_DEBUG_SAFE("VMWRITE: IS NOT SUPPORT %X ! \r\n", field); 	  //#gp
 			  VMfailInvalid(&guest_context->flag_reg);
 			  break;
 		  }
@@ -2856,18 +2932,18 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  if (operand_size == VMCS_FIELD_WIDTH_16BIT)
 		  {
 			  VmWrite16(field, vmcs12_va, Value);
-			  HYPERPLATFORM_LOG_DEBUG("VMWRITE: field: %I64X base: %I64X Offset: %I64X Value: %I64X  \r\n", field, vmcs12_va, offset, (USHORT)Value);
+			  HYPERPLATFORM_LOG_DEBUG_SAFE("VMWRITE: field: %I64X base: %I64X Offset: %I64X Value: %I64X  \r\n", field, vmcs12_va, offset, (USHORT)Value);
 		  }
 
 		  if (operand_size == VMCS_FIELD_WIDTH_32BIT)
 		  {
 			  VmWrite32(field, vmcs12_va, Value);
-			  HYPERPLATFORM_LOG_DEBUG("VMWRITE: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, (ULONG32)Value);
+			  HYPERPLATFORM_LOG_DEBUG_SAFE("VMWRITE: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, (ULONG32)Value);
 		  }
 		  if (operand_size == VMCS_FIELD_WIDTH_64BIT || operand_size == VMCS_FIELD_WIDTH_NATURAL_WIDTH)
 		  {
 			  VmWrite64(field, vmcs12_va, Value);
-			  HYPERPLATFORM_LOG_DEBUG("VMWRITE: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, (ULONG64)Value);
+			  HYPERPLATFORM_LOG_DEBUG_SAFE("VMWRITE: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, (ULONG64)Value);
 		  }
 
 		  VMSucceed(&guest_context->flag_reg);
@@ -2923,13 +2999,19 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
   VOID VmlaunchEmulate(GuestContext* guest_context)
   {
 	  PROCESSOR_NUMBER  procnumber = { 0 };
-	  ULONG			  vcpu_index = KeGetCurrentProcessorNumberEx(&procnumber);
+	  NestedVmm* vm = GetCurrentCPU();
 	  VmxStatus		  status;
 	  do {
-		  //not in vmx mode
-		  if (!g_vcpus[vcpu_index]->inVMX)
+		  if(!vm)
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMWRITE: VMXON is required ! \r\n"));
+			  DumpVcpu();
+			  HYPERPLATFORM_COMMON_DBG_BREAK();
+			  break;
+		  }
+		  //not in vmx mode
+		  if (!vm->inVMX)
+		  {
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: VMXON is required ! \r\n"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
@@ -2938,7 +3020,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //CR0.PE = 0;
 		  if (!IsGuestInProtectedMode())
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMWRITE: Please running in Protected Mode ! \r\n"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: Please running in Protected Mode ! \r\n"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
@@ -2948,7 +3030,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //RFLAGS.VM = 1
 		  if (IsGuestInVirtual8086())
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMWRITE: Guest is running in virtual-8086 mode ! \r\n"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: Guest is running in virtual-8086 mode ! \r\n"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
@@ -2961,7 +3043,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 			  //If CS.L == 0 , means compability mode (32bit addressing), CS.L == 1 is 64bit mode , default operand is 32bit
 			  if (!IsGuestinCompatibliltyMode())
 			  {
-				  HYPERPLATFORM_LOG_DEBUG(("VMWRITE: Guest is IA-32e mode but not in 64bit mode ! \r\n"));
+				  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: Guest is IA-32e mode but not in 64bit mode ! \r\n"));
 				  //#UD
 				  ThrowInvalidCodeException();
 				  break;
@@ -2970,13 +3052,13 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //Get Guest CPL
 		  if (GetGuestCPL() > 0)
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMLAUNCH: Need running in Ring - 0 ! \r\n")); 	  //#gp
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMLAUNCH: Need running in Ring - 0 ! \r\n")); 	  //#gp
 			  ThrowGerneralFaultInterrupt();
 			  break;
 		  }
 
 
-		  ENTER_GUEST_MODE(g_vcpus[vcpu_index]);
+		  ENTER_GUEST_MODE(vm);
 
 		  /*
 		  if (!g_vcpus[vcpu_index]->inRoot)
@@ -2989,12 +3071,12 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //Get vmcs02 / vmcs12
 		
 
-		  auto    vmcs02_pa = g_vcpus[vcpu_index]->vmcs02_pa;
-		  auto	  vmcs12_pa = g_vcpus[vcpu_index]->vmcs12_pa;
+		  auto    vmcs02_pa = vm->vmcs02_pa;
+		  auto	  vmcs12_pa = vm->vmcs12_pa;
 
 		  if (!vmcs02_pa || !vmcs12_pa)
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMLAUNCH: VMCS still not loaded ! \r\n"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMLAUNCH: VMCS still not loaded ! \r\n"));
 			  VMfailInvalid(&guest_context->flag_reg);
 			  break;
 		  }
@@ -3050,11 +3132,11 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  if (VmxStatus::kOk != (status = static_cast<VmxStatus>(__vmx_vmlaunch())))
 		  {
 			  VmxInstructionError error2 = static_cast<VmxInstructionError>(UtilVmRead(VmcsField::kVmInstructionError));
-			  HYPERPLATFORM_LOG_DEBUG("Error vmclear error code :%x , %x ", status, error2);
+			  HYPERPLATFORM_LOG_DEBUG_SAFE("Error vmclear error code :%x , %x ", status, error2);
 			  HYPERPLATFORM_COMMON_DBG_BREAK();
 		  }
 
-		  HYPERPLATFORM_LOG_DEBUG("Error vmclear error code :%x , %x ", 0, 0); 
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("Error vmclear error code :%x , %x ", 0, 0); 
 		  return;
 	  } while (FALSE);
 
@@ -3068,13 +3150,19 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 	  do
 	  {
 		  PROCESSOR_NUMBER  procnumber = { 0 };
-		  ULONG			  vcpu_index = KeGetCurrentProcessorNumberEx(&procnumber);
+		  NestedVmm* vm = GetCurrentCPU();
 
-		  HYPERPLATFORM_LOG_DEBUG("----Start Emulate VMRESUME---");
-		  //not in vmx mode
-		  if (!g_vcpus[vcpu_index]->inVMX)
+		  if (!vm)
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMWRITE: VMXON is required ! \r\n"));
+			  DumpVcpu();
+			  HYPERPLATFORM_COMMON_DBG_BREAK();
+			  break;
+		  }
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("----Start Emulate VMRESUME---");
+		  //not in vmx mode
+		  if (!vm->inVMX)
+		  {
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: VMXON is required ! \r\n"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
@@ -3083,7 +3171,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //CR0.PE = 0;
 		  if (!IsGuestInProtectedMode())
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMWRITE: Please running in Protected Mode ! \r\n"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: Please running in Protected Mode ! \r\n"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
@@ -3093,7 +3181,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //RFLAGS.VM = 1
 		  if (IsGuestInVirtual8086())
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMWRITE: Guest is running in virtual-8086 mode ! \r\n"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: Guest is running in virtual-8086 mode ! \r\n"));
 			  //#UD
 			  ThrowInvalidCodeException();
 			  break;
@@ -3106,7 +3194,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 			  //If CS.L == 0 , means compability mode (32bit addressing), CS.L == 1 is 64bit mode , default operand is 32bit
 			  if (!IsGuestinCompatibliltyMode())
 			  {
-				  HYPERPLATFORM_LOG_DEBUG(("VMWRITE: Guest is IA-32e mode but not in 64bit mode ! \r\n"));
+				  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: Guest is IA-32e mode but not in 64bit mode ! \r\n"));
 				  //#UD
 				  ThrowInvalidCodeException();
 				  break;
@@ -3115,20 +3203,20 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  //Get Guest CPL
 		  if (GetGuestCPL() > 0)
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMLAUNCH: Need running in Ring - 0 ! \r\n")); 	  //#gp
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMLAUNCH: Need running in Ring - 0 ! \r\n")); 	  //#gp
 			  ThrowGerneralFaultInterrupt();
 			  break;
 		  }
 
+		  
+		  ENTER_GUEST_MODE(vm);
 
-		  ENTER_GUEST_MODE(g_vcpus[vcpu_index]);
-
-		  auto    vmcs02_pa = g_vcpus[vcpu_index]->vmcs02_pa;
-		  auto	  vmcs12_pa = g_vcpus[vcpu_index]->vmcs12_pa;
+		  auto    vmcs02_pa = vm->vmcs02_pa;
+		  auto	  vmcs12_pa = vm->vmcs12_pa;
 
 		  if (!vmcs02_pa || !vmcs12_pa)
 		  {
-			  HYPERPLATFORM_LOG_DEBUG(("VMLAUNCH: VMCS still not loaded ! \r\n"));
+			  HYPERPLATFORM_LOG_DEBUG_SAFE(("VMLAUNCH: VMCS still not loaded ! \r\n"));
 			  VMfailInvalid(&guest_context->flag_reg);
 			  break;
 		  }
@@ -3136,6 +3224,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 
 
 		  PrintVMCS();
+
 
 		  auto    vmcs02_va = (ULONG64)UtilVaFromPa(vmcs02_pa);
 		  auto    vmcs12_va = (ULONG64)UtilVaFromPa(vmcs12_pa);
@@ -3156,6 +3245,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 
 		  HYPERPLATFORM_LOG_DEBUG("vmcs02_va: %I64X", vmcs12_va);
 
+		  vmx_restore_guest_msrs(vm);
 
 		  //Prepare VMCS01 Host / Control Field
 		  PrepareHostAndControlField(vmcs12_va, vmcs02_pa, FALSE);
@@ -3164,6 +3254,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  VM Guest state field Start
 		  */ 
 		  FillGuestFieldFromVMCS12(vmcs12_va);
+
 
 		  /*
 		  VM Guest state field End
@@ -3188,15 +3279,30 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  // it must be collpased, such as, INT 3 breakpoint handler
 		  // it will call SAWPGS, and anythings won't swapped, since 
 		  // they are same, so we need to clarify and avoid this situation. 
-		  if (UtilReadMsr(Msr::kIa32KernelGsBase) == UtilVmRead(VmcsField::kGuestGsBase)) 
-		  {
-			  UtilWriteMsr(Msr::kIa32KernelGsBase, UtilReadMsr(Msr::kIa32GsBase)); 
-		  } 
+
 
 		  HYPERPLATFORM_COMMON_DBG_BREAK();
 	  } while (FALSE);
   }
-   
+
+  //----------------------------------------------------------------------------------------------------------------//
+  VOID VmptrstEmulate(GuestContext* guest_context)
+  {
+	  do
+	  {
+		  PROCESSOR_NUMBER	procnumber = {};
+		  ULONG64				InstructionPointer = { UtilVmRead64(VmcsField::kGuestRip) };
+		  ULONG64				StackPointer = { UtilVmRead64(VmcsField::kGuestRsp) };
+		  ULONG64				vmcs12_region_pa = *(PULONG64)DecodeVmclearOrVmptrldOrVmptrstOrVmxon(guest_context);
+		  ULONG64				vmcs12_region_va = 0;
+		  ULONG				vcpu_index = KeGetCurrentProcessorNumberEx(&procnumber);
+		  
+		  __vmx_vmptrst(&vmcs12_region_va);
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("[kVmptrst]: current_vmcs : %I64X", vmcs12_region_va);
+		  VMSucceed(&guest_context->flag_reg);
+	  } while (FALSE);
+  }
+
   //----------------------------------------------------------------------------------------------------------------//
 
   _Use_decl_annotations_ static void VmmpHandleVmx(GuestContext *guest_context) {
@@ -3233,12 +3339,17 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  VmptrldEmulate(guest_context);
 	  }
 	  break;
-
+	  
+	  case VmxExitReason::kVmptrst:
+	  {
+		  VmptrstEmulate(guest_context);
+	  }
+	  break;
 	  /// TODO:
 	  case VmxExitReason::kVmoff:
 	  {
 		  VMSucceed(&guest_context->flag_reg);
-		  HYPERPLATFORM_LOG_DEBUG("nested vmxoff \r\n");
+		  HYPERPLATFORM_LOG_DEBUG_SAFE("nested vmxoff \r\n");
 	  }
 	  break;
 	  /*

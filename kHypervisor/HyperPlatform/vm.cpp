@@ -279,8 +279,14 @@ _Use_decl_annotations_ static void *VmpBuildMsrBitmap() {
   // Activate VM-exit for RDMSR against all MSRs
   const auto bitmap_read_low = reinterpret_cast<UCHAR *>(msr_bitmap);
   const auto bitmap_read_high = bitmap_read_low + 1024;
+  const auto bitmap_write_low = bitmap_read_low + 2048;
+  const auto bitmap_write_high = bitmap_read_low + 3072;
+
   RtlFillMemory(bitmap_read_low, 1024, 0xff);   // read        0 -     1fff
   RtlFillMemory(bitmap_read_high, 1024, 0xff);  // read c0000000 - c0001fff
+  RtlFillMemory(bitmap_write_low, 1024, 0x0);   // write        0 -     1fff
+  RtlFillMemory(bitmap_write_high, 1024, 0x0);  // write c0000000 - c0001fff
+
 
   // Ignore IA32_MPERF (000000e7) and IA32_APERF (000000e8)
   RTL_BITMAP bitmap_read_low_header = {};
@@ -302,7 +308,16 @@ _Use_decl_annotations_ static void *VmpBuildMsrBitmap() {
   RtlInitializeBitMap(&bitmap_read_high_header,
                       reinterpret_cast<PULONG>(bitmap_read_high),
                       1024 * CHAR_BIT);
+  
   RtlClearBits(&bitmap_read_high_header, 0x101, 2);
+  /*
+  RTL_BITMAP bitmap_write_high_header = {};
+  RtlInitializeBitMap(&bitmap_write_high_header,
+	  reinterpret_cast<PULONG>(bitmap_write_high),
+	  1024 * CHAR_BIT);
+
+  RtlSetBits(&bitmap_write_high_header, 0x102, 1);
+  */
 
   return msr_bitmap;
 }

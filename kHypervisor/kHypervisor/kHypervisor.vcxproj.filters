@@ -37,6 +37,9 @@
     <ClCompile Include="..\HyperPlatform\hotplug_callback.cpp">
       <Filter>Source</Filter>
     </ClCompile>
+    <ClCompile Include="vmx.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\HyperPlatform\asm.h">
@@ -69,9 +72,6 @@
     <ClInclude Include="..\HyperPlatform\util.h">
       <Filter>Include</Filter>
     </ClInclude>
-    <ClInclude Include="..\HyperPlatform\vmcs.h">
-      <Filter>Include</Filter>
-    </ClInclude>
     <ClInclude Include="..\HyperPlatform\vm.h">
       <Filter>Include</Filter>
     </ClInclude>
@@ -89,6 +89,12 @@
     </ClInclude>
     <ClInclude Include="..\HyperPlatform\util_page_constants.h">
       <Filter>Source</Filter>
+    </ClInclude>
+    <ClInclude Include="vmx.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="vmcs.h">
+      <Filter>Include</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

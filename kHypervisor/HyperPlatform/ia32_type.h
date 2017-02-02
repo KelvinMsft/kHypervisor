@@ -1,4 +1,5 @@
 // Copyright (c) 2015-2016, tandasat. All rights reserved.
+// Copyright (c) 2016-2017, KelvinChan. All rights reserved.
 // Use of this source code is governed by a MIT-style license that can be
 // found in the LICENSE file.
 
@@ -81,6 +82,11 @@ static const SIZE_T kVmxMaxVmcsSize = 4096;
 /// this CPUID function code to indicate their existence. HyperPlatform follows
 /// this convention.
 static const ULONG32 kHyperVCpuidInterface = 0x40000001;
+
+
+//Declared by Intel 
+#define LONG_MODE_BUSY_TSS			 0xB				
+#define LONG_MODE_FREE_TSS			 0x9
 
 ////////////////////////////////////////////////////////////////////////////////
 //

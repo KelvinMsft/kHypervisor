@@ -1,4 +1,5 @@
 // Copyright (c) 2015-2016, tandasat. All rights reserved.
+// Copyright (c) 2016-2017, KelvinChan. All rights reserved.
 // Use of this source code is governed by a MIT-style license that can be
 // found in the LICENSE file.
 
@@ -44,6 +45,23 @@ struct ProcessorData {
   ULONG64 xsave_inst_mask;                  //!< A mask to save state components
   UCHAR fxsave_area[512 + 16];              //!< For fxsave (+16 for alignment)
 };
+
+typedef struct NestedVmm
+{
+	ULONG64   vmxon_region;
+	ULONG64   vmcs02_pa;				///VMCS02 , actual VMCS L1 will runs on
+	ULONG64   vmcs12_pa;				///VMCS12 , for L1's VMREAD and VMWRITE, as a shadow VMCS
+	ULONG64   vmcs01_pa;				///VMCS01 , Initial VMCS
+	ULONG     CpuNumber;				///VCPU number
+	BOOLEAN   blockINITsignal;			///NOT USED
+	BOOLEAN   blockAndDisableA20M;		///NOT USED
+	BOOLEAN   inVMX;					///is it in VMX mode 
+	BOOLEAN   inRoot;					///is it in root mode
+	USHORT	  kVirtualProcessorId;		///NOT USED
+	ULONG_PTR guest_gs_kernel_base;		///guest_gs_kernel_base
+
+}NestedVmm, *PNestedVmm;
+
 
 ////////////////////////////////////////////////////////////////////////////////
 //

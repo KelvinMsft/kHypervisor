@@ -151,6 +151,7 @@
     <ClCompile Include="..\HyperPlatform\\vm.cpp" />
     <ClCompile Include="vmcs.cpp" />
     <ClCompile Include="..\HyperPlatform\vmm.cpp" />
+    <ClCompile Include="vmx.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\HyperPlatform\asm.h" />
@@ -168,8 +169,9 @@
     <ClInclude Include="..\HyperPlatform\util.h" />
     <ClInclude Include="..\HyperPlatform\util_page_constants.h" />
     <ClInclude Include="..\HyperPlatform\vm.h" />
-    <ClInclude Include="..\HyperPlatform\vmcs.h" />
     <ClInclude Include="..\HyperPlatform\vmm.h" />
+    <ClInclude Include="vmcs.h" />
+    <ClInclude Include="vmx.h" />
   </ItemGroup>
   <ItemGroup>
     <MASM Include="..\HyperPlatform\Arch\x64\x64.asm">

@@ -1,4 +1,5 @@
 // Copyright (c) 2015-2016, tandasat. All rights reserved.
+// Copyright (c) 2016-2017, KelvinChan. All rights reserved.
 // Use of this source code is governed by a MIT-style license that can be
 // found in the LICENSE file.
 
@@ -134,7 +135,6 @@ _IRQL_requires_max_(PASSIVE_LEVEL) static bool VmpIsHyperPlatformInstalled();
 //
 // implementations
 //
-
 // Define GetSegmentLimit if it is not defined yet (it is only defined on x64)
 #if !defined(GetSegmentLimit)
 inline ULONG GetSegmentLimit(_In_ ULONG selector) {
@@ -833,17 +833,16 @@ _Use_decl_annotations_ static void VmpLaunchVm() {
     error_code = UtilVmRead(VmcsField::kVmInstructionError);
     HYPERPLATFORM_LOG_ERROR("VM_INSTRUCTION_ERROR = %d", error_code);
   }
-  HYPERPLATFORM_COMMON_DBG_BREAK();
 }
 
 // Returns access right of the segment specified by the SegmentSelector for VMX
-_Use_decl_annotations_ static ULONG VmpGetSegmentAccessRight(
-    USHORT segment_selector) {
+_Use_decl_annotations_ static ULONG VmpGetSegmentAccessRight(USHORT segment_selector) 
+{
   PAGED_CODE();
-
   VmxRegmentDescriptorAccessRight access_right = {};
   const SegmentSelector ss = {segment_selector};
-  if (segment_selector) {
+  if (segment_selector) 
+{
     auto native_access_right = AsmLoadAccessRightsByte(ss.all);
     native_access_right >>= 8;
     access_right.all = static_cast<ULONG>(native_access_right);

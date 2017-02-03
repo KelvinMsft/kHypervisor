@@ -1233,7 +1233,7 @@ VOID VmlaunchEmulate(GuestContext* guest_context)
 		//not in vmx mode
 		if (!vm->inVMX)
 		{
-			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: VMXON is required ! \r\n"));
+			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMLAUNCH: VMXON is required ! \r\n"));
 			//#UD
 			ThrowInvalidCodeException();
 			break;
@@ -1242,7 +1242,7 @@ VOID VmlaunchEmulate(GuestContext* guest_context)
 		//CR0.PE = 0;
 		if (!IsGuestInProtectedMode())
 		{
-			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: Please running in Protected Mode ! \r\n"));
+			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMLAUNCH: Please running in Protected Mode ! \r\n"));
 			//#UD
 			ThrowInvalidCodeException();
 			break;
@@ -1252,7 +1252,7 @@ VOID VmlaunchEmulate(GuestContext* guest_context)
 		//RFLAGS.VM = 1
 		if (IsGuestInVirtual8086())
 		{
-			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: Guest is running in virtual-8086 mode ! \r\n"));
+			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMLAUNCH: Guest is running in virtual-8086 mode ! \r\n"));
 			//#UD
 			ThrowInvalidCodeException();
 			break;
@@ -1265,7 +1265,7 @@ VOID VmlaunchEmulate(GuestContext* guest_context)
 			//If CS.L == 0 , means compability mode (32bit addressing), CS.L == 1 is 64bit mode , default operand is 32bit
 			if (!IsGuestinCompatibliltyMode())
 			{
-				HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: Guest is IA-32e mode but not in 64bit mode ! \r\n"));
+				HYPERPLATFORM_LOG_DEBUG_SAFE(("VMLAUNCH: Guest is IA-32e mode but not in 64bit mode ! \r\n"));
 				//#UD
 				ThrowInvalidCodeException();
 				break;
@@ -1342,11 +1342,11 @@ VOID VmlaunchEmulate(GuestContext* guest_context)
 		if (VmxStatus::kOk != (status = static_cast<VmxStatus>(__vmx_vmlaunch())))
 		{
 			VmxInstructionError error2 = static_cast<VmxInstructionError>(UtilVmRead(VmcsField::kVmInstructionError));
-			HYPERPLATFORM_LOG_DEBUG_SAFE("Error vmclear error code :%x , %x ", status, error2);
+			HYPERPLATFORM_LOG_DEBUG_SAFE("Error VMLAUNCH error code :%x , %x ", status, error2);
 			HYPERPLATFORM_COMMON_DBG_BREAK();
 		}
 
-		HYPERPLATFORM_LOG_DEBUG_SAFE("Error vmclear error code :%x , %x ", 0, 0);
+		HYPERPLATFORM_LOG_DEBUG_SAFE("Error VMLAUNCH error code :%x , %x ", 0, 0);
 		return;
 	} while (FALSE);
 

@@ -7,6 +7,7 @@
 #define NESTED_HYPERPLATFORM_VMX_H_
 #include <fltKernel.h>
 #include "..\HyperPlatform\vmm.h"
+#include "..\HyperPlatform\util.h"
 extern struct GuestContext;
 extern "C"
 {
@@ -55,6 +56,9 @@ BOOLEAN IsRootMode(
 );  
 void vmx_save_guest_msrs(
 	NestedVmm* vcpu
+);
+BOOLEAN VMExitEmulationTest(
+	VmExitInformation exit_reason
 );
 
 }

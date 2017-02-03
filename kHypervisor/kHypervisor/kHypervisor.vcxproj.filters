@@ -40,6 +40,9 @@
     <ClCompile Include="vmx.cpp">
       <Filter>Source</Filter>
     </ClCompile>
+    <ClCompile Include="vmx_common.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\HyperPlatform\asm.h">
@@ -94,6 +97,9 @@
       <Filter>Include</Filter>
     </ClInclude>
     <ClInclude Include="vmcs.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="vmx_common.h">
       <Filter>Include</Filter>
     </ClInclude>
   </ItemGroup>

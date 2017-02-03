@@ -10,7 +10,7 @@
 #include "..\HyperPlatform\vmm.h"
 #include "..\HyperPlatform\log.h"
 #include "..\HyperPlatform\common.h"
-
+#include "vmx_common.h"
 extern "C"
 {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,41 +21,16 @@ extern GpRegisters*  GetGpReg(GuestContext* guest_context);
 extern FlagRegister* GetFlagReg(GuestContext* guest_context);
 extern KIRQL		 GetGuestIrql(GuestContext* guest_context);
 
+NestedVmm* GetCurrentCPU(bool IsNested);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //// Marco
 ////
-#define MY_VMX_TPR_SHADOW            (1 <<  0)              /* TPR shadow */
-#define MY_VMX_VIRTUAL_NMI           (1 <<  1)              /* Virtual NMI */
-#define MY_VMX_APIC_VIRTUALIZATION   (1 <<  2)              /* APIC Access Virtualization */
-#define MY_VMX_WBINVD_VMEXIT         (1 <<  3)              /* WBINVD VMEXIT */
-#define MY_VMX_PERF_GLOBAL_CTRL      (1 <<  4)              /* Save/Restore MSR_PERF_GLOBAL_CTRL */
-#define MY_VMX_MONITOR_TRAP_FLAG     (1 <<  5)              /* Monitor trap Flag (MTF) */
-#define MY_VMX_X2APIC_VIRTUALIZATION (1 <<  6)              /* Virtualize X2APIC */
-#define MY_VMX_EPT                   (1 <<  7)              /* Extended Page Tables (EPT) */
-#define MY_VMX_VPID                  (1 <<  8)              /* VPID */
-#define MY_VMX_UNRESTRICTED_GUEST    (1 <<  9)              /* Unrestricted Guest */
-#define MY_VMX_PREEMPTION_TIMER      (1 << 10)              /* VMX preemption timer */
-#define MY_VMX_SAVE_DEBUGCTL_DISABLE (1 << 11)              /* Disable Save/Restore of MSR_DEBUGCTL */
-#define MY_VMX_PAT                   (1 << 12)              /* Save/Restore MSR_PAT */
-#define MY_VMX_EFER                  (1 << 13)              /* Save/Restore MSR_EFER */
-#define MY_VMX_DESCRIPTOR_TABLE_EXIT (1 << 14)              /* Descriptor Table VMEXIT */
-#define MY_VMX_PAUSE_LOOP_EXITING    (1 << 15)              /* Pause Loop Exiting */
-#define MY_VMX_EPTP_SWITCHING        (1 << 16)              /* EPTP switching (VM Function 0) */
-#define MY_VMX_EPT_ACCESS_DIRTY      (1 << 17)              /* Extended Page Tables (EPT) A/D Bits */
-#define MY_VMX_VINTR_DELIVERY        (1 << 18)              /* Virtual Interrupt Delivery */
-#define MY_VMX_POSTED_INSTERRUPTS    (1 << 19)              /* Posted Interrupts support - not implemented yet */
-#define MY_VMX_VMCS_SHADOWING        (1 << 20)              /* VMCS Shadowing */
-#define MY_VMX_EPT_EXCEPTION         (1 << 21)              /* EPT Violation (#VE) exception */
-#define MY_VMX_PML                   (1 << 22)              /* Page Modification Logging - not implemented yet */
-#define MY_VMX_TSC_SCALING           (1 << 23)              /* TSC Scaling */
- 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //// 
 //// Variable
 ////
-ULONG32				 g_vmx_extensions_bitmask;
 NestedVmm*	         g_vcpus[64] = {};
 volatile LONG		 g_vpid = 1;
 volatile LONG	     g_VM_Core_Count = 0;
@@ -75,28 +50,11 @@ enum VMX_state
 //// 
 //// Implementation
 ////
+
+
 VOID	LEAVE_GUEST_MODE(NestedVmm* vm) { vm->inRoot = TRUE; }
 VOID	ENTER_GUEST_MODE(NestedVmm* vm) { vm->inRoot = FALSE; }
 BOOLEAN IsRootMode(NestedVmm* vm) { return vm->inRoot; }
-
-
-//---------------------------------------------------------------------------------------------------------------------//
-void vmx_save_guest_msrs(NestedVmm* vcpu)
-{
-	/*
-	* We cannot cache SHADOW_GS_BASE while the VCPU runs, as it can
-	* be updated at any time via SWAPGS, which we cannot trap.
-	*/
-	vcpu->guest_gs_kernel_base = UtilReadMsr64(Msr::kIa32KernelGsBase);
-	HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Save GS base: %I64X \r\n ", vcpu->guest_gs_kernel_base);
-}
-//---------------------------------------------------------------------------------------------------------------------//
-void vmx_restore_guest_msrs(NestedVmm* vcpu)
-{
-	UtilWriteMsr64(Msr::kIa32KernelGsBase, vcpu->guest_gs_kernel_base);
-	HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Restore GS base: %I64X \r\n ", vcpu->guest_gs_kernel_base);
-}
-
 
 //---------------------------------------------------------------------------------------------------------------------//
 NestedVmm* GetCurrentCPU(bool IsNested = true)
@@ -155,348 +113,372 @@ void DumpVcpu()
 		}
 	}
 }
-//---------------------------------------------------------------------------------------------------------------------//
+//----------------------------------------------------------------------------------------------------------------------//
 /*
-VMsucceed:
-CF ¡û 0;
-PF ¡û 0;
-AF ¡û 0;
-ZF ¡û 0;
-SF ¡û 0;
-OF ¡û 0;
+Descritpion:
+
+1. Call before emulate a VMExit, Read All VMExit related-Information
+From VMCS0-2, And backup it into VMCS1-2, the purpose is for
+emulate VMExit,
+
+2. Actually the Emulation of VMExit is that we RESUME the L0 to L1,
+so when L1 make any VMREAD/WRITE,  will trap by us, we return a
+VMCS1-2 to its.
+
+Parameters:
+
+1. VMExit Reason
+2. Physical Address for VMCS1-2
+
 */
-VOID VMSucceed(FlagRegister *reg)
+VOID SaveExceptionInformationFromVmcs02(VmExitInformation exit_reason, ULONG64 vmcs12_va)
 {
-	reg->fields.cf = false;  // Error without status
-	reg->fields.pf = false;
-	reg->fields.af = false;
-	reg->fields.zf = false;  // Error without status
-	reg->fields.sf = false;
-	reg->fields.of = false;
-}
-//-----------------------------------------------------------------------------------------------------------------------------------------------------//
-/*
-VMfailInvalid:
-CF ¡û 1;
-PF ¡û 0;
-AF ¡û 0;
-ZF ¡û 0;
-SF ¡û 0;
-OF ¡û 0;
-*/
-VOID VMfailInvalid(FlagRegister *reg)
-{
-	reg->fields.cf = true;  // Error without status
-	reg->fields.pf = false;
-	reg->fields.af = false;
-	reg->fields.zf = false;  // Error without status
-	reg->fields.sf = false;
-	reg->fields.of = false;
-}
 
-
-//-----------------------------------------------------------------------------------------------------------------------------------------------------//
-/*
-VMfailValid(ErrorNumber):// executed only if there is a current VMCS
-CF ¡û 0;
-PF ¡û 0;
-AF ¡û 0;
-ZF ¡û 1;
-SF ¡û 0;
-OF ¡û 0;
-Set the VM-instruction error field to ErrorNumber;
-*/
-VOID VMfailValid(FlagRegister *reg, VmxInstructionError err)
-{
-	UNREFERENCED_PARAMETER(err);
-	reg->fields.cf = false;  // Error without status
-	reg->fields.pf = false;
-	reg->fields.af = false;
-	reg->fields.zf = true;  // Error without status
-	reg->fields.sf = false;
-	reg->fields.of = false;
-	//	Set the VM-instruction error field to ErrorNumber;
-}
-
-//-------------------------------------------------------------------------------------------------------------------------------------------------------//
-
-VOID VMfail(FlagRegister *reg, VmxInstructionError err)
-{
-	UNREFERENCED_PARAMETER(err);
-	//if and only if VMCS is current
-	//VMfailValid(reg, err);
-	//else
-	VMfailInvalid(reg);
-}
-
-//----------------------------------------------------------------------------------------------------------------//
-BOOLEAN IsGuestinPagingMode()
-{
-	Cr0 cr0 = { UtilVmRead64(VmcsField::kGuestCr0) };
-	return (cr0.fields.pg) ? TRUE : FALSE;
-}
-
-//----------------------------------------------------------------------------------------------------------------//
-BOOLEAN IsGuestSetNumericErrorBit()
-{
-	Cr0 cr0 = { UtilVmRead64(VmcsField::kGuestCr0) };
-	return (cr0.fields.ne) ? TRUE : FALSE;
-}
-
-//----------------------------------------------------------------------------------------------------------------//
-BOOLEAN IsGuestInProtectedMode()
-{
-	Cr0 cr0 = { UtilVmRead64(VmcsField::kGuestCr0) };
-	return (cr0.fields.pe) ? TRUE : FALSE;
-}
-
-//----------------------------------------------------------------------------------------------------------------//
-BOOLEAN IsGuestSupportVMX()
-{
-	Cr4 cr4 = { UtilVmRead64(VmcsField::kGuestCr4) };
-	return (cr4.fields.vmxe) ? TRUE : FALSE;
-}
-
-//----------------------------------------------------------------------------------------------------------------//
-BOOLEAN IsGuestInVirtual8086()
-{
-	FlagRegister flags = { UtilVmRead64(VmcsField::kGuestRflags) };
-	return (flags.fields.vm) ? TRUE : FALSE;
-}
-
-//----------------------------------------------------------------------------------------------------------------//
-SegmentDescriptor* GetSegmentDesctiptor(SegmentSelector ss, ULONG64 gdtBase)
-{
-	return	reinterpret_cast<SegmentDescriptor *>(gdtBase + ss.fields.index * sizeof(SegmentDescriptor));
-}
-
-
-//----------------------------------------------------------------------------------------------------------------//
-BOOLEAN IsGuestinCompatibliltyMode()
-{
-	SegmentSelector ss = { UtilVmRead64(VmcsField::kGuestCsSelector) };
-	ULONG64 gdtBase = UtilVmRead64(VmcsField::kGuestGdtrBase);
-	SegmentDescriptor* ds = GetSegmentDesctiptor(ss, gdtBase);
-	return (ds->fields.l) ? TRUE : FALSE;
-}
-
-
-//----------------------------------------------------------------------------------------------------------------//
-USHORT GetGuestCPL()
-{
-	const SegmentSelector ss = { UtilVmRead64(VmcsField::kGuestCsSelector) };
-	USHORT ret = ss.fields.rpl;
-	return ret;
-}
-
-//----------------------------------------------------------------------------------------------------------------//
-BOOLEAN IsGuestInIA32eMode()
-{
-	MSR_EFER efer = { UtilVmRead64(VmcsField::kGuestIa32Efer) };
-	return (efer.fields.LMA) ? TRUE : FALSE;
-}
-
-//----------------------------------------------------------------------------------------------------------------//
-///See: Layout of IA32_FEATURE_CONTROL
-BOOLEAN IsLockbitClear()
-{
-	Ia32FeatureControlMsr vmx_feature_control = { UtilReadMsr64(Msr::kIa32FeatureControl) };
-	if (vmx_feature_control.fields.lock) {
-		return TRUE;
-	}
-	return FALSE;
-}
-//----------------------------------------------------------------------------------------------------------------//
-///See:  Layout of IA32_FEATURE_CONTROL
-BOOLEAN IsGuestEnableVMXOnInstruction()
-{
-	Ia32FeatureControlMsr vmx_feature_control = { UtilReadMsr64(Msr::kIa32FeatureControl) };
-	if (vmx_feature_control.fields.enable_vmxon) {
-		return TRUE;
-	}
-	return FALSE;
-}
-//----------------------------------------------------------------------------------------------------------------//
-BOOLEAN CheckPhysicalAddress(ULONG64 vmxon_region_pa)
-{
-	Ia32VmxBasicMsr vmx_basic = { UtilReadMsr64(Msr::kIa32VmxBasic) };
-	if (vmx_basic.fields.supported_ia64)
-	{
-		//0xFFFFFFFF00001234 & 0xFFFFFFFF00000000 != 0
-		if ((CHECK_BOUNDARY_FOR_IA32 & vmxon_region_pa) != 0)
-		{
-			return FALSE;
-		}
-	}
-	return TRUE;
-}
-
-//----------------------------------------------------------------------------------------------------------------//
-ULONG GetVMCSRevisionIdentifier()
-{
-	Ia32VmxBasicMsr vmx_basic = { UtilReadMsr64(Msr::kIa32VmxBasic) };
-	return vmx_basic.fields.revision_identifier;
-}
-
-
-
-
-//----------------------------------------------------------------------------------------------------------------//
-BOOLEAN CheckPageAlgined(ULONG64 address)
-{
-	//i.e. 0x22341000 & 0xFFF = 0 , it is page aligned ,
-	//	   0x22342355 &	0xFFF = 0x355 , it is not aglined
-	return ((address & CHECK_PAGE_ALGINMENT) == 0);
-}
-
-
-//----------------------------------------------------------------------------------------------------------------//
-VOID FillEventInjection(ULONG32 interruption_type, ULONG32 exception_vector, BOOLEAN isDeliver_error_code, BOOLEAN isValid)
-{
-	VmEntryInterruptionInformationField inject = {};
-	inject.fields.interruption_type = interruption_type;
-	inject.fields.vector = exception_vector;
-	inject.fields.deliver_error_code = isDeliver_error_code;
-	inject.fields.valid = isValid;
-	UtilVmWrite(VmcsField::kVmEntryIntrInfoField, inject.all);
-}
-
-//----------------------------------------------------------------------------------------------------------------//
-VOID ThrowInvalidCodeException()
-{
-	FillEventInjection((ULONG32)InterruptionType::kHardwareException, (ULONG32)InterruptionVector::kInvalidOpcodeException, FALSE, TRUE);
-}
-
-
-//----------------------------------------------------------------------------------------------------------------//
-VOID ThrowGerneralFaultInterrupt()
-{
-	FillEventInjection((ULONG32)InterruptionType::kHardwareException, (ULONG32)InterruptionVector::kGeneralProtectionException, FALSE, TRUE);
-}
-
-
-ULONG64 DecodeVmclearOrVmptrldOrVmptrstOrVmxon(GuestContext* guest_context)
-{
-	const VMInstructionQualificationForClearOrPtrldOrPtrstOrVmxon exit_qualification =
-	{
-		static_cast<ULONG32>(UtilVmRead(VmcsField::kVmxInstructionInfo))
+	const VmExitInterruptionInformationField exception = {
+		static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrInfo))
 	};
 
-	// Calculate an address to be used for the instruction
-	const auto displacement = UtilVmRead(VmcsField::kExitQualification);
-	// Base
-	ULONG_PTR base_value = 0;
-	if (!exit_qualification.fields.BaseRegInvalid)
+	ULONG_PTR vmexit_qualification = UtilVmRead(VmcsField::kExitQualification);
+
+	VmWrite32(VmcsField::kVmExitIntrInfo, vmcs12_va, exception.all);
+	VmWrite32(VmcsField::kVmExitReason, vmcs12_va, exit_reason.all);
+	VmWrite32(VmcsField::kExitQualification, vmcs12_va, vmexit_qualification);
+	VmWrite32(VmcsField::kVmExitInstructionLen, vmcs12_va, UtilVmRead(VmcsField::kVmExitInstructionLen));
+	VmWrite32(VmcsField::kVmInstructionError, vmcs12_va, UtilVmRead(VmcsField::kVmInstructionError));
+	VmWrite32(VmcsField::kVmExitIntrErrorCode, vmcs12_va, UtilVmRead(VmcsField::kVmExitIntrErrorCode));
+	VmWrite32(VmcsField::kIdtVectoringInfoField, vmcs12_va, UtilVmRead(VmcsField::kIdtVectoringInfoField));
+	VmWrite32(VmcsField::kIdtVectoringErrorCode, vmcs12_va, UtilVmRead(VmcsField::kIdtVectoringErrorCode));
+	VmWrite32(VmcsField::kVmxInstructionInfo, vmcs12_va, UtilVmRead(VmcsField::kVmxInstructionInfo));
+
+}
+//---------------------------------------------------------------------------------------------------------------------//
+
+/*
+Descritpion:
+1.  Call before emulate a VMExit, Read All Guest Field From VMCS0-2,
+And backup into VMCS1-2, the purpose is for emulated VMExit, but
+actually we RESUME the VM to L1, when L1 make any VMREAD/WRITE,
+we return a VMCS1-2 to its.
+
+Parameters:
+1.	Physical Address for VMCS1-2
+
+*/
+VOID SaveGuestFieldFromVmcs02(ULONG64 vmcs12_va)
+{
+	//all nested vm-exit should record 
+
+	VmWrite64(VmcsField::kGuestRip, vmcs12_va, UtilVmRead(VmcsField::kGuestRip));
+	VmWrite64(VmcsField::kGuestRsp, vmcs12_va, UtilVmRead(VmcsField::kGuestRsp));
+	VmWrite64(VmcsField::kGuestCr3, vmcs12_va, UtilVmRead(VmcsField::kGuestCr3));
+	VmWrite64(VmcsField::kGuestCr0, vmcs12_va, UtilVmRead(VmcsField::kGuestCr0));
+	VmWrite64(VmcsField::kGuestCr4, vmcs12_va, UtilVmRead(VmcsField::kGuestCr4));
+	VmWrite64(VmcsField::kGuestDr7, vmcs12_va, UtilVmRead(VmcsField::kGuestDr7));
+	VmWrite64(VmcsField::kGuestRflags, vmcs12_va, UtilVmRead(VmcsField::kGuestRflags));
+
+
+	VmWrite16(VmcsField::kGuestEsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestEsSelector));
+	VmWrite16(VmcsField::kGuestCsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestCsSelector));
+	VmWrite16(VmcsField::kGuestSsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestSsSelector));
+	VmWrite16(VmcsField::kGuestDsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestDsSelector));
+	VmWrite16(VmcsField::kGuestFsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestFsSelector));
+	VmWrite16(VmcsField::kGuestGsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestGsSelector));
+	VmWrite16(VmcsField::kGuestLdtrSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestLdtrSelector));
+	VmWrite16(VmcsField::kGuestTrSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestTrSelector));
+
+	VmWrite32(VmcsField::kGuestEsLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestEsLimit));
+	VmWrite32(VmcsField::kGuestCsLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestCsLimit));
+	VmWrite32(VmcsField::kGuestSsLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestSsLimit));
+	VmWrite32(VmcsField::kGuestDsLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestDsLimit));
+	VmWrite32(VmcsField::kGuestFsLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestFsLimit));
+	VmWrite32(VmcsField::kGuestGsLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestGsLimit));
+	VmWrite32(VmcsField::kGuestLdtrLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestLdtrLimit));
+	VmWrite32(VmcsField::kGuestTrLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestTrLimit));
+	VmWrite32(VmcsField::kGuestGdtrLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestGdtrLimit));
+	VmWrite32(VmcsField::kGuestIdtrLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestIdtrLimit));
+
+	VmWrite32(VmcsField::kGuestEsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestEsArBytes));
+	VmWrite32(VmcsField::kGuestCsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestCsArBytes));
+	VmWrite32(VmcsField::kGuestSsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestSsArBytes));
+	VmWrite32(VmcsField::kGuestDsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestDsArBytes));
+	VmWrite32(VmcsField::kGuestFsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestFsArBytes));
+	VmWrite32(VmcsField::kGuestGsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestGsArBytes));
+	VmWrite32(VmcsField::kGuestLdtrArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestLdtrArBytes));
+
+	VmWrite32(VmcsField::kGuestTrArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestTrArBytes));
+
+	VmWrite32(VmcsField::kGuestInterruptibilityInfo, vmcs12_va, UtilVmRead(VmcsField::kGuestInterruptibilityInfo));
+	VmWrite32(VmcsField::kGuestActivityState, vmcs12_va, UtilVmRead(VmcsField::kGuestActivityState));
+	VmWrite32(VmcsField::kGuestSysenterCs, vmcs12_va, UtilVmRead(VmcsField::kGuestSysenterCs));
+
+	VmWrite64(VmcsField::kGuestSysenterEsp, vmcs12_va, UtilVmRead(VmcsField::kGuestSysenterEsp));
+	VmWrite64(VmcsField::kGuestSysenterEip, vmcs12_va, UtilVmRead(VmcsField::kGuestSysenterEip));
+	VmWrite64(VmcsField::kGuestPendingDbgExceptions, vmcs12_va, UtilVmRead(VmcsField::kGuestPendingDbgExceptions));
+	VmWrite64(VmcsField::kGuestEsBase, vmcs12_va, UtilVmRead(VmcsField::kGuestEsBase));
+	VmWrite64(VmcsField::kGuestCsBase, vmcs12_va, UtilVmRead(VmcsField::kGuestCsBase));
+	VmWrite64(VmcsField::kGuestSsBase, vmcs12_va, UtilVmRead(VmcsField::kGuestSsBase));
+	VmWrite64(VmcsField::kGuestDsBase, vmcs12_va, UtilVmRead(VmcsField::kGuestDsBase));
+	VmWrite64(VmcsField::kGuestFsBase, vmcs12_va, UtilVmRead(VmcsField::kGuestFsBase));
+	VmWrite64(VmcsField::kGuestGsBase, vmcs12_va, UtilVmRead(VmcsField::kGuestGsBase));
+	VmWrite64(VmcsField::kGuestLdtrBase, vmcs12_va, UtilVmRead(VmcsField::kGuestLdtrBase));
+	VmWrite64(VmcsField::kGuestTrBase, vmcs12_va, UtilVmRead(VmcsField::kGuestTrBase));
+	VmWrite64(VmcsField::kGuestGdtrBase, vmcs12_va, UtilVmRead(VmcsField::kGuestGdtrBase));
+	VmWrite64(VmcsField::kGuestIdtrBase, vmcs12_va, UtilVmRead(VmcsField::kGuestIdtrBase));
+
+	/*
+	VmWrite64(VmcsField::kGuestPdptr0, vmcs12_va, UtilVmRead(VmcsField::kGuestPdptr0));
+	VmWrite64(VmcsField::kGuestPdptr1, vmcs12_va, UtilVmRead(VmcsField::kGuestPdptr1));
+	VmWrite64(VmcsField::kGuestPdptr2, vmcs12_va, UtilVmRead(VmcsField::kGuestPdptr2));
+	VmWrite64(VmcsField::kGuestPdptr3, vmcs12_va, UtilVmRead(VmcsField::kGuestPdptr3));
+	*/
+}
+//---------------------------------------------------------------------------------------------------------------------//
+/*
+Descritpion:
+1.  Emulate a VMExit, After Saving All Guest Field and Exception Information
+From VMCS0-2, And backup into VMCS1-2, We need to modify VMCS0-1 and get
+ready to back VMCS0-1.
+
+The VMCS0-1's Guest RIP, RSP,CR0,CR3,CR4 should be modified to VMCS1-2's Host RIP
+(Since L1 will fill the VMExit Handler when initialization stage)
+
+Parameters:
+1.	Physical Address for VMCS1-2
+
+*/
+VOID EmulateVmExit(ULONG64 vmcs01, ULONG64 vmcs12_va)
+{
+
+	VmxStatus status;
+
+	ULONG64   VMCS_VMEXIT_HANDLER = 0;
+	ULONG64   VMCS_VMEXIT_STACK = 0;
+	ULONG64   VMCS_VMEXIT_RFLAGs = 0;
+	ULONG64   VMCS_VMEXIT_CR4 = 0;
+	ULONG64   VMCS_VMEXIT_CR3 = 0;
+	ULONG64   VMCS_VMEXIT_CR0 = 0;
+
+
+	ULONG64   VMCS_VMEXIT_CS = 0;
+	ULONG64   VMCS_VMEXIT_SS = 0;
+	ULONG64   VMCS_VMEXIT_DS = 0;
+	ULONG64   VMCS_VMEXIT_ES = 0;
+	ULONG64   VMCS_VMEXIT_FS = 0;
+	ULONG64   VMCS_VMEXIT_GS = 0;
+	ULONG64   VMCS_VMEXIT_TR = 0;
+
+	ULONG32   VMCS_VMEXIT_SYSENTER_CS = 0;
+	ULONG64   VMCS_VMEXIT_SYSENTER_RIP = 0;
+	ULONG64   VMCS_VMEXIT_SYSENTER_RSP = 0;
+
+
+	ULONG_PTR  VMCS_VMEXIT_HOST_FS = 0;
+	ULONG_PTR  VMCS_VMEXIT_HOST_GS = 0;
+	ULONG_PTR  VMCS_VMEXIT_HOST_TR = 0;
+
+	//VMCS01 guest rip == VMCS12 host rip (should be)
+	const VmExitInformation exit_reason = { static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitReason)) };
+
+	const VmExitInterruptionInformationField exception = { static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrInfo)) };
+
+	PrintVMCS();
+	/*
+	1. Print about trapped reason
+	*/
+	HYPERPLATFORM_LOG_DEBUG_SAFE("[EmulateVmExit]VMCS id %x", UtilVmRead(VmcsField::kVirtualProcessorId));
+	HYPERPLATFORM_LOG_DEBUG_SAFE("[EmulateVmExit]Trapped by %I64X ", UtilVmRead(VmcsField::kGuestRip));
+	HYPERPLATFORM_LOG_DEBUG_SAFE("[EmulateVmExit]Trapped Reason: %I64X ", exit_reason.fields.reason);
+	HYPERPLATFORM_LOG_DEBUG_SAFE("[EmulateVmExit]Trapped Intrreupt: %I64X ", exception.fields.interruption_type);
+	HYPERPLATFORM_LOG_DEBUG_SAFE("[EmulateVmExit]Trapped Intrreupt vector: %I64X ", exception.fields.vector);
+	HYPERPLATFORM_LOG_DEBUG_SAFE("[EmulateVmExit]Trapped kVmExitInstructionLen: %I64X ", UtilVmRead(VmcsField::kVmExitInstructionLen));
+
+	if (VmxStatus::kOk != (status = static_cast<VmxStatus>(__vmx_vmptrld(&vmcs01))))
 	{
-		const auto register_used = VmmpSelectRegister(exit_qualification.fields.BaseReg, guest_context);
-		base_value = *register_used;
+		VmxInstructionError error = static_cast<VmxInstructionError>(UtilVmRead(VmcsField::kVmInstructionError));
+		HYPERPLATFORM_LOG_DEBUG_SAFE("Error vmptrld error code :%x , %x", status, error);
 	}
 
-	// Index
-	ULONG_PTR index_value = 0;
+	//Read from vmcs12_va get it host vmexit handler
+	VmRead64(VmcsField::kHostRip, vmcs12_va, &VMCS_VMEXIT_HANDLER);
+	VmRead64(VmcsField::kHostRsp, vmcs12_va, &VMCS_VMEXIT_STACK);
+	VmRead64(VmcsField::kHostCr0, vmcs12_va, &VMCS_VMEXIT_CR0);
+	VmRead64(VmcsField::kHostCr3, vmcs12_va, &VMCS_VMEXIT_CR3);
+	VmRead64(VmcsField::kHostCr4, vmcs12_va, &VMCS_VMEXIT_CR4);
 
-	if (!exit_qualification.fields.IndexRegInvalid)
+
+	VmRead64(VmcsField::kHostCsSelector, vmcs12_va, &VMCS_VMEXIT_CS);
+	VmRead64(VmcsField::kHostSsSelector, vmcs12_va, &VMCS_VMEXIT_SS);
+	VmRead64(VmcsField::kHostDsSelector, vmcs12_va, &VMCS_VMEXIT_DS);
+	VmRead64(VmcsField::kHostEsSelector, vmcs12_va, &VMCS_VMEXIT_ES);
+	VmRead64(VmcsField::kHostFsSelector, vmcs12_va, &VMCS_VMEXIT_FS);
+	VmRead64(VmcsField::kHostGsSelector, vmcs12_va, &VMCS_VMEXIT_GS);
+	VmRead64(VmcsField::kHostTrSelector, vmcs12_va, &VMCS_VMEXIT_TR);
+
+
+	VmRead32(VmcsField::kHostIa32SysenterCs, vmcs12_va, &VMCS_VMEXIT_SYSENTER_CS);
+	VmRead64(VmcsField::kHostIa32SysenterEip, vmcs12_va, &VMCS_VMEXIT_SYSENTER_RSP);
+	VmRead64(VmcsField::kHostIa32SysenterEsp, vmcs12_va, &VMCS_VMEXIT_SYSENTER_RIP);
+
+
+	VmRead64(VmcsField::kHostFsBase, vmcs12_va, &VMCS_VMEXIT_HOST_FS);
+	VmRead64(VmcsField::kHostGsBase, vmcs12_va, &VMCS_VMEXIT_HOST_GS);
+	VmRead64(VmcsField::kHostTrBase, vmcs12_va, &VMCS_VMEXIT_HOST_TR);
+
+	VmRead64(VmcsField::kGuestRflags, vmcs12_va, &VMCS_VMEXIT_RFLAGs);
+
+	//Write VMCS01 for L1's VMExit handler
+	UtilVmWrite(VmcsField::kGuestRflags, VMCS_VMEXIT_RFLAGs);
+	UtilVmWrite(VmcsField::kGuestRip, VMCS_VMEXIT_HANDLER);
+	UtilVmWrite(VmcsField::kGuestRsp, VMCS_VMEXIT_STACK);
+	UtilVmWrite(VmcsField::kGuestCr0, VMCS_VMEXIT_CR0);
+	UtilVmWrite(VmcsField::kGuestCr3, VMCS_VMEXIT_CR3);
+	UtilVmWrite(VmcsField::kGuestCr4, VMCS_VMEXIT_CR4);
+	UtilVmWrite(VmcsField::kGuestDr7, 0x400);
+
+	UtilVmWrite(VmcsField::kGuestCsSelector, VMCS_VMEXIT_CS);
+	UtilVmWrite(VmcsField::kGuestSsSelector, VMCS_VMEXIT_SS);
+	UtilVmWrite(VmcsField::kGuestDsSelector, VMCS_VMEXIT_DS);
+	UtilVmWrite(VmcsField::kGuestEsSelector, VMCS_VMEXIT_ES);
+	UtilVmWrite(VmcsField::kGuestFsSelector, VMCS_VMEXIT_FS);
+	UtilVmWrite(VmcsField::kGuestGsSelector, VMCS_VMEXIT_GS);
+	UtilVmWrite(VmcsField::kGuestTrSelector, VMCS_VMEXIT_TR);
+
+	UtilVmWrite(VmcsField::kGuestSysenterCs, VMCS_VMEXIT_SYSENTER_CS);
+	UtilVmWrite(VmcsField::kGuestSysenterEsp, VMCS_VMEXIT_SYSENTER_RSP);
+	UtilVmWrite(VmcsField::kGuestSysenterEip, VMCS_VMEXIT_SYSENTER_RIP);
+
+	UtilVmWrite(VmcsField::kGuestFsBase, VMCS_VMEXIT_HOST_FS);
+	UtilVmWrite(VmcsField::kGuestGsBase, VMCS_VMEXIT_HOST_GS);
+	UtilVmWrite(VmcsField::kGuestTrBase, VMCS_VMEXIT_HOST_TR);
+
+	VmWrite32(VmcsField::kVmEntryIntrInfoField, vmcs12_va, 0);
+	VmWrite32(VmcsField::kVmEntryExceptionErrorCode, vmcs12_va, 0);
+
+	UtilVmWrite(VmcsField::kVmEntryIntrInfoField, 0);
+	UtilVmWrite(VmcsField::kVmEntryExceptionErrorCode, 0);
+
+	PrintVMCS();
+	PrintVMCS12(vmcs12_va);
+}
+//---------------------------------------------------------------------------------------------------------------------//
+//Nested breakpoint dispatcher
+VOID VmExitDispatcher(NestedVmm* vcpu, ULONG64 vmcs12_va)
+{
+	const VmExitInformation exit_reason = { static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitReason)) };
+	if (!vcpu->vmcs01_pa)
 	{
-		const auto register_used = VmmpSelectRegister(exit_qualification.fields.IndxeReg, guest_context);
+		HYPERPLATFORM_COMMON_DBG_BREAK();
+	}
 
-		index_value = *register_used;
-		switch (static_cast<VMXScaling>(exit_qualification.fields.scalling))
+	if (vmcs12_va)
+	{
+		EmulateVmExit(vcpu->vmcs01_pa, vmcs12_va);
+	}
+}
+//------------------------------------------------------------------------------------------------------------
+BOOLEAN VMExitEmulationTest(VmExitInformation exit_reason)
+{
+	/*
+	We need to emulate the exception if and only if the vCPU mode is Guest Mode ,
+	and only the exception is somethings we want to redirect to L1 for handle it.
+	IsRootMode:
+	{
+	Root Mode:
+	- if the Guest's vCPU is root mode , that means he dun expected the action will be trap.
+	so that action should not give its VMExit handler, otherwise.
+	Guest Mode:
+	- If the Guest's vCPU is in guest mode, that means he expected the action will be trapped
+	And handle by its VMExit handler
+	}
+
+	We desginated the L1 wants to handle any breakpoint exception but the others.
+	So that we only nested it for testing purpose.
+	*/
+
+
+	ULONG64 vmcs12_va = 0;
+	NestedVmm* vm = NULL;
+	BOOLEAN	ret;
+
+	// Unit-Testing with nested INT 3 exception
+
+	do
+	{
+		const VmExitInterruptionInformationField exception =
 		{
-		case VMXScaling::kNoScaling:
-			index_value = index_value;
-			break;
-		case VMXScaling::kScaleBy2:
-			index_value = index_value * 2;
-			break;
-		case VMXScaling::kScaleBy4:
-			index_value = index_value * 4;
-			break;
-		case VMXScaling::kScaleBy8:
-			index_value = index_value * 8;
-			break;
-		default:
+			static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrInfo))
+		};
+
+		vm = GetCurrentCPU(false);
+		if (!vm)
+		{
+			ret = FALSE;
 			break;
 		}
-	}
 
-	auto operation_address = base_value + index_value + displacement;
-
-	if (static_cast<VMXAaddressSize>(exit_qualification.fields.address_size) == VMXAaddressSize::k32bit)
-	{
-		operation_address &= MAXULONG;
-	}
-	const auto guest_cr3 = UtilVmRead(VmcsField::kGuestCr3);
-	const auto vmm_cr3 = __readcr3();
-	HYPERPLATFORM_LOG_DEBUG_SAFE("operation_address= %I64x + %I64x + %I64x = %I64x \r\n", base_value, index_value, displacement, operation_address);
- 	return operation_address;
-
-}
-
-
-//----------------------------------------------------------------------------------------------------------------//
-//What functions we support for nested
-void init_vmx_extensions_bitmask(void)
-{
-	g_vmx_extensions_bitmask |=
-		MY_VMX_VIRTUAL_NMI |
-		MY_VMX_TPR_SHADOW |
-		MY_VMX_APIC_VIRTUALIZATION |
-		MY_VMX_WBINVD_VMEXIT |
-		MY_VMX_PREEMPTION_TIMER |
-		MY_VMX_PAT |
-		MY_VMX_EFER |
-		MY_VMX_EPT |
-		MY_VMX_VPID |
-		MY_VMX_UNRESTRICTED_GUEST |
-		MY_VMX_DESCRIPTOR_TABLE_EXIT |
-		MY_VMX_X2APIC_VIRTUALIZATION |
-		MY_VMX_PAUSE_LOOP_EXITING |
-		MY_VMX_EPT_ACCESS_DIRTY |
-		MY_VMX_VINTR_DELIVERY |
-		MY_VMX_VMCS_SHADOWING |
-		MY_VMX_EPTP_SWITCHING |
-		MY_VMX_EPT_EXCEPTION |
-		MY_VMX_SAVE_DEBUGCTL_DISABLE |
-		MY_VMX_PERF_GLOBAL_CTRL;
-
-}
-
-//----------------------------------------------------------------------------------------------------------------//
-//Is ept-pointer validate
-BOOLEAN is_eptptr_valid(ULONG64 eptptr)
-{
-	// [2:0] EPT paging-structure memory type
-	//       0 = Uncacheable (UC)
-	//       6 = Write-back (WB)
-	ULONG32 memtype = eptptr & 7;
-	if (memtype != (ULONG32)memory_type::kUncacheable && memtype != (ULONG32)memory_type::kWriteBack)
-		return FALSE;
-
-	// [5:3] This value is 1 less than the EPT page-walk length
-	ULONG32 walk_length = (eptptr >> 3) & 7;
-	if (walk_length != 3)
-		return FALSE;
-
-	// [6]   EPT A/D Enable
-	if (!(g_vmx_extensions_bitmask & MY_VMX_EPT_ACCESS_DIRTY))
-	{
-		if (eptptr & 0x40)
+		// Since VMXON, but VMPTRLD 
+		if (!vm->vmcs02_pa || !vm->vmcs12_pa || vm->vmcs12_pa == ~0x0 || vm->vmcs02_pa == ~0x0)
 		{
-			HYPERPLATFORM_LOG_DEBUG_SAFE(("is_eptptr_valid: EPTPTR A/D enabled when not supported by CPU"));
-			return FALSE;
+			HYPERPLATFORM_LOG_DEBUG_SAFE("cannot find vmcs \r\n");
+			ret = FALSE;
+			break;
 		}
-	}
 
-#define BX_EPTPTR_RESERVED_BITS 0xf80 /* bits 11:7 are reserved */
-	if (eptptr & BX_EPTPTR_RESERVED_BITS) {
-		HYPERPLATFORM_LOG_DEBUG_SAFE(("is_eptptr_valid: EPTPTR reserved bits set"));
-		return FALSE;
-	}
+		vmcs12_va = (ULONG64)UtilVaFromPa(vm->vmcs12_pa);
+		// Test L0 exception
+		if (static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kPageFaultException)
+		{
+			ret = FALSE;
+			break;
+		}
+		// Test L1 exception
+		if (!IsRootMode(vm) &&
+			static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kBreakpointException)
+		{
+			if (vmcs12_va)
+			{
+				SaveGuestFieldFromVmcs02(vmcs12_va);
+				SaveExceptionInformationFromVmcs02(exit_reason, vmcs12_va);
+			}
+			// Emulated VMExit 
+			LEAVE_GUEST_MODE(vm);
 
-	if (!CheckPhysicalAddress(eptptr))
-		return FALSE;
-	return TRUE;
+			vmx_save_guest_msrs(vm);
+
+			VmExitDispatcher(vm, vmcs12_va);
+
+			ENTER_GUEST_MODE(vm);
+
+			ret = TRUE;
+			break;
+		}
+		else
+		{
+			ret = FALSE;
+			break;
+		}
+
+	} while (0);
+
+	return ret;
 }
+//---------------------------------------------------------------------------------------------------------------------//
+void vmx_save_guest_msrs(NestedVmm* vcpu)
+{
+	/*
+	* We cannot cache SHADOW_GS_BASE while the VCPU runs, as it can
+	* be updated at any time via SWAPGS, which we cannot trap.
+	*/
+	vcpu->guest_gs_kernel_base = UtilReadMsr64(Msr::kIa32KernelGsBase);
+	HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Save GS base: %I64X \r\n ", vcpu->guest_gs_kernel_base);
+}
+//---------------------------------------------------------------------------------------------------------------------//
+void vmx_restore_guest_msrs(NestedVmm* vcpu)
+{
+	UtilWriteMsr64(Msr::kIa32KernelGsBase, vcpu->guest_gs_kernel_base);
+	HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Restore GS base: %I64X \r\n ", vcpu->guest_gs_kernel_base);
+}
+
 
 //---------------------------------------------------------------------------------------------------------------------//
 VOID VmxonEmulate(GuestContext* guest_context)

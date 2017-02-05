@@ -770,7 +770,6 @@ _Use_decl_annotations_ static void VmmpHandleLdtrOrTrAccess(
     case LdtrOrTrInstructionIdentity::kStr:
 	{
 		*selector = static_cast<USHORT>(UtilVmRead(VmcsField::kGuestTrSelector));
-		HYPERPLATFORM_LOG_DEBUG_SAFE("STR: %x GuestRip: %I64X ", *selector, UtilVmRead(VmcsField::kGuestRip));
 		break;
 	}
     case LdtrOrTrInstructionIdentity::kLldt:
@@ -779,7 +778,6 @@ _Use_decl_annotations_ static void VmmpHandleLdtrOrTrAccess(
     case LdtrOrTrInstructionIdentity::kLtr:
 	{
 		UtilVmWrite(VmcsField::kGuestTrSelector, *selector);
-		HYPERPLATFORM_LOG_DEBUG_SAFE("LTR: %x GuestRip: %I64X ", *selector, UtilVmRead(VmcsField::kGuestRip));
 		break;
 	}
 	default:

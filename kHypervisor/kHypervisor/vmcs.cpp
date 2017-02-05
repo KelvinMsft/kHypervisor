@@ -1004,9 +1004,9 @@ VOID PrepareHostAndControlField(ULONG_PTR vmcs12_va, ULONG_PTR vmcs02_pa, BOOLEA
 	//  Start Mixing Control field with VMCS01 and VMCS12 into VMCS02
 	/*
 	16 bit Control Field
-	*/
-	VmRead16(VmcsField::kVirtualProcessorId, vmcs12_va, &my_guest_vpid);
-	UtilVmWrite(VmcsField::kVirtualProcessorId, my_guest_vpid);
+	*/ 
+
+	UtilVmWrite(VmcsField::kVirtualProcessorId, guest_vpid);
 
 	/*
 	32 bit Control Field

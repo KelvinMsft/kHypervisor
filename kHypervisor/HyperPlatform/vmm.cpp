@@ -242,7 +242,7 @@ _Use_decl_annotations_ bool __stdcall VmmVmExitHandler(VmmInitialStack *stack)
   }
 
   // Restore guest's context
-  if (guest_context.irql < DISPATCH_LEVEL && !IsEmulateVMExit)
+  if (guest_context.irql < DISPATCH_LEVEL)
   {
     KeLowerIrql(guest_context.irql);
   }

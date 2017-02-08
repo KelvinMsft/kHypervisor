@@ -44,8 +44,7 @@ struct ProcessorData {
   void* xsave_area;                         //!< VA to store state components
   ULONG64 xsave_inst_mask;                  //!< A mask to save state components
   UCHAR fxsave_area[512 + 16];              //!< For fxsave (+16 for alignment)
-};
-
+}; 
 typedef struct NestedVmm
 {
 	ULONG64   vmxon_region;
@@ -58,8 +57,13 @@ typedef struct NestedVmm
 	BOOLEAN   inVMX;					///is it in VMX mode 
 	BOOLEAN   inRoot;					///is it in root mode
 	USHORT	  kVirtualProcessorId;		///NOT USED
-	ULONG_PTR guest_gs_kernel_base;		///guest_gs_kernel_base
+	ULONG_PTR guest_gs_kernel_base;		///guest_gs_kernel_base 
+	ULONG_PTR guest_IA32_STAR;		///IA32_STAR 
+	ULONG_PTR guest_IA32_LSTAR;		///IA32_LSTAR 
+	ULONG_PTR guest_IA32_FMASK;		///IA32_FMASK
 
+	ULONG_PTR guest_irql;
+	ULONG_PTR guest_cr8;
 }NestedVmm, *PNestedVmm;
 
 

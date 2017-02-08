@@ -29,13 +29,13 @@ extern "C" {
 //
 BOOLEAN IsEmulateVMExit = FALSE;
 // Whether VM-exit recording is enabled
-static const long kVmmpEnableRecordVmExit = true;
+static const long kVmmpEnableRecordVmExit = false;
 
 // How many events should be recorded per a processor
-static const long kVmmpNumberOfRecords = 5;
+static const long kVmmpNumberOfRecords = 100;
 
 // How many processors are supported for recording
-static const long kVmmpNumberOfProcessors = 2;
+static const long kVmmpNumberOfProcessors = 4;
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -242,7 +242,7 @@ _Use_decl_annotations_ bool __stdcall VmmVmExitHandler(VmmInitialStack *stack)
   }
 
   // Restore guest's context
-  if (guest_context.irql < DISPATCH_LEVEL && !IsEmulateVMExit)
+  if (guest_context.irql < DISPATCH_LEVEL)
   {
     KeLowerIrql(guest_context.irql);
   }
@@ -279,16 +279,14 @@ _Use_decl_annotations_ static void VmmpHandleVmExit(GuestContext *guest_context)
 	 {
 		  index = 0;
 	 }
-  }
-
+  } 
   IsEmulateVMExit = FALSE;
 
   if (VMExitEmulationTest(exit_reason))
   {
 	  IsEmulateVMExit = TRUE;
 	  return;
-  }
-
+  } 
    switch (exit_reason.fields.reason) 
   {
 	case VmxExitReason::kExceptionOrNmi:
@@ -424,10 +422,11 @@ _Use_decl_annotations_ static void VmmpHandleException(
       const auto error_code =
           static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrErrorCode));
 
-      VmmpInjectInterruption(interruption_type, vector, true, error_code);
-       
+      VmmpInjectInterruption(interruption_type, vector, true, error_code); 
+    }
+ 
+	else {
 
-    } else {
       HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 0, 0,
                                      0);
     }
@@ -437,9 +436,10 @@ _Use_decl_annotations_ static void VmmpHandleException(
     if (vector == InterruptionVector::kBreakpointException) {
       // #BP
       VmmpInjectInterruption(interruption_type, vector, false, 0);
-      HYPERPLATFORM_LOG_INFO_SAFE("L0 GuestIp= %p, #BP ", guest_context->ip);
+      //HYPERPLATFORM_LOG_INFO_SAFE("L0 GuestIp= %p, #BP ", guest_context->ip);
       UtilVmWrite(VmcsField::kVmEntryInstructionLen, 1);
 
+   
     } else {
       HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 0, 0,
                                      0);
@@ -767,21 +767,15 @@ _Use_decl_annotations_ static void VmmpHandleLdtrOrTrAccess(
     case LdtrOrTrInstructionIdentity::kSldt:
       *selector = static_cast<USHORT>(UtilVmRead(VmcsField::kGuestLdtrSelector));
       break;
-    case LdtrOrTrInstructionIdentity::kStr:
-	{
+    case LdtrOrTrInstructionIdentity::kStr: 
 		*selector = static_cast<USHORT>(UtilVmRead(VmcsField::kGuestTrSelector));
-		HYPERPLATFORM_LOG_DEBUG_SAFE("STR: %x GuestRip: %I64X ", *selector, UtilVmRead(VmcsField::kGuestRip));
-		break;
-	}
+		break; 
     case LdtrOrTrInstructionIdentity::kLldt:
       UtilVmWrite(VmcsField::kGuestLdtrSelector, *selector);
       break;
-    case LdtrOrTrInstructionIdentity::kLtr:
-	{
+    case LdtrOrTrInstructionIdentity::kLtr: 
 		UtilVmWrite(VmcsField::kGuestTrSelector, *selector);
-		HYPERPLATFORM_LOG_DEBUG_SAFE("LTR: %x GuestRip: %I64X ", *selector, UtilVmRead(VmcsField::kGuestRip));
-		break;
-	}
+		break; 
 	default:
 		break;
   }
@@ -976,8 +970,13 @@ _Use_decl_annotations_ static void VmmpHandleCrAccess(
           if (UtilIsX86Pae()) {
             UtilLoadPdptes(UtilVmRead(VmcsField::kGuestCr3));
           }
-          UtilVmWrite(VmcsField::kGuestCr0, *register_used);
-          UtilVmWrite(VmcsField::kCr0ReadShadow, *register_used);
+		  const Cr0 cr0_fixed0 = { UtilReadMsr(Msr::kIa32VmxCr0Fixed0) };
+		  const Cr0 cr0_fixed1 = { UtilReadMsr(Msr::kIa32VmxCr0Fixed1) };
+		  Cr0 cr0 = { *register_used };
+		  cr0.all &= cr0_fixed1.all;
+		  cr0.all |= cr0_fixed0.all;
+		  UtilVmWrite(VmcsField::kGuestCr0, cr0.all);
+		  UtilVmWrite(VmcsField::kCr0ReadShadow, cr0.all);
           break;
         }
 
@@ -1001,8 +1000,13 @@ _Use_decl_annotations_ static void VmmpHandleCrAccess(
             UtilLoadPdptes(UtilVmRead(VmcsField::kGuestCr3));
           }
           UtilInvvpidAllContext();
-          UtilVmWrite(VmcsField::kGuestCr4, *register_used);
-          UtilVmWrite(VmcsField::kCr4ReadShadow, *register_used);
+		  const Cr4 cr4_fixed0 = { UtilReadMsr(Msr::kIa32VmxCr4Fixed0) };
+		  const Cr4 cr4_fixed1 = { UtilReadMsr(Msr::kIa32VmxCr4Fixed1) };
+		  Cr4 cr4 = { *register_used };
+		  cr4.all &= cr4_fixed1.all;
+		  cr4.all |= cr4_fixed0.all;
+		  UtilVmWrite(VmcsField::kGuestCr4, cr4.all);
+		  UtilVmWrite(VmcsField::kCr4ReadShadow, cr4.all);
           break;
         }
 
@@ -1523,7 +1527,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  case VmxExitReason::kVmoff:
 		  {
 		
-			  HYPERPLATFORM_LOG_DEBUG_SAFE("nested vmxoff \r\n");
+			  VmxoffEmulate(guest_context);
 			  VMSucceed(&guest_context->flag_reg);
 		  }
 		  break;

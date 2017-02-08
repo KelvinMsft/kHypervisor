@@ -21,7 +21,10 @@ extern GpRegisters*  GetGpReg(GuestContext* guest_context);
 extern FlagRegister* GetFlagReg(GuestContext* guest_context);
 extern KIRQL		 GetGuestIrql(GuestContext* guest_context);
 
-NestedVmm* GetCurrentCPU(bool IsNested);
+void				 SaveGuestCr8(NestedVmm* vcpu);
+void				 SaveGuestMsrs(NestedVmm* vcpu);
+
+NestedVmm*			 GetCurrentCPU(bool IsNested);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //// Marco
@@ -224,6 +227,8 @@ VOID SaveGuestFieldFromVmcs02(ULONG64 vmcs12_va)
 	VmWrite64(VmcsField::kGuestTrBase, vmcs12_va, UtilVmRead(VmcsField::kGuestTrBase));
 	VmWrite64(VmcsField::kGuestGdtrBase, vmcs12_va, UtilVmRead(VmcsField::kGuestGdtrBase));
 	VmWrite64(VmcsField::kGuestIdtrBase, vmcs12_va, UtilVmRead(VmcsField::kGuestIdtrBase));
+	
+	VmWrite64(VmcsField::kGuestIa32Efer, vmcs12_va, UtilVmRead(VmcsField::kGuestIa32Efer));
 
 	/*
 	VmWrite64(VmcsField::kGuestPdptr0, vmcs12_va, UtilVmRead(VmcsField::kGuestPdptr0));
@@ -285,13 +290,14 @@ VOID EmulateVmExit(ULONG64 vmcs01, ULONG64 vmcs12_va)
 	/*
 	1. Print about trapped reason
 	*/
+	/*
 	HYPERPLATFORM_LOG_DEBUG_SAFE("[EmulateVmExit]VMCS id %x", UtilVmRead(VmcsField::kVirtualProcessorId));
 	HYPERPLATFORM_LOG_DEBUG_SAFE("[EmulateVmExit]Trapped by %I64X ", UtilVmRead(VmcsField::kGuestRip));
 	HYPERPLATFORM_LOG_DEBUG_SAFE("[EmulateVmExit]Trapped Reason: %I64X ", exit_reason.fields.reason);
 	HYPERPLATFORM_LOG_DEBUG_SAFE("[EmulateVmExit]Trapped Intrreupt: %I64X ", exception.fields.interruption_type);
 	HYPERPLATFORM_LOG_DEBUG_SAFE("[EmulateVmExit]Trapped Intrreupt vector: %I64X ", exception.fields.vector);
 	HYPERPLATFORM_LOG_DEBUG_SAFE("[EmulateVmExit]Trapped kVmExitInstructionLen: %I64X ", UtilVmRead(VmcsField::kVmExitInstructionLen));
-
+	*/
 	if (VmxStatus::kOk != (status = static_cast<VmxStatus>(__vmx_vmptrld(&vmcs01))))
 	{
 		VmxInstructionError error = static_cast<VmxInstructionError>(UtilVmRead(VmcsField::kVmInstructionError));
@@ -357,8 +363,8 @@ VOID EmulateVmExit(ULONG64 vmcs01, ULONG64 vmcs12_va)
 	UtilVmWrite(VmcsField::kVmEntryIntrInfoField, 0);
 	UtilVmWrite(VmcsField::kVmEntryExceptionErrorCode, 0);
 
-	PrintVMCS();
-	PrintVMCS12(vmcs12_va);
+	 PrintVMCS();
+	 PrintVMCS12(vmcs12_va);
 }
 //---------------------------------------------------------------------------------------------------------------------//
 //Nested breakpoint dispatcher
@@ -373,6 +379,7 @@ VOID VmExitDispatcher(NestedVmm* vcpu, ULONG64 vmcs12_va)
 	if (vmcs12_va)
 	{
 		EmulateVmExit(vcpu->vmcs01_pa, vmcs12_va);
+		HYPERPLATFORM_COMMON_DBG_BREAK();
 	}
 }
 //------------------------------------------------------------------------------------------------------------
@@ -419,7 +426,7 @@ BOOLEAN VMExitEmulationTest(VmExitInformation exit_reason)
 		// Since VMXON, but VMPTRLD 
 		if (!vm->vmcs02_pa || !vm->vmcs12_pa || vm->vmcs12_pa == ~0x0 || vm->vmcs02_pa == ~0x0)
 		{
-			HYPERPLATFORM_LOG_DEBUG_SAFE("cannot find vmcs \r\n");
+			//HYPERPLATFORM_LOG_DEBUG_SAFE("cannot find vmcs \r\n");
 			ret = FALSE;
 			break;
 		}
@@ -438,19 +445,16 @@ BOOLEAN VMExitEmulationTest(VmExitInformation exit_reason)
 			if (vmcs12_va)
 			{
 				SaveGuestFieldFromVmcs02(vmcs12_va);
-				SaveExceptionInformationFromVmcs02(exit_reason, vmcs12_va);
-			}
-			// Emulated VMExit 
-			LEAVE_GUEST_MODE(vm);
+				SaveExceptionInformationFromVmcs02(exit_reason, vmcs12_va); 
+				SaveGuestMsrs(vm);
+				SaveGuestCr8(vm);
 
-			vmx_save_guest_msrs(vm);
+				// Emulated VMExit 
+				LEAVE_GUEST_MODE(vm); 
+				VmExitDispatcher(vm, vmcs12_va); 
 
-			VmExitDispatcher(vm, vmcs12_va);
-
-			ENTER_GUEST_MODE(vm);
-
-			ret = TRUE;
-			break;
+				ret = TRUE;
+			} 
 		}
 		else
 		{
@@ -463,23 +467,41 @@ BOOLEAN VMExitEmulationTest(VmExitInformation exit_reason)
 	return ret;
 }
 //---------------------------------------------------------------------------------------------------------------------//
-void vmx_save_guest_msrs(NestedVmm* vcpu)
+void SaveGuestMsrs(NestedVmm* vcpu)
 {
 	/*
 	* We cannot cache SHADOW_GS_BASE while the VCPU runs, as it can
 	* be updated at any time via SWAPGS, which we cannot trap.
 	*/
 	vcpu->guest_gs_kernel_base = UtilReadMsr64(Msr::kIa32KernelGsBase);
-	HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Save GS base: %I64X \r\n ", vcpu->guest_gs_kernel_base);
+	vcpu->guest_IA32_STAR = UtilReadMsr(Msr::kIa32Star);
+	vcpu->guest_IA32_LSTAR	= UtilReadMsr(Msr::kIa32Lstar);
+	vcpu->guest_IA32_FMASK	= UtilReadMsr(Msr::kIa32Fmask); 
+	//HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Save GS base: %I64X \r\n ", vcpu->guest_gs_kernel_base);
 }
 //---------------------------------------------------------------------------------------------------------------------//
-void vmx_restore_guest_msrs(NestedVmm* vcpu)
+void RestoreGuestMsrs(NestedVmm* vcpu)
 {
 	UtilWriteMsr64(Msr::kIa32KernelGsBase, vcpu->guest_gs_kernel_base);
-	HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Restore GS base: %I64X \r\n ", vcpu->guest_gs_kernel_base);
+	UtilWriteMsr64(Msr::kIa32Star, vcpu->guest_IA32_STAR);
+	UtilWriteMsr64(Msr::kIa32Lstar, vcpu->guest_IA32_LSTAR);
+	UtilWriteMsr64(Msr::kIa32Fmask, vcpu->guest_IA32_FMASK);
+	//HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Restore GS base: %I64X \r\n ", vcpu->guest_gs_kernel_base);
 }
 
-
+//---------------------------------------------------------------------------------------------------------------------//
+void SaveGuestCr8(NestedVmm* vcpu)
+{
+	vcpu->guest_cr8 = __readcr8();
+	//HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Save cr8 : %I64X \r\n ", vcpu->guest_cr8);
+}
+//---------------------------------------------------------------------------------------------------------------------//
+void RestoreGuestCr8(NestedVmm* vcpu)
+{
+	__writecr8(vcpu->guest_cr8);
+	//HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Restore cr8 : %I64X \r\n ", __readcr8());
+}
+ 
 //---------------------------------------------------------------------------------------------------------------------//
 VOID VmxonEmulate(GuestContext* guest_context)
 {
@@ -653,7 +675,26 @@ VOID VmxonEmulate(GuestContext* guest_context)
 	} while (FALSE);
 }
 
+VOID VmxoffEmulate(
+	GuestContext* guest_context
+)
+{
+	do
+	{
+		NestedVmm*				vm = GetCurrentCPU();
 
+		if (!vm)
+		{
+			DumpVcpu();
+			HYPERPLATFORM_COMMON_DBG_BREAK();
+			break;
+		}
+		//load back vmcs01
+		__vmx_vmptrld(&vm->vmcs01_pa);
+		vm = { 0 };
+		HYPERPLATFORM_LOG_DEBUG_SAFE("VMXOff");
+	} while (0);
+}
 //---------------------------------------------------------------------------------------------------------------------//
 VOID VmclearEmulate(GuestContext* guest_context)
 {
@@ -909,7 +950,7 @@ VOID VmptrldEmulate(GuestContext* guest_context)
 		HYPERPLATFORM_LOG_DEBUG_SAFE("[VMPTRLD] Run Successfully \r\n");
 		HYPERPLATFORM_LOG_DEBUG_SAFE("[VMPTRLD] VMCS02 PA: %I64X VA: %I64X  \r\n", vmcs02_region_pa, vmcs02_region_va);
 		HYPERPLATFORM_LOG_DEBUG_SAFE("[VMPTRLD] VMCS12 PA: %I64X VA: %I64X \r\n", vmcs12_region_pa, vmcs12_region_va);
-		HYPERPLATFORM_LOG_DEBUG_SAFE("[VMPTRLD] VMCS01 PA: %I64X VA: %I64X \r\n", vm->vmcs01_pa);
+		HYPERPLATFORM_LOG_DEBUG_SAFE("[VMPTRLD] VMCS01 PA: %I64X VA: %I64X \r\n", vm->vmcs01_pa, UtilVaFromPa(vm->vmcs01_pa));
 		HYPERPLATFORM_LOG_DEBUG_SAFE("[VMPTRLD] Current Cpu: %x in Cpu Group : %x  Number: %x \r\n", vm->CpuNumber, procnumber.Group, procnumber.Number);
 
 		VMSucceed(GetFlagReg(guest_context));
@@ -1358,7 +1399,7 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 	{
 		PROCESSOR_NUMBER  procnumber = { 0 };
 		NestedVmm* vm = GetCurrentCPU();
-		HYPERPLATFORM_LOG_DEBUG_SAFE("----Start Emulate VMRESUME---");
+	//	HYPERPLATFORM_LOG_DEBUG_SAFE("----Start Emulate VMRESUME---");
 
 		if (!vm)
 		{
@@ -1369,7 +1410,7 @@ VOID VmresumeEmulate(GuestContext* guest_context)
  		//not in vmx mode
 		if (!vm->inVMX)
 		{
-			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: VMXON is required ! \r\n"));
+			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMRESUME: VMXON is required ! \r\n"));
 			//#UD
 			ThrowInvalidCodeException();
 			break;
@@ -1378,7 +1419,7 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 		//CR0.PE = 0;
 		if (!IsGuestInProtectedMode())
 		{
-			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: Please running in Protected Mode ! \r\n"));
+			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMRESUME: Please running in Protected Mode ! \r\n"));
 			//#UD
 			ThrowInvalidCodeException();
 			break;
@@ -1388,7 +1429,7 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 		//RFLAGS.VM = 1
 		if (IsGuestInVirtual8086())
 		{
-			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: Guest is running in virtual-8086 mode ! \r\n"));
+			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMRESUME: Guest is running in virtual-8086 mode ! \r\n"));
 			//#UD
 			ThrowInvalidCodeException();
 			break;
@@ -1401,7 +1442,7 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 			//If CS.L == 0 , means compability mode (32bit addressing), CS.L == 1 is 64bit mode , default operand is 32bit
 			if (!IsGuestinCompatibliltyMode())
 			{
-				HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: Guest is IA-32e mode but not in 64bit mode ! \r\n"));
+				HYPERPLATFORM_LOG_DEBUG_SAFE(("VMRESUME: Guest is IA-32e mode but not in 64bit mode ! \r\n"));
 				//#UD
 				ThrowInvalidCodeException();
 				break;
@@ -1410,7 +1451,7 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 		//Get Guest CPL
 		if (GetGuestCPL() > 0)
 		{
-			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMLAUNCH: Need running in Ring - 0 ! \r\n")); 	  //#gp
+			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMRESUME: Need running in Ring - 0 ! \r\n")); 	  //#gp
 			ThrowGerneralFaultInterrupt();
 			break;
 		}
@@ -1423,7 +1464,7 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 
 		if (!vmcs02_pa || !vmcs12_pa)
 		{
-			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMLAUNCH: VMCS still not loaded ! \r\n"));
+			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMRESUME: VMCS still not loaded ! \r\n"));
 			VMfailInvalid(GetFlagReg(guest_context));
 			break;
 		}
@@ -1437,8 +1478,9 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 		VmControlStructure* ptr = (VmControlStructure*)vmcs02_va;
 		ptr->revision_identifier = vmx_basic_msr.fields.revision_identifier;
 
-		//Restore some MSR we may need to ensure the consistency 
-		vmx_restore_guest_msrs(vm);
+		//Restore some MSR & cr8 we may need to ensure the consistency  
+		RestoreGuestMsrs(vm);
+		RestoreGuestCr8(vm);
 
 		//Prepare VMCS01 Host / Control Field
 		PrepareHostAndControlField(vmcs12_va, vmcs02_pa, FALSE);
@@ -1446,12 +1488,11 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 		/*
 		VM Guest state field Start
 		*/
-		PrepareGuestStateField(vmcs12_va);
-
-
+		PrepareGuestStateField(vmcs12_va); 
 		/*
 		VM Guest state field End
 		*/
+
 		//--------------------------------------------------------------------------------------//
 
 		/*
@@ -1467,9 +1508,7 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 		//--------------------------------------------------------------------------------------//
 
 
-		PrintVMCS(); 
-
-
+		PrintVMCS();   
 		HYPERPLATFORM_COMMON_DBG_BREAK();
 	} while (FALSE);
 }

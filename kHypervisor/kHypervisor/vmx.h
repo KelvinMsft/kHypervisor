@@ -16,6 +16,10 @@ VOID VmxonEmulate(
 	GuestContext* guest_context
 );
 
+VOID VmxoffEmulate(
+	GuestContext* guest_context
+);
+
 VOID VmclearEmulate(
 	GuestContext* guest_context
 );

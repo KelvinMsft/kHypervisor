@@ -439,8 +439,16 @@ _Use_decl_annotations_ static void VmmpHandleException(
       //HYPERPLATFORM_LOG_INFO_SAFE("L0 GuestIp= %p, #BP ", guest_context->ip);
       UtilVmWrite(VmcsField::kVmEntryInstructionLen, 1);
 
-   
-    } else {
+    }
+	else if (vector == InterruptionVector::kApcInterrupt)
+	{
+		const auto error_code =
+			static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrErrorCode));
+		HYPERPLATFORM_LOG_DEBUG("RIP: %i64x RSP: %i64x \r\n", UtilVmRead(VmcsField::kGuestRip), UtilVmRead(VmcsField::kGuestRsp));
+		VmmpInjectInterruption(interruption_type, vector, exception.fields.error_code_valid, error_code);
+	}
+	
+	else {
       HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 0, 0,
                                      0);
     }
@@ -1528,8 +1536,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		  {
 		
 			  VmxoffEmulate(guest_context);
-			  VMSucceed(&guest_context->flag_reg);
-		  }
+ 		  }
 		  break;
 		  /*
 		  ReadWrite on VMCS12 

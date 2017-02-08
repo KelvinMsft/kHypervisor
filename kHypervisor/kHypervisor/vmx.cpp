@@ -692,6 +692,9 @@ VOID VmxoffEmulate(
 		//load back vmcs01
 		__vmx_vmptrld(&vm->vmcs01_pa);
 		vm = { 0 };
+
+		VMSucceed(GetFlagReg(guest_context));
+
 		HYPERPLATFORM_LOG_DEBUG_SAFE("VMXOff");
 	} while (0);
 }

@@ -58,11 +58,10 @@ VOID ENTER_GUEST_MODE(
 BOOLEAN IsRootMode(
 	NestedVmm* vcpu
 );  
-void vmx_save_guest_msrs(
-	NestedVmm* vcpu
-);
+
 BOOLEAN VMExitEmulationTest(
-	VmExitInformation exit_reason
+	VmExitInformation exit_reason,
+	GuestContext* guest_context
 );
 
 }

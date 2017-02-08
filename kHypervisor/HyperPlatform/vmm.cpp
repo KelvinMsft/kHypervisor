@@ -192,6 +192,10 @@ KIRQL GetGuestIrql(GuestContext* guest_context)
 {
 	return guest_context->irql;
 }
+ULONG_PTR GetGuestCr8(GuestContext* guest_context)
+{
+	return guest_context->cr8;
+}
 
 extern VOID VMSucceed(FlagRegister* reg);
 extern NestedVmm* GetCurrentCPU(bool IsNested);
@@ -242,13 +246,13 @@ _Use_decl_annotations_ bool __stdcall VmmVmExitHandler(VmmInitialStack *stack)
   }
 
   // Restore guest's context
-  if (guest_context.irql < DISPATCH_LEVEL)
+  if (guest_context.irql < DISPATCH_LEVEL && ! IsEmulateVMExit )
   {
     KeLowerIrql(guest_context.irql);
   }
 
   // Apply possibly updated CR8 by the handler
-  if (IsX64()) {
+  if (IsX64() && !IsEmulateVMExit ) {
     __writecr8(guest_context.cr8);
   }
   return guest_context.vm_continue;
@@ -280,9 +284,8 @@ _Use_decl_annotations_ static void VmmpHandleVmExit(GuestContext *guest_context)
 		  index = 0;
 	 }
   } 
-  IsEmulateVMExit = FALSE;
-
-  if (VMExitEmulationTest(exit_reason))
+  IsEmulateVMExit = FALSE; 
+  if (VMExitEmulationTest(exit_reason, guest_context))
   {
 	  IsEmulateVMExit = TRUE;
 	  return;

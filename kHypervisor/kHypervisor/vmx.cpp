@@ -20,8 +20,8 @@ extern ULONG_PTR*	 VmmpSelectRegister(_In_ ULONG index, _In_ GuestContext *guest
 extern GpRegisters*  GetGpReg(GuestContext* guest_context);
 extern FlagRegister* GetFlagReg(GuestContext* guest_context);
 extern KIRQL		 GetGuestIrql(GuestContext* guest_context);
-
-void				 SaveGuestCr8(NestedVmm* vcpu);
+extern ULONG_PTR	 GetGuestCr8(GuestContext* guest_context);
+void				 SaveGuestCr8(NestedVmm* vcpu, ULONG_PTR cr8);
 void				 SaveGuestMsrs(NestedVmm* vcpu);
 
 NestedVmm*			 GetCurrentCPU(bool IsNested);
@@ -383,7 +383,7 @@ VOID VmExitDispatcher(NestedVmm* vcpu, ULONG64 vmcs12_va)
 	}
 }
 //------------------------------------------------------------------------------------------------------------
-BOOLEAN VMExitEmulationTest(VmExitInformation exit_reason)
+BOOLEAN VMExitEmulationTest(VmExitInformation exit_reason, GuestContext* guest_context)
 {
 	/*
 	We need to emulate the exception if and only if the vCPU mode is Guest Mode ,
@@ -447,7 +447,7 @@ BOOLEAN VMExitEmulationTest(VmExitInformation exit_reason)
 				SaveGuestFieldFromVmcs02(vmcs12_va);
 				SaveExceptionInformationFromVmcs02(exit_reason, vmcs12_va); 
 				SaveGuestMsrs(vm);
-				SaveGuestCr8(vm);
+				SaveGuestCr8(vm, GetGuestCr8(guest_context));
 
 				// Emulated VMExit 
 				LEAVE_GUEST_MODE(vm); 
@@ -486,20 +486,20 @@ void RestoreGuestMsrs(NestedVmm* vcpu)
 	UtilWriteMsr64(Msr::kIa32Star, vcpu->guest_IA32_STAR);
 	UtilWriteMsr64(Msr::kIa32Lstar, vcpu->guest_IA32_LSTAR);
 	UtilWriteMsr64(Msr::kIa32Fmask, vcpu->guest_IA32_FMASK);
-	//HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Restore GS base: %I64X \r\n ", vcpu->guest_gs_kernel_base);
+	HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Restore GS base: %I64X \r\n ", vcpu->guest_gs_kernel_base);
 }
 
 //---------------------------------------------------------------------------------------------------------------------//
-void SaveGuestCr8(NestedVmm* vcpu)
+void SaveGuestCr8(NestedVmm* vcpu, ULONG_PTR cr8)
 {
-	vcpu->guest_cr8 = __readcr8();
-	//HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Save cr8 : %I64X \r\n ", vcpu->guest_cr8);
+	vcpu->guest_cr8 = cr8;
+	HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Save cr8 : %I64X \r\n ", vcpu->guest_cr8);
 }
 //---------------------------------------------------------------------------------------------------------------------//
 void RestoreGuestCr8(NestedVmm* vcpu)
 {
 	__writecr8(vcpu->guest_cr8);
-	//HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Restore cr8 : %I64X \r\n ", __readcr8());
+	HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Restore cr8 : %I64X \r\n ", __readcr8());
 }
  
 //---------------------------------------------------------------------------------------------------------------------//
@@ -1512,7 +1512,11 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 
 
 		PrintVMCS();   
+		
 		HYPERPLATFORM_COMMON_DBG_BREAK();
+
+		__vmx_vmresume();
+
 	} while (FALSE);
 }
 

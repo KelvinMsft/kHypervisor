@@ -31,7 +31,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
 
  1. Compiled kHypervisor.sys and DdiMon.sys by kHypervisor and NestedHypervisor respectively
 
- 2. We only support Signle core temporarily. (We can set a multi-core by msconfig.exe)
+ 2. We supports a multi-core environment 
 
  3. Install DdiMon.sys and kHypervisor.sys by following command:
 

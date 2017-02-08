@@ -75,7 +75,7 @@
 /// Enables #HYPERPLATFORM_PERFORMANCE_MEASURE_THIS_SCOPE() which maeasures
 /// an elapesed time of the scope when set to non 0. Enabling it introduces
 /// nagative performance impact.
-#define HYPERPLATFORM_PERFORMANCE_ENABLE_PERFCOUNTER 0
+#define HYPERPLATFORM_PERFORMANCE_ENABLE_PERFCOUNTER 1
 
 /// A pool tag
 static const ULONG kHyperPlatformCommonPoolTag = 'PpyH';

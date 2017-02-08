@@ -139,7 +139,7 @@ AsmInitializeVm ENDP
 ; void __stdcall AsmVmmEntryPoint();
 AsmVmmEntryPoint PROC
     ; No need to save the flag registers since it is restored from the VMCS at
-    ; the time of vmresume. 
+    ; the time of vmresume.
     PUSHAQ                  ; -8 * 16
     mov rcx, rsp
     

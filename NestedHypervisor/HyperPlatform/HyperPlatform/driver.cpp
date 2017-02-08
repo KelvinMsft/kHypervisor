@@ -210,15 +210,15 @@ _Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
 
   HYPERPLATFORM_LOG_INFO("Start VM IRQL: %x \r\n", KeGetCurrentIrql());
   status = VmInitialization();
-  /*
+ 
   if (!NT_SUCCESS(status))
   {
      UtilTermination();
-   // PerfTermination();
-   // LogTermination();	
+     PerfTermination();
+    LogTermination();	
     return status;
   } 
-  */ 
+
   HYPERPLATFORM_LOG_INFO("break IRQL: %x \r\n", KeGetCurrentIrql()); 
    
   HYPERPLATFORM_LOG_INFO("The VMM has been installed. IRQL: %x \r\n", KeGetCurrentIrql());
@@ -234,9 +234,9 @@ _Use_decl_annotations_ static void DriverpDriverUnload(
   HYPERPLATFORM_COMMON_DBG_BREAK();
 
   VmTermination();
-  //UtilTermination();
-  //PerfTermination();
-  //LogTermination();
+  UtilTermination();
+  PerfTermination();
+  LogTermination();
 }
 
 // Test if the system is one of supported OS versions

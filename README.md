@@ -4,12 +4,13 @@ kHypervisor is an Open Source light-weighted Nested-Virtual Machine Monitor in W
 #Environment
 - Visual Studio 2015 update 3 
 - Windows SDK 10
-- Windowr Driver Kit 10
-- Single Core Processor (Temporarily)
+- Windowr Driver Kit 10 
 - VMware 12 with EPT environment. 
+- Supports Multi-core processor environment
+- Test environment with Windows 7 x64 sp1
 
 #Description
-The kHypervisor is not yet completed, and it will be rapidly update on progress, please using a windbg+vmware 12 for debugging kHypervisor.  
+The kHypervisor is not yet completed, and it will be rapidly update on progress, please using a windbg+vmware 12 for debugging kHypervisor.  
 
 #Progress
 2016-10-19 :  First commit, Supporting nested itself only, and nested software breakpoint exception from Level 2. And the nested-Vmm is able to dispatch this exception to L1 and help L1 to resume to L2.
@@ -22,13 +23,15 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
 
 2017-02-05 : VPID shared between VMCS0-1 and VMCS0-2, support multi-processor.
 
+2017-02-08 : Emulate VMExit behaviour has been slightly Changed. in case of L2 is trapped by L0, and L0 emulate VMExit to L1, this time of VMRESUME will not be restore a Guest CR8 and Guest IRQL, it is until VMRESUME by L1. (L0 helps L1 resume to L2) 
+
 #Installation
 
  - kHypervisor extended HyperPlatform which is created by Tandasat, it is a Nested-Virtual Machine Monitor, and DdiMon is one of Tandasat's product of HyperPlatform for test demo in kHypervisor.
 
  1. Compiled kHypervisor.sys and DdiMon.sys by kHypervisor and NestedHypervisor respectively
 
- 2. We only support Signle core temporarily. (We can set a multi-core by msconfig.exe)
+ 2. We supports a multi-core environment 
 
  3. Install DdiMon.sys and kHypervisor.sys by following command:
 

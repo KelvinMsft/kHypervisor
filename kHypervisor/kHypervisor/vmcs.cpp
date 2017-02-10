@@ -10,6 +10,7 @@
 #include "..\HyperPlatform\asm.h"
 #include "..\HyperPlatform\log.h"   
 
+//-------------------------------------------------------------------------------------------------------------------------------------//
 VOID PrintAllFieldForVmcs12(const char* func, ULONG64 vmcs12)
 {
 	HYPERPLATFORM_LOG_DEBUG_SAFE("------------------------- Start Print VMCS12 by %s -----------------------------", func);
@@ -17,17 +18,19 @@ VOID PrintAllFieldForVmcs12(const char* func, ULONG64 vmcs12)
 	HYPERPLATFORM_LOG_DEBUG_SAFE("------------------------- End Printed VMCS12 by %s -----------------------------", func);
 
 }
+//-------------------------------------------------------------------------------------------------------------------------------------//
 VOID PrintAllField(const char* func)
 {
 	HYPERPLATFORM_LOG_DEBUG_SAFE("------------------------- Start Printe Current VMCS by %s -----------------------------", func);
 	PrintControlField();
 	PrintHostStateField();
 	PrintGuestStateField();
-	PrintReadOnlyField(); 
+	PrintReadOnlyField();
 	HYPERPLATFORM_LOG_DEBUG_SAFE("kIa32GsBase: %I64X kIa32KernelGsBase: %I64X \r\n", UtilReadMsr(Msr::kIa32GsBase), UtilReadMsr(Msr::kIa32KernelGsBase));
 	HYPERPLATFORM_LOG_DEBUG_SAFE("------------------------- End Printed Current VMCS by %s -----------------------------", func);
-
 }
+//-------------------------------------------------------------------------------------------------------------------------------------//
+
 
 extern "C" 
 {
@@ -330,6 +333,7 @@ ULONG GetVMCSOffset(ULONG_PTR encoded)
 	}
 	return 0;
 }
+//-------------------------------------------------------------------------------------------------------------------------------------//
 
 VmcsField DecodeVmwriteOrVmRead(GpRegisters* guest_context, ULONG_PTR* Offset, ULONG_PTR* Value, BOOLEAN* RorM, ULONG_PTR* RegIndex, ULONG_PTR* MemAddr)
 {
@@ -425,45 +429,54 @@ VmcsField DecodeVmwriteOrVmRead(GpRegisters* guest_context, ULONG_PTR* Offset, U
 	return static_cast<VmcsField>(*Field);
 }
 
+//-------------------------------------------------------------------------------------------------------------------------------------//
 
 VOID VmRead64(VmcsField Field, ULONG_PTR base, PULONG64 destination)
 {
 	ULONG_PTR offset = GetVMCSOffset((ULONG64)Field);
 	*destination = *(PULONG64)(base + offset);
 }
+
+//-------------------------------------------------------------------------------------------------------------------------------------//
 VOID VmRead32(VmcsField Field, ULONG_PTR base, PULONG32 destination)
 {
 	ULONG_PTR offset = GetVMCSOffset((ULONG64)Field);
 	*destination = *(PULONG32)(base + offset);
 }
+//-------------------------------------------------------------------------------------------------------------------------------------//
 VOID VmRead16(VmcsField Field, ULONG_PTR base, PUSHORT destination)
 {
 	ULONG_PTR offset = GetVMCSOffset((ULONG64)Field);
 	*destination = *(PUSHORT)(base + offset);
 }
+//-------------------------------------------------------------------------------------------------------------------------------------//
 
 VOID VmWrite64(VmcsField Field, ULONG_PTR base, ULONG_PTR value)
 {
 	ULONG_PTR offset = GetVMCSOffset((ULONG64)Field);
 	*(PULONG64)(base + offset) = (ULONG64)value;
 }
+//-------------------------------------------------------------------------------------------------------------------------------------//
 
 VOID VmWrite32(VmcsField Field, ULONG_PTR base, ULONG_PTR value)
 {
 	ULONG_PTR offset = GetVMCSOffset((ULONG64)Field);
 	*(PULONG32)(base + offset) = (ULONG32)value;
 }
+//-------------------------------------------------------------------------------------------------------------------------------------//
 
 VOID VmWrite16(VmcsField Field, ULONG_PTR base, ULONG_PTR value)
 {
 	ULONG_PTR offset = GetVMCSOffset((ULONG64)Field);
 	*(PUSHORT)(base + offset) = (USHORT)value;
 }
+//-------------------------------------------------------------------------------------------------------------------------------------//
 
 BOOLEAN RegularCheck()
 {
 	return FALSE;
 }
+//-------------------------------------------------------------------------------------------------------------------------------------//
 
 BOOLEAN is_vmcs_field_supported(VmcsField encoding)
 {
@@ -713,6 +726,7 @@ BOOLEAN is_vmcs_field_supported(VmcsField encoding)
 		return 0;
 	}
 }
+//-------------------------------------------------------------------------------------------------------------------------------------//
 
 VOID BuildGernericVMCSMap()
 {
@@ -768,6 +782,7 @@ VOID BuildGernericVMCSMap()
 		}
 	}
 }
+//-------------------------------------------------------------------------------------------------------------------------------------//
 
 // Returns a base address of segment_descriptor
 _Use_decl_annotations_ static ULONG_PTR GetSegmentBaseByDescriptor(
@@ -786,6 +801,7 @@ _Use_decl_annotations_ static ULONG_PTR GetSegmentBaseByDescriptor(
 	}
 	return base;
 }
+//-------------------------------------------------------------------------------------------------------------------------------------//
 
 // Returns the segment descriptor corresponds to the SegmentSelector
 _Use_decl_annotations_ static SegmentDescriptor *GetSegmentDescriptor(
@@ -793,6 +809,7 @@ _Use_decl_annotations_ static SegmentDescriptor *GetSegmentDescriptor(
 	const SegmentSelector ss = { segment_selector };
 	return reinterpret_cast<SegmentDescriptor *>(descriptor_table_base + ss.fields.index * sizeof(SegmentDescriptor));
 }
+//-------------------------------------------------------------------------------------------------------------------------------------//
 
 // Returns a base address of the segment specified by SegmentSelector
 _Use_decl_annotations_ static ULONG_PTR GetSegmentBase(
@@ -817,6 +834,7 @@ _Use_decl_annotations_ static ULONG_PTR GetSegmentBase(
 		return	GetSegmentBaseByDescriptor(segment_descriptor);
 	}
 }
+//-------------------------------------------------------------------------------------------------------------------------------------//
 
 //IF (register operand) or (CR0.PE = 0) or (CR4.VMXE = 0) or (RFLAGS.VM = 1) or (IA32_EFER.LMA = 1 and CS.L = 0) 
 //if and only if compatibility mode is on 
@@ -1107,6 +1125,7 @@ VOID PrepareHostAndControlField(ULONG_PTR vmcs12_va, ULONG_PTR vmcs02_pa, BOOLEA
 	VM control field End
 	--------------------------------------------------------------------------------------*/
 }
+//-------------------------------------------------------------------------------------------------------------------------------------//
 
 VOID PrepareGuestStateField(ULONG_PTR guest_vmcs_va)
 {
@@ -1268,9 +1287,11 @@ VOID PrepareGuestStateField(ULONG_PTR guest_vmcs_va)
 	VmRead64(VmcsField::kGuestIdtrBase, guest_vmcs_va, &vmcs12_kGuestIdtrBase);
 	VmRead64(VmcsField::kGuestDr7, guest_vmcs_va, &vmcs12_kGuestDr7);
 	VmRead64(VmcsField::kGuestRflags, guest_vmcs_va, &vmcs12_kGuestRflags);
+
 	VmRead64(VmcsField::kGuestCr0, guest_vmcs_va, &vmcs12_kGuestCr0);
-	VmRead64(VmcsField::kGuestCr3, guest_vmcs_va, &vmcs12_kGuestCr3);
 	VmRead64(VmcsField::kGuestCr4, guest_vmcs_va, &vmcs12_kGuestCr4);
+
+	VmRead64(VmcsField::kGuestCr3, guest_vmcs_va, &vmcs12_kGuestCr3); 
 
 	VmRead64(VmcsField::kGuestRip, guest_vmcs_va, &vmcs12_kGuestRip);
 	VmRead64(VmcsField::kGuestRsp, guest_vmcs_va, &vmcs12_kGuestRsp);
@@ -1291,9 +1312,24 @@ VOID PrepareGuestStateField(ULONG_PTR guest_vmcs_va)
 	UtilVmWrite(VmcsField::kGuestIdtrBase, vmcs12_kGuestIdtrBase);
 	UtilVmWrite(VmcsField::kGuestDr7, vmcs12_kGuestDr7);
 	UtilVmWrite(VmcsField::kGuestRflags, vmcs12_kGuestRflags);
-	UtilVmWrite(VmcsField::kGuestCr0, vmcs12_kGuestCr0);
-	UtilVmWrite(VmcsField::kGuestCr3, vmcs12_kGuestCr3);
-	UtilVmWrite(VmcsField::kGuestCr4, vmcs12_kGuestCr4);   
+
+	const Cr0 cr0_fixed0 = { UtilReadMsr(Msr::kIa32VmxCr0Fixed0) };
+	const Cr0 cr0_fixed1 = { UtilReadMsr(Msr::kIa32VmxCr0Fixed1) };
+	Cr0 cr0 = { vmcs12_kGuestCr0 };
+	cr0.all &= cr0_fixed1.all;
+	cr0.all |= cr0_fixed0.all;
+	UtilVmWrite(VmcsField::kGuestCr0, cr0.all);
+	UtilVmWrite(VmcsField::kCr0ReadShadow, cr0.all);
+
+	const Cr4 cr4_fixed0 = { UtilReadMsr(Msr::kIa32VmxCr4Fixed0) };
+	const Cr4 cr4_fixed1 = { UtilReadMsr(Msr::kIa32VmxCr4Fixed1) };
+	Cr4 cr4 = { vmcs12_kGuestCr4 };
+	cr4.all &= cr4_fixed1.all;
+	cr4.all |= cr4_fixed0.all;
+	UtilVmWrite(VmcsField::kGuestCr4, cr4.all);
+	UtilVmWrite(VmcsField::kCr4ReadShadow, cr4.all);
+	 
+	UtilVmWrite(VmcsField::kGuestCr3, vmcs12_kGuestCr3); 
 	UtilVmWrite(VmcsField::kGuestRip, vmcs12_kGuestRip);
 	UtilVmWrite(VmcsField::kGuestRsp, vmcs12_kGuestRsp);
 	UtilVmWrite(VmcsField::kGuestRflags, vmcs12_kGuestRlags);
@@ -1302,5 +1338,7 @@ VOID PrepareGuestStateField(ULONG_PTR guest_vmcs_va)
 	Guest stated field END
 	*--------------------------------------------------------------------------------------------------------------*/
 }
+//-------------------------------------------------------------------------------------------------------------------------------------//
+
 }
 

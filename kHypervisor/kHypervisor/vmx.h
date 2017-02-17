@@ -48,7 +48,6 @@ VOID VmptrstEmulate(
 	GuestContext* guest_context
 );
 
-
 VOID LEAVE_GUEST_MODE(
 	NestedVmm* vcpu
 );

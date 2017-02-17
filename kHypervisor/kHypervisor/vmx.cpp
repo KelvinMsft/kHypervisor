@@ -631,15 +631,16 @@ VOID VmxonEmulate(GuestContext* guest_context)
 			VMfailInvalid(GetFlagReg(guest_context));
 			break;
 		}
-
-		//VMCS id is not supported
-		if (vmxon_region_struct->revision_identifier != GetVMCSRevisionIdentifier())
+		if (vmxon_region_struct) 
 		{
-			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXON: VMCS revision identifier is not supported,  CPU supports identifier is : %x !"), GetVMCSRevisionIdentifier());
-			VMfailInvalid(GetFlagReg(guest_context));
-			break;
+			//VMCS id is not supported
+			if (vmxon_region_struct->revision_identifier != GetVMCSRevisionIdentifier())
+			{
+				HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXON: VMCS revision identifier is not supported,  CPU supports identifier is : %x !"), GetVMCSRevisionIdentifier());
+				VMfailInvalid(GetFlagReg(guest_context));
+				break;
+			}
 		}
-
 		///TODO: a20m and in SMX operation3 and bit 1 of IA32_FEATURE_CONTROL MSR is clear
 
 		NestedVmm* vm = (NestedVmm*)ExAllocatePool(NonPagedPoolNx, sizeof(NestedVmm));

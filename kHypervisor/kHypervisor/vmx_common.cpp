@@ -258,7 +258,7 @@ VOID ThrowGerneralFaultInterrupt()
 	FillEventInjection((ULONG32)InterruptionType::kHardwareException, (ULONG32)InterruptionVector::kGeneralProtectionException, FALSE, TRUE);
 }
 
-
+//----------------------------------------------------------------------------------------------------------------//
 ULONG64 DecodeVmclearOrVmptrldOrVmptrstOrVmxon(GuestContext* guest_context)
 {
 	const VMInstructionQualificationForClearOrPtrldOrPtrstOrVmxon exit_qualification =

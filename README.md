@@ -44,7 +44,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
  <img src="https://cloud.githubusercontent.com/assets/22551808/21606548/47069716-d1eb-11e6-9620-4c7262aad172.png" width="50%" height="50%"> </img>
 
 #Expected Output
- kHypervisor can be tested by kernel/user mode with Single-Core Processor Configuration 
+ kHypervisor can be tested by kernel/user mode with Multi-Core Processor Configuration 
  
 #Kenrel mode Test: 
  

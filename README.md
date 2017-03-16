@@ -1,7 +1,7 @@
 # kHypervisor
 kHypervisor is an Open Source light-weighted Nested-Virtual Machine Monitor in Windows x64 platform. Temporarily not supported multi-core yet, and which is using a VT framework from Hyper-platform :-)
 
-#Environment
+# Environment
 - Visual Studio 2015 update 3 
 - Windows SDK 10
 - Windowr Driver Kit 10 
@@ -9,10 +9,10 @@ kHypervisor is an Open Source light-weighted Nested-Virtual Machine Monitor in W
 - Supports Multi-core processor environment
 - Test environment with Windows 7 x64 sp1
 
-#Description
+# Description
 The kHypervisor is not yet completed, and it will be rapidly update on progress, please using a windbg+vmware 12 for debugging kHypervisor.  
 
-#Progress
+# Progress
 2016-10-19 :  First commit, Supporting nested itself only, and nested software breakpoint exception from Level 2. And the nested-Vmm is able to dispatch this exception to L1 and help L1 to resume to L2.
 
 2016-10-21 : Fixed Ring-3 vm-exit emulation error. 
@@ -25,7 +25,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
 
 2017-02-08 : Emulate VMExit behaviour has been slightly Changed. in case of L2 is trapped by L0, and L0 emulate VMExit to L1, this time of VMRESUME will not be restore a Guest CR8 and Guest IRQL, it is until VMRESUME by L1. (L0 helps L1 resume to L2) 
 
-#Installation
+# Installation
 
  - kHypervisor extended HyperPlatform which is created by Tandasat, it is a Nested-Virtual Machine Monitor, and DdiMon is one of Tandasat's product of HyperPlatform for test demo in kHypervisor.
 
@@ -43,10 +43,10 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
 
  <img src="https://cloud.githubusercontent.com/assets/22551808/21606548/47069716-d1eb-11e6-9620-4c7262aad172.png" width="50%" height="50%"> </img>
 
-#Expected Output
+# Expected Output
  kHypervisor can be tested by kernel/user mode with Multi-Core Processor Configuration 
  
-#Kenrel mode Test: 
+# Kenrel mode Test: 
  
  1. During the installion we could able to see a result, since we set a breakpoint as soon as the DdiMon's virtualization. </br>
  <img src="https://cloud.githubusercontent.com/assets/22551808/21608786/796ca796-d1f9-11e6-98c7-853933c7447b.png" width="70%" height="70%"> </img>
@@ -56,7 +56,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
   <img src="https://cloud.githubusercontent.com/assets/22551808/21608895/50274d54-d1fa-11e6-84a2-fddd41b5d2b5.png" width="70%" height="70%"> </img>
  4. After the DdiMon catch up the control flow, it will normally execute a <b>VMRESUME</b>, since he didn't know anythings, and feel it is normal trap only :) </br>
 
-#User Mode Test:  
+# User Mode Test:  
   
   Any everybreakpoint in the system will be work as follow:
 
@@ -71,7 +71,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
  <img src="https://cloud.githubusercontent.com/assets/22551808/21672420/6d7935e8-d35d-11e6-989c-4afb97f65047.png" width="70%" height="70%"/>
 </img></br>
  
-#TODO
+# TODO
  - Fully Support CPU Feature from vCPU aspect.
  - EPT virtualization
  - APIC virtualization

@@ -46,6 +46,7 @@ struct VmmInitialStack {
 	GpRegisters gp_regs;
 	ULONG_PTR reserved;
 	ProcessorData *processor_data;
+
 };
 
 #pragma pack(8)
@@ -178,192 +179,349 @@ static void VmmpInjectInterruption(_In_ InterruptionType interruption_type,
 static ULONG g_vmmp_next_history_index[kVmmpNumberOfProcessors];
 static VmExitHistory g_vmmp_vm_exit_history[kVmmpNumberOfProcessors]
                                            [kVmmpNumberOfRecords];
+extern VOID VMSucceed(FlagRegister* reg);
+////////////////////////////////////////////////////////////////////////////////
+//
+// implementations
+
+
+//----------------------------------------------------------------------------------------------------------------//
 GpRegisters* GetGpReg(GuestContext* guest_context)
 {
 	return	guest_context->gp_regs;
 }
 
+//----------------------------------------------------------------------------------------------------------------//
 FlagRegister* GetFlagReg(GuestContext* guest_context)
 {
 	return &guest_context->flag_reg;
 }
 
+//----------------------------------------------------------------------------------------------------------------//
 KIRQL GetGuestIrql(GuestContext* guest_context)
 {
 	return guest_context->irql;
 }
+
+
+//----------------------------------------------------------------------------------------------------------------//
 ULONG_PTR GetGuestCr8(GuestContext* guest_context)
 {
 	return guest_context->cr8;
 }
 
-extern VOID VMSucceed(FlagRegister* reg);
-extern NestedVmm* GetCurrentCPU(bool IsNested);
-////////////////////////////////////////////////////////////////////////////////
-//
-// implementations
+//----------------------------------------------------------------------------------------------------------------//
+ULONG GetvCpuMode(GuestContext* guest_context)
+{
+	return guest_context->stack->processor_data->CpuMode;
+}
 
- 
+
+//----------------------------------------------------------------------------------------------------------------//
+VOID vCpuEnterVmxMode(GuestContext* guest_context)
+{
+	guest_context->stack->processor_data->CpuMode = IN_VMX_MODE;
+}
+
+
+//----------------------------------------------------------------------------------------------------------------//
+VOID vCpuLeaveVmxMode(GuestContext* guest_context)
+{
+	guest_context->stack->processor_data->CpuMode = ~IN_VMX_MODE;
+}
+
+//----------------------------------------------------------------------------------------------------------------//
+NestedVmm* GetCurrentNestedCpu(GuestContext* guest_context)
+{
+	return guest_context->stack->processor_data->vCPU;
+}
+
+//----------------------------------------------------------------------------------------------------------------//
+VOID SetCurrentNestedCpu(GuestContext* guest_context, NestedVmm* NestedVmm)
+{
+	guest_context->stack->processor_data->vCPU = NestedVmm;
+}
+
+//----------------------------------------------------------------------------------------------------------------//
 
 // A high level VMX handler called from AsmVmExitHandler().
 // Return true for vmresume, or return false for vmxoff.
 #pragma warning(push)
 #pragma warning(disable : 28167)
-_Use_decl_annotations_ bool __stdcall VmmVmExitHandler(VmmInitialStack *stack) 
+_Use_decl_annotations_ bool __stdcall VmmVmExitHandler(VmmInitialStack *stack)
 {
 
-  // Save guest's context and raise IRQL as quick as possible
-  const auto guest_irql = KeGetCurrentIrql();
-  const auto guest_cr8 = IsX64() ? __readcr8() : 0;
-  if (guest_irql < DISPATCH_LEVEL) {
-  	KeRaiseIrqlToDpcLevel();
-  }
-  NT_ASSERT(stack->reserved == MAXULONG_PTR);
+	// Save guest's context and raise IRQL as quick as possible
+	const auto guest_irql = KeGetCurrentIrql();
+	const auto guest_cr8 = IsX64() ? __readcr8() : 0;
+	if (guest_irql < DISPATCH_LEVEL) {
+		KeRaiseIrqlToDpcLevel();
+	}
+	NT_ASSERT(stack->reserved == MAXULONG_PTR);
 
 	// Capture the current guest state
-  GuestContext guest_context = { stack,
-  							  UtilVmRead(VmcsField::kGuestRflags),
-  							  UtilVmRead(VmcsField::kGuestRip),
-  							  guest_cr8,
-  							  guest_irql,
-  							  true };
+	GuestContext guest_context = { stack,
+								UtilVmRead(VmcsField::kGuestRflags),
+								UtilVmRead(VmcsField::kGuestRip),
+								guest_cr8,
+								guest_irql,
+								true };
 
-  guest_context.gp_regs->sp = UtilVmRead(VmcsField::kGuestRsp);
-  
-  VmmpSaveExtendedProcessorState(&guest_context);
- 
-  // Dispatch the current VM-exit event
-  VmmpHandleVmExit(&guest_context);
+	guest_context.gp_regs->sp = UtilVmRead(VmcsField::kGuestRsp);
 
-  VmmpRestoreExtendedProcessorState(&guest_context);
+	VmmpSaveExtendedProcessorState(&guest_context);
 
-  // See: Guidelines for Use of the INVVPID Instruction, and Guidelines for Use
-  // of the INVEPT Instruction
-  if (!guest_context.vm_continue) 
-  {
-    UtilInveptGlobal();
-    UtilInvvpidAllContext();
-  }
+	// Dispatch the current VM-exit event
+	VmmpHandleVmExit(&guest_context);
 
-  // Restore guest's context
-  if (guest_context.irql < DISPATCH_LEVEL && ! IsEmulateVMExit )
-  {
-    KeLowerIrql(guest_context.irql);
-  }
+	VmmpRestoreExtendedProcessorState(&guest_context);
 
-  // Apply possibly updated CR8 by the handler
-  if (IsX64() && !IsEmulateVMExit ) {
-    __writecr8(guest_context.cr8);
-  }
-  return guest_context.vm_continue;
+	// See: Guidelines for Use of the INVVPID Instruction, and Guidelines for Use
+	// of the INVEPT Instruction
+	if (!guest_context.vm_continue)
+	{
+		UtilInveptGlobal();
+		UtilInvvpidAllContext();
+	}
+
+	// Restore guest's context
+	if (guest_context.irql < DISPATCH_LEVEL && !IsEmulateVMExit)
+	{
+		KeLowerIrql(guest_context.irql);
+	}
+
+	// Apply possibly updated CR8 by the handler
+	if (IsX64() && !IsEmulateVMExit) {
+		__writecr8(guest_context.cr8);
+	}
+	return guest_context.vm_continue;
 }
 #pragma warning(pop)
- 
+_Use_decl_annotations_ static void VmmpHandleVmExitForL1(VmExitInformation exit_reason, GuestContext *guest_context)
+{
+	switch (exit_reason.fields.reason)
+	{
+	case VmxExitReason::kExceptionOrNmi:
+		VmmpHandleException(guest_context);
+		break;
+	case VmxExitReason::kTripleFault:
+		VmmpHandleTripleFault(guest_context);
+		break;
+	case VmxExitReason::kCpuid:
+		VmmpHandleCpuid(guest_context);
+		break;
+	case VmxExitReason::kInvd:
+		VmmpHandleInvalidateInternalCaches(guest_context);
+		break;
+	case VmxExitReason::kInvlpg:
+		VmmpHandleInvalidateTlbEntry(guest_context);
+		break;
+	case VmxExitReason::kRdtsc:
+		VmmpHandleRdtsc(guest_context);
+		break;
+	case VmxExitReason::kCrAccess:
+		VmmpHandleCrAccess(guest_context);
+		break;
+	case VmxExitReason::kDrAccess:
+		VmmpHandleDrAccess(guest_context);
+		break;
+	case VmxExitReason::kIoInstruction:
+		VmmpHandleIoPort(guest_context);
+		break;
+	case VmxExitReason::kMsrRead:
+		VmmpHandleMsrReadAccess(guest_context);
+		break;
+	case VmxExitReason::kMsrWrite:
+		VmmpHandleMsrWriteAccess(guest_context);
+		break;
+	case VmxExitReason::kMonitorTrapFlag:
+		VmmpHandleMonitorTrap(guest_context);
+		break;
+	case VmxExitReason::kGdtrOrIdtrAccess:
+		VmmpHandleGdtrOrIdtrAccess(guest_context);
+		break;
+	case VmxExitReason::kLdtrOrTrAccess:
+		VmmpHandleLdtrOrTrAccess(guest_context);
+		break;
+	case VmxExitReason::kEptViolation:
+		VmmpHandleEptViolation(guest_context);
+		break;
+	case VmxExitReason::kEptMisconfig:
+		VmmpHandleEptMisconfig(guest_context);
+		break;
+	case VmxExitReason::kVmcall:
+		VmmpHandleVmCall(guest_context);
+		break;
+	case VmxExitReason::kVmclear:
+	case VmxExitReason::kVmlaunch:
+	case VmxExitReason::kVmptrld:
+	case VmxExitReason::kVmptrst:
+	case VmxExitReason::kVmread:
+	case VmxExitReason::kVmresume:
+	case VmxExitReason::kVmwrite:
+	case VmxExitReason::kVmoff:
+	case VmxExitReason::kVmon:
+		VmmpHandleVmx(guest_context);
+		break;
+	case VmxExitReason::kRdtscp:
+		VmmpHandleRdtscp(guest_context);
+		break;
+	case VmxExitReason::kXsetbv:
+		VmmpHandleXsetbv(guest_context);
+		break;
+	default:
+		VmmpHandleUnexpectedExit(guest_context);
+		break;
+	}
+}
+//-----------------------------------------------------------------------------------------------------------------------//
+_Use_decl_annotations_ static void VmmpHandleExceptionForL2(
+	_In_ VmExitInformation exit_reason, 
+	_In_ GuestContext *guest_context
+)
+{
+	VmExitInterruptionInformationField 	exception = { static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrInfo)) };
+	if (static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kBreakpointException)
+	{
+		HYPERPLATFORM_COMMON_DBG_BREAK();
+		HYPERPLATFORM_LOG_DEBUG("Nested VMExit Ready !!!! \r\n");
+		if (VMExitEmulationTest(GetCurrentNestedCpu(guest_context), exit_reason, guest_context))
+		{
+			IsEmulateVMExit = true;
+		}
+	}
+}
+
+//-----------------------------------------------------------------------------------------------------------------------//
+_Use_decl_annotations_ static void VmmpHandleCpuidForL2(
+	_In_ VmExitInformation exit_reason,
+	_In_ GuestContext *guest_context
+)
+{
+	if (VMExitEmulationTest(GetCurrentNestedCpu(guest_context), exit_reason, guest_context))
+	{
+		IsEmulateVMExit = true;
+	}
+}
+
+//-----------------------------------------------------------------------------------------------------------------------//
+_Use_decl_annotations_ static BOOLEAN VmmpHandleVmExitForL2(
+	_In_ VmExitInformation exit_reason,
+	_In_ GuestContext *guest_context
+)
+{
+	BOOLEAN IsHandled = FALSE;
+	switch (exit_reason.fields.reason) 
+	{
+		case VmxExitReason::kCpuid: 
+		//	VmmpHandleCpuidForL2(exit_reason, guest_context);
+			IsHandled = FALSE;
+		break;
+		case VmxExitReason::kExceptionOrNmi:
+			VmmpHandleExceptionForL2(exit_reason, guest_context);
+			IsHandled = TRUE; 
+		break;
+		case VmxExitReason::kTripleFault:
+			break;
+		case VmxExitReason::kInvd:
+			break;
+		case VmxExitReason::kInvlpg:
+			break;
+		case VmxExitReason::kRdtsc:
+			break;
+		case VmxExitReason::kCrAccess:
+			break;
+		case VmxExitReason::kDrAccess:
+			break;
+		case VmxExitReason::kIoInstruction:
+			break;
+		case VmxExitReason::kMsrRead:
+			break;
+		case VmxExitReason::kMsrWrite:
+			break;
+		case VmxExitReason::kMonitorTrapFlag:
+			break;
+		case VmxExitReason::kGdtrOrIdtrAccess:
+			break;
+		case VmxExitReason::kLdtrOrTrAccess:
+			break;
+		case VmxExitReason::kEptViolation:
+			break;
+		case VmxExitReason::kEptMisconfig:
+			break;
+		case VmxExitReason::kVmcall:
+			break;
+		case VmxExitReason::kVmclear:
+		case VmxExitReason::kVmlaunch:
+		case VmxExitReason::kVmptrld:
+		case VmxExitReason::kVmptrst:
+		case VmxExitReason::kVmread:
+		case VmxExitReason::kVmresume:
+		case VmxExitReason::kVmwrite:
+		case VmxExitReason::kVmoff:
+		case VmxExitReason::kVmon:
+			break;
+		case VmxExitReason::kRdtscp:
+			break;
+		case VmxExitReason::kXsetbv:
+			break;
+		default:
+			break;
+	}
+	return IsHandled ;
+} 
+
 //---------------------------------------------------------------------------------------------------------------------//
 // Dispatches VM-exit to a corresponding handler
-_Use_decl_annotations_ static void VmmpHandleVmExit(GuestContext *guest_context) 
+_Use_decl_annotations_ static void VmmpHandleVmExit(GuestContext *guest_context)
 {
-  HYPERPLATFORM_PERFORMANCE_MEASURE_THIS_SCOPE();
+	HYPERPLATFORM_PERFORMANCE_MEASURE_THIS_SCOPE();
 
-  const VmExitInformation exit_reason = { static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitReason))};
+	ULONG64 vmcs_pa = 0;
+	NestedVmm*	 vCPU = GetCurrentNestedCpu(guest_context);
 
-  if (kVmmpEnableRecordVmExit) 
-  {	 // Save them for ease of trouble shooting
-	 const auto processor = KeGetCurrentProcessorNumberEx(nullptr);
-	 auto &index = g_vmmp_next_history_index[processor];
-	 auto &history = g_vmmp_vm_exit_history[processor][index];
+	const VmExitInformation exit_reason = { static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitReason)) };
 
-	 history.gp_regs = *guest_context->gp_regs;
-	 history.ip = guest_context->ip;
-	 history.exit_reason = exit_reason;
-	 history.exit_qualification = UtilVmRead(VmcsField::kExitQualification);
-	 history.instruction_info = UtilVmRead(VmcsField::kVmxInstructionInfo);
-	 history.exception_infomation_field = { (ULONG32)UtilVmRead(VmcsField::kVmExitIntrInfo) };
-	 if (++index == kVmmpNumberOfRecords)
-	 {
-		  index = 0;
-	 }
-  } 
-  IsEmulateVMExit = FALSE; 
-  if (VMExitEmulationTest(exit_reason, guest_context))
-  {
-	  IsEmulateVMExit = TRUE;
-	  return;
-  } 
-   switch (exit_reason.fields.reason) 
-  {
-	case VmxExitReason::kExceptionOrNmi:
-	  VmmpHandleException(guest_context); 
-	break;
-    case VmxExitReason::kTripleFault:
-      VmmpHandleTripleFault(guest_context);
-      break;
-    case VmxExitReason::kCpuid:
-      VmmpHandleCpuid(guest_context);
-      break;
-    case VmxExitReason::kInvd:
-      VmmpHandleInvalidateInternalCaches(guest_context);
-      break;
-    case VmxExitReason::kInvlpg:
-      VmmpHandleInvalidateTlbEntry(guest_context);
-      break;
-    case VmxExitReason::kRdtsc:
-      VmmpHandleRdtsc(guest_context);
-      break;
-    case VmxExitReason::kCrAccess:
-      VmmpHandleCrAccess(guest_context);
-      break;
-    case VmxExitReason::kDrAccess:
-      VmmpHandleDrAccess(guest_context);
-      break;
-    case VmxExitReason::kIoInstruction:
-      VmmpHandleIoPort(guest_context);
-      break;
-    case VmxExitReason::kMsrRead:
-      VmmpHandleMsrReadAccess(guest_context);
-      break;
-    case VmxExitReason::kMsrWrite:
-      VmmpHandleMsrWriteAccess(guest_context);
-      break;
-    case VmxExitReason::kMonitorTrapFlag:
-      VmmpHandleMonitorTrap(guest_context);
-      break;
-    case VmxExitReason::kGdtrOrIdtrAccess:
-      VmmpHandleGdtrOrIdtrAccess(guest_context);
-      break;
-    case VmxExitReason::kLdtrOrTrAccess:
-      VmmpHandleLdtrOrTrAccess(guest_context);
-      break;
-    case VmxExitReason::kEptViolation:
-      VmmpHandleEptViolation(guest_context);
-      break;
-    case VmxExitReason::kEptMisconfig:
-      VmmpHandleEptMisconfig(guest_context);
-      break;
-    case VmxExitReason::kVmcall:
-      VmmpHandleVmCall(guest_context);
-      break;
-    case VmxExitReason::kVmclear:
-    case VmxExitReason::kVmlaunch:
-    case VmxExitReason::kVmptrld:
-    case VmxExitReason::kVmptrst:
-    case VmxExitReason::kVmread:
-    case VmxExitReason::kVmresume:
-    case VmxExitReason::kVmwrite:
-    case VmxExitReason::kVmoff:
-    case VmxExitReason::kVmon:
-      VmmpHandleVmx(guest_context);
-      break;
-    case VmxExitReason::kRdtscp:
-      VmmpHandleRdtscp(guest_context);
-      break;
-    case VmxExitReason::kXsetbv:
-      VmmpHandleXsetbv(guest_context);
-      break;
-    default:
-      VmmpHandleUnexpectedExit(guest_context);
-      break;
-  }  
+	if (kVmmpEnableRecordVmExit)
+	{	 // Save them for ease of trouble shooting
+		const auto processor = KeGetCurrentProcessorNumberEx(nullptr);
+		auto &index = g_vmmp_next_history_index[processor];
+		auto &history = g_vmmp_vm_exit_history[processor][index];
+
+		history.gp_regs = *guest_context->gp_regs;
+		history.ip = guest_context->ip;
+		history.exit_reason = exit_reason;
+		history.exit_qualification = UtilVmRead(VmcsField::kExitQualification);
+		history.instruction_info = UtilVmRead(VmcsField::kVmxInstructionInfo);
+		history.exception_infomation_field = { (ULONG32)UtilVmRead(VmcsField::kVmExitIntrInfo) };
+		if (++index == kVmmpNumberOfRecords)
+		{
+			index = 0;
+		}
+	}
+ 
+	__vmx_vmptrst(&vmcs_pa);
+	
+	if (GetvCpuMode(guest_context) == IN_VMX_MODE)
+	{
+		if(!IsRootMode(vCPU) && (vCPU->vmcs02_pa == vmcs_pa))
+		{
+			IsEmulateVMExit = FALSE;
+			if (!VmmpHandleVmExitForL2(exit_reason, guest_context))
+			{
+				VmmpHandleVmExitForL1(exit_reason, guest_context); 
+			}
+		}
+		else
+		{
+			HYPERPLATFORM_COMMON_DBG_BREAK();
+			VmmpHandleVmExitForL1(exit_reason, guest_context);
+		}
+	}
+	else
+	{ 
+		VmmpHandleVmExitForL1(exit_reason, guest_context);
+	}
 }
 //---------------------------------------------------------------------------------------------------------------------//
 
@@ -460,10 +618,16 @@ _Use_decl_annotations_ static void VmmpHandleException(
                                    0);
   }
 }
+//  L2 -> L0	cpuid 
+//  L0 -> L1	inject cpuid
+//  L1 -> L0	vmresume
+//  L0 -> L2	resume l2 
 
 // CPUID
 _Use_decl_annotations_ static void VmmpHandleCpuid(
-    GuestContext *guest_context) {
+  _In_ GuestContext *guest_context
+) 
+{
   HYPERPLATFORM_PERFORMANCE_MEASURE_THIS_SCOPE();
   unsigned int cpu_info[4] = {};
   const auto function_id = static_cast<int>(guest_context->gp_regs->ax);
@@ -471,12 +635,15 @@ _Use_decl_annotations_ static void VmmpHandleCpuid(
 
   __cpuidex(reinterpret_cast<int *>(cpu_info), function_id, sub_function_id);
 
-  if (function_id == 1) {
+  if (function_id == 1) 
+  {
     // Present existence of a hypervisor using the HypervisorPresent bit
     CpuFeaturesEcx cpu_features = {static_cast<ULONG_PTR>(cpu_info[2])};
-    cpu_features.fields.not_used = true;
+    cpu_features.fields.not_used = false;
     cpu_info[2] = static_cast<int>(cpu_features.all);
-  } else if (function_id == kHyperVCpuidInterface) {
+  } 
+  else if (function_id == kHyperVCpuidInterface) 
+  {
     // Leave signature of HyperPlatform onto EAX
     cpu_info[0] = 'PpyH';
   }
@@ -486,6 +653,7 @@ _Use_decl_annotations_ static void VmmpHandleCpuid(
   guest_context->gp_regs->cx = cpu_info[2];
   guest_context->gp_regs->dx = cpu_info[3];
 
+  HYPERPLATFORM_LOG_DEBUG("Root CPUID Called with id : %x sid: %x !!!!!!!!!!!!!!! \r\n", function_id, sub_function_id);
   VmmpAdjustGuestInstructionPointer(guest_context);
 }
 
@@ -589,38 +757,79 @@ _Use_decl_annotations_ static void VmmpHandleMsrAccess(
   const auto is_64bit_vmcs =
       UtilIsInBounds(vmcs_field, VmcsField::kIoBitmapA,
                      VmcsField::kHostIa32PerfGlobalCtrlHigh);
- 
-   
+
   LARGE_INTEGER msr_value = {};
-  if (read_access) {
-    if (transfer_to_vmcs) {
-      if (is_64bit_vmcs) {
+  if (read_access) 
+  {
+    if (transfer_to_vmcs) 
+	{
+      if (is_64bit_vmcs) 
+	  {
         msr_value.QuadPart = UtilVmRead64(vmcs_field);
-      } else {
+      } else 
+	  {
         msr_value.QuadPart = UtilVmRead(vmcs_field);
       }
-    } else { 
+    } 
+	else 
+	{ 
+		if (msr == Msr::kIa32VmxEptVpidCap)
+		{
+			msr_value.LowPart = guest_context->stack->processor_data->VmxEptMsr.LowPart;
+			msr_value.HighPart = guest_context->stack->processor_data->VmxEptMsr.HighPart;
+		}
+		else if (msr == Msr::kIa32FeatureControl)
+		{
+			msr_value.LowPart = guest_context->stack->processor_data->Ia32FeatureMsr.LowPart;
+			msr_value.HighPart = guest_context->stack->processor_data->Ia32FeatureMsr.HighPart;
+			HYPERPLATFORM_LOG_DEBUG("Writing Ia32FeactureCtrl : %I64x \r\n ", msr_value.QuadPart);
+		}
+		else if (msr == Msr::kIa32VmxBasic)
+		{
+			msr_value.LowPart = guest_context->stack->processor_data->VmxBasicMsr.LowPart;
+			msr_value.HighPart = guest_context->stack->processor_data->VmxBasicMsr.HighPart;
+		}
+		else 
+		{
 			msr_value.QuadPart = UtilReadMsr64(msr);
+		}
 	}	
-	if (msr == Msr::kIa32VmxEptVpidCap)
-	 {
-	   msr_value.QuadPart = 0; 
-	 }
-    guest_context->gp_regs->ax = msr_value.LowPart;
-    guest_context->gp_regs->dx = msr_value.HighPart;
+	guest_context->gp_regs->ax = msr_value.LowPart;
+	guest_context->gp_regs->dx = msr_value.HighPart;
   }
   else 
   {
     msr_value.LowPart = static_cast<ULONG>(guest_context->gp_regs->ax);
     msr_value.HighPart = static_cast<ULONG>(guest_context->gp_regs->dx);
-    if (transfer_to_vmcs) {
-      if (is_64bit_vmcs) {
+    if (transfer_to_vmcs) 
+	{
+      if (is_64bit_vmcs) 
+	  {
         UtilVmWrite64(vmcs_field, static_cast<ULONG_PTR>(msr_value.QuadPart));
-      } else {
+      } else 
+	  {
         UtilVmWrite(vmcs_field, static_cast<ULONG_PTR>(msr_value.QuadPart));
       }
-    } else {
-      UtilWriteMsr64(msr, msr_value.QuadPart);
+    } 
+	else
+	{
+		if (msr == Msr::kIa32VmxEptVpidCap)
+		{
+			guest_context->stack->processor_data->VmxEptMsr.QuadPart = msr_value.QuadPart;
+		}
+		else if (msr == Msr::kIa32FeatureControl)
+		{
+			guest_context->stack->processor_data->Ia32FeatureMsr.QuadPart = msr_value.QuadPart ;
+			HYPERPLATFORM_LOG_DEBUG("Reading Ia32FeactureCtrl : %I64x \r\n ", msr_value.QuadPart);
+		}
+		else if (msr == Msr::kIa32VmxBasic)
+		{
+		     guest_context->stack->processor_data->VmxBasicMsr.QuadPart = msr_value.QuadPart ;
+		}
+		else
+		{ 
+			UtilWriteMsr64(msr, msr_value.QuadPart);
+		}
     }
   }
 
@@ -1466,14 +1675,7 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 		const auto fault_address = UtilVmRead(VmcsField::kExitQualification);
 
 		PrintVMCS();
-		NestedVmm* vm = GetCurrentCPU(false);
-		if (vm)
-		{
-			if (vm->vmcs12_pa)
-			{
-				PrintVMCS12((ULONG_PTR)UtilVaFromPa(vm->vmcs12_pa));
-			}
-		}	   
+ 
 		HYPERPLATFORM_COMMON_DBG_BREAK(); 
 	}
 	else
@@ -1491,10 +1693,9 @@ _Use_decl_annotations_ static void VmmpInjectInterruption(
 	}
 }
 
-
-  //----------------------------------------------------------------------------------------------------------------//
-
-  _Use_decl_annotations_ static void VmmpHandleVmx(GuestContext *guest_context) {
+//----------------------------------------------------------------------------------------------------------------//
+_Use_decl_annotations_ static void VmmpHandleVmx(GuestContext *guest_context) 
+{
 	  HYPERPLATFORM_PERFORMANCE_MEASURE_THIS_SCOPE();
 
 

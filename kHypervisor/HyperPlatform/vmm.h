@@ -20,7 +20,9 @@
 //
 // constants and macros
 //
-
+#define IN_VMX_MODE	  1
+#define IN_ROOT_MODE  1
+#define IN_GUEST_MODE 3
 ////////////////////////////////////////////////////////////////////////////////
 //
 // types
@@ -34,17 +36,6 @@ struct SharedProcessorData {
   void* io_bitmap_b;              //!< Bitmap to activate IO VM-exit (~ 0xffff)
 };
 
-/// Represents VMM related data associated with each processor
-struct ProcessorData {
-  SharedProcessorData* shared_data;         //!< Shared data
-  void* vmm_stack_limit;                    //!< A head of VA for VMM stack
-  struct VmControlStructure* vmxon_region;  //!< VA of a VMXON region
-  struct VmControlStructure* vmcs_region;   //!< VA of a VMCS region
-  struct EptData* ept_data;                 //!< A pointer to EPT related data
-  void* xsave_area;                         //!< VA to store state components
-  ULONG64 xsave_inst_mask;                  //!< A mask to save state components
-  UCHAR fxsave_area[512 + 16];              //!< For fxsave (+16 for alignment)
-}; 
 typedef struct NestedVmm
 {
 	ULONG64   vmxon_region;
@@ -66,12 +57,29 @@ typedef struct NestedVmm
 	ULONG_PTR guest_cr8;
 }NestedVmm, *PNestedVmm;
 
+/// Represents VMM related data associated with each processor
+struct ProcessorData {
+  SharedProcessorData* shared_data;         //!< Shared data
+  void* vmm_stack_limit;                    //!< A head of VA for VMM stack
+  struct VmControlStructure* vmxon_region;  //!< VA of a VMXON region
+  struct VmControlStructure* vmcs_region;   //!< VA of a VMCS region
+  struct EptData* ept_data;                 //!< A pointer to EPT related data
+  void* xsave_area;                         //!< VA to store state components
+  ULONG64 xsave_inst_mask;                  //!< A mask to save state components
+  UCHAR fxsave_area[512 + 16];              //!< For fxsave (+16 for alignment)
+  LARGE_INTEGER Ia32FeatureMsr;				//!< For Msr Read / Write
+  LARGE_INTEGER VmxBasicMsr;				//!< For Msr Read / Write
+  LARGE_INTEGER VmxEptMsr;					//!< For Msr Read / Write
+  NestedVmm*	vCPU;
+  ULONG			CpuMode;
+}; 
+
+
 
 ////////////////////////////////////////////////////////////////////////////////
 //
 // prototypes
 //
-
 ////////////////////////////////////////////////////////////////////////////////
 //
 // variables

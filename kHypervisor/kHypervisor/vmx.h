@@ -59,6 +59,7 @@ BOOLEAN IsRootMode(
 );  
 
 BOOLEAN VMExitEmulationTest(
+	NestedVmm* vCPU,
 	VmExitInformation exit_reason,
 	GuestContext* guest_context
 );

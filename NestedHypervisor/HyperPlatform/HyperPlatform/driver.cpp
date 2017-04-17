@@ -146,14 +146,11 @@ extern "C" {
 		return STATUS_SUCCESS;
 	}
 	// A driver entry point
-	_Use_decl_annotations_ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object,
-		PUNICODE_STRING registry_path) {
-		/*	BOOLEAN symbolicLink;
-		UNICODE_STRING		ntDeviceName;
-		UNICODE_STRING		dosDeviceName;
-		PDEVICE_OBJECT		deviceObject = NULL;
-		PDEVICE_EXTENSION		deviceExtension = NULL;
-		*/
+	_Use_decl_annotations_ NTSTATUS DriverEntry(
+		PDRIVER_OBJECT driver_object,	
+		PUNICODE_STRING registry_path
+	) 
+	{
 
 		UNREFERENCED_PARAMETER(registry_path);
 		PAGED_CODE();
@@ -219,6 +216,7 @@ extern "C" {
 			LogTermination();
 			return status;
 		}
+
 
 		HYPERPLATFORM_LOG_INFO("break IRQL: %x \r\n", KeGetCurrentIrql());
 

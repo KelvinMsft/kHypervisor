@@ -310,15 +310,23 @@ _Use_decl_annotations_ static void *VmpBuildMsrBitmap() {
                       1024 * CHAR_BIT);
   
   RtlClearBits(&bitmap_read_high_header, 0x101, 2);
-  /*
+  
+
+  RTL_BITMAP bitmap_write_low_header = {};
+  RtlInitializeBitMap(&bitmap_write_low_header,
+	  reinterpret_cast<PULONG>(bitmap_write_low),
+	  1024 * CHAR_BIT);
+
+  RtlSetBits(&bitmap_write_low_header, 0x3A, 1);
+
+/*
   RTL_BITMAP bitmap_write_high_header = {};
   RtlInitializeBitMap(&bitmap_write_high_header,
 	  reinterpret_cast<PULONG>(bitmap_write_high),
 	  1024 * CHAR_BIT);
 
   RtlSetBits(&bitmap_write_high_header, 0x102, 1);
-  */
-
+*/
   return msr_bitmap;
 }
 
@@ -369,126 +377,140 @@ _Use_decl_annotations_ static NTSTATUS VmpStartVm(void *context) {
 // Allocates structures for virtualization, initializes VMCS and virtualizes
 // the current processor
 _Use_decl_annotations_ static void VmpInitializeVm(
-    ULONG_PTR guest_stack_pointer, ULONG_PTR guest_instruction_pointer,
-    void *context) {
-  PAGED_CODE();
+	ULONG_PTR guest_stack_pointer, ULONG_PTR guest_instruction_pointer,
+	void *context) {
+	PAGED_CODE();
 
-  const auto shared_data = reinterpret_cast<SharedProcessorData *>(context);
-  if (!shared_data) {
-    return;
-  }
+	const auto shared_data = reinterpret_cast<SharedProcessorData *>(context);
+	if (!shared_data) {
+		return;
+	}
 
-  // Allocate related structures
-  const auto processor_data =
-      reinterpret_cast<ProcessorData *>(ExAllocatePoolWithTag(
-          NonPagedPool, sizeof(ProcessorData), kHyperPlatformCommonPoolTag));
-  if (!processor_data) {
-    return;
-  }
-  RtlZeroMemory(processor_data, sizeof(ProcessorData));
-  processor_data->shared_data = shared_data;
-  InterlockedIncrement(&processor_data->shared_data->reference_count);
+	// Allocate related structures
+	const auto processor_data =
+		reinterpret_cast<ProcessorData *>(ExAllocatePoolWithTag(
+			NonPagedPool, sizeof(ProcessorData), kHyperPlatformCommonPoolTag));
+	if (!processor_data) {
+		return;
+	}
+	RtlZeroMemory(processor_data, sizeof(ProcessorData));
+	processor_data->shared_data = shared_data;
+	processor_data->vCPU = NULL;
+	processor_data->CpuMode		= IN_ROOT_MODE;
 
-  // Set up EPT
-  processor_data->ept_data = EptInitialization();
-  if (!processor_data->ept_data) {
-    goto ReturnFalse;
-  }
+	InterlockedIncrement(&processor_data->shared_data->reference_count);
 
-  // Check if XSAVE/XRSTOR are available and save an instruction mask for all
-  // supported user state components
-  processor_data->xsave_inst_mask =
-      RtlGetEnabledExtendedFeatures(static_cast<ULONG64>(-1));
-  HYPERPLATFORM_LOG_DEBUG("xsave_inst_mask       = %p",
-                          processor_data->xsave_inst_mask);
-  if (processor_data->xsave_inst_mask) {
-    // Allocate a large enough XSAVE area to store all supported user state
-    // components. A size is round-up to multiple of the page size so that the
-    // address fulfills a requirement of 64K alignment.
-    //
-    // See: ENUMERATION OF CPU SUPPORT FOR XSAVE INSTRUCTIONS AND XSAVESUPPORTED
-    // FEATURES
-    int cpu_info[4] = {};
-    __cpuidex(cpu_info, 0xd, 0);
-    const auto xsave_area_size = ROUND_TO_PAGES(cpu_info[2]);  // ecx
-    processor_data->xsave_area = ExAllocatePoolWithTag(
-        NonPagedPool, xsave_area_size, kHyperPlatformCommonPoolTag);
-    if (!processor_data->xsave_area) {
-      goto ReturnFalse;
-    }
-    RtlZeroMemory(processor_data->xsave_area, xsave_area_size);
-  } else {
-    // Use FXSAVE/FXRSTOR instead.
-    int cpu_info[4] = {};
-    __cpuid(cpu_info, 1);
-    const CpuFeaturesEcx cpu_features_ecx = {static_cast<ULONG32>(cpu_info[2])};
-    const CpuFeaturesEdx cpu_features_edx = {static_cast<ULONG32>(cpu_info[3])};
-    if (cpu_features_ecx.fields.avx) {
-      HYPERPLATFORM_LOG_ERROR("A processor supports AVX but not XSAVE/XRSTOR.");
-      goto ReturnFalse;
-    }
-    if (!cpu_features_edx.fields.fxsr) {
-      HYPERPLATFORM_LOG_ERROR("A processor does not support FXSAVE/FXRSTOR.");
-      goto ReturnFalse;
-    }
-  }
+	// Set up EPT
+	processor_data->ept_data = EptInitialization();
+	if (!processor_data->ept_data) {
+		goto ReturnFalse;
+	}
 
-  // Allocate other processor data fields
-  processor_data->vmm_stack_limit =
-      UtilAllocateContiguousMemory(KERNEL_STACK_SIZE);
-  if (!processor_data->vmm_stack_limit) {
-    goto ReturnFalse;
-  }
-  RtlZeroMemory(processor_data->vmm_stack_limit, KERNEL_STACK_SIZE);
+	// Check if XSAVE/XRSTOR are available and save an instruction mask for all
+	// supported user state components
+	processor_data->xsave_inst_mask =
+		RtlGetEnabledExtendedFeatures(static_cast<ULONG64>(-1));
+	HYPERPLATFORM_LOG_DEBUG("xsave_inst_mask       = %p",
+		processor_data->xsave_inst_mask);
+	if (processor_data->xsave_inst_mask) {
+		// Allocate a large enough XSAVE area to store all supported user state
+		// components. A size is round-up to multiple of the page size so that the
+		// address fulfills a requirement of 64K alignment.
+		//
+		// See: ENUMERATION OF CPU SUPPORT FOR XSAVE INSTRUCTIONS AND XSAVESUPPORTED
+		// FEATURES
+		int cpu_info[4] = {};
+		__cpuidex(cpu_info, 0xd, 0);
+		const auto xsave_area_size = ROUND_TO_PAGES(cpu_info[2]);  // ecx
+		processor_data->xsave_area = ExAllocatePoolWithTag(
+			NonPagedPool, xsave_area_size, kHyperPlatformCommonPoolTag);
+		if (!processor_data->xsave_area) {
+			goto ReturnFalse;
+		}
+		RtlZeroMemory(processor_data->xsave_area, xsave_area_size);
+	}
+	else {
+		// Use FXSAVE/FXRSTOR instead.
+		int cpu_info[4] = {};
+		__cpuid(cpu_info, 1);
+		const CpuFeaturesEcx cpu_features_ecx = { static_cast<ULONG32>(cpu_info[2]) };
+		const CpuFeaturesEdx cpu_features_edx = { static_cast<ULONG32>(cpu_info[3]) };
+		if (cpu_features_ecx.fields.avx) {
+			HYPERPLATFORM_LOG_ERROR("A processor supports AVX but not XSAVE/XRSTOR.");
+			goto ReturnFalse;
+		}
+		if (!cpu_features_edx.fields.fxsr) {
+			HYPERPLATFORM_LOG_ERROR("A processor does not support FXSAVE/FXRSTOR.");
+			goto ReturnFalse;
+		}
+	}
 
-  processor_data->vmcs_region =
-      reinterpret_cast<VmControlStructure *>(ExAllocatePoolWithTag(
-          NonPagedPool, kVmxMaxVmcsSize, kHyperPlatformCommonPoolTag));
-  if (!processor_data->vmcs_region) {
-    goto ReturnFalse;
-  }
-  RtlZeroMemory(processor_data->vmcs_region, kVmxMaxVmcsSize);
+	// Allocate other processor data fields
+	processor_data->vmm_stack_limit =
+		UtilAllocateContiguousMemory(KERNEL_STACK_SIZE);
+	if (!processor_data->vmm_stack_limit) {
+		goto ReturnFalse;
+	}
+	RtlZeroMemory(processor_data->vmm_stack_limit, KERNEL_STACK_SIZE);
 
-  processor_data->vmxon_region =
-      reinterpret_cast<VmControlStructure *>(ExAllocatePoolWithTag(
-          NonPagedPool, kVmxMaxVmcsSize, kHyperPlatformCommonPoolTag));
-  if (!processor_data->vmxon_region) {
-    goto ReturnFalse;
-  }
-  RtlZeroMemory(processor_data->vmxon_region, kVmxMaxVmcsSize);
+	processor_data->vmcs_region =
+		reinterpret_cast<VmControlStructure *>(ExAllocatePoolWithTag(
+			NonPagedPool, kVmxMaxVmcsSize, kHyperPlatformCommonPoolTag));
+	if (!processor_data->vmcs_region) {
+		goto ReturnFalse;
+	}
+	RtlZeroMemory(processor_data->vmcs_region, kVmxMaxVmcsSize);
 
-  // Initialize stack memory for VMM like this:
-  //
-  // (High)
-  // +------------------+  <- vmm_stack_region_base      (eg, AED37000)
-  // | processor_data   |
-  // +------------------+  <- vmm_stack_data             (eg, AED36FFC)
-  // | MAXULONG_PTR     |
-  // +------------------+  <- vmm_stack_base (initial SP)(eg, AED36FF8)
-  // |                  |    v
-  // | (VMM Stack)      |    v (grow)
-  // |                  |    v
-  // +------------------+  <- vmm_stack_limit            (eg, AED34000)
-  // (Low)
-  const auto vmm_stack_region_base =
-      reinterpret_cast<ULONG_PTR>(processor_data->vmm_stack_limit) +
-      KERNEL_STACK_SIZE;
-  const auto vmm_stack_data = vmm_stack_region_base - sizeof(void *);
-  const auto vmm_stack_base = vmm_stack_data - sizeof(void *);
-  HYPERPLATFORM_LOG_DEBUG("vmm_stack_limit       = %p",
-                          processor_data->vmm_stack_limit);
-  HYPERPLATFORM_LOG_DEBUG("vmm_stack_region_base = %p", vmm_stack_region_base);
-  HYPERPLATFORM_LOG_DEBUG("vmm_stack_data        = %p", vmm_stack_data);
-  HYPERPLATFORM_LOG_DEBUG("vmm_stack_base        = %p", vmm_stack_base);
-  HYPERPLATFORM_LOG_DEBUG("processor_data        = %p stored at %p",
-                          processor_data, vmm_stack_data);
-  HYPERPLATFORM_LOG_DEBUG("guest_stack_pointer   = %p", guest_stack_pointer);
-  HYPERPLATFORM_LOG_DEBUG("guest_inst_pointer    = %p",
-                          guest_instruction_pointer);
-  *reinterpret_cast<ULONG_PTR *>(vmm_stack_base) = MAXULONG_PTR;
-  *reinterpret_cast<ProcessorData **>(vmm_stack_data) = processor_data;
+	processor_data->vmxon_region =
+		reinterpret_cast<VmControlStructure *>(ExAllocatePoolWithTag(
+			NonPagedPool, kVmxMaxVmcsSize, kHyperPlatformCommonPoolTag));
+	if (!processor_data->vmxon_region) {
+		goto ReturnFalse;
+	}
+	RtlZeroMemory(processor_data->vmxon_region, kVmxMaxVmcsSize);
 
-  // Set up VMCS
+	// Initialize stack memory for VMM like this:
+	//
+	// (High)
+	// +------------------+  <- vmm_stack_region_base      (eg, AED37000)
+	// | processor_data   |
+	// +------------------+  <- vmm_stack_data             (eg, AED36FFC)
+	// | MAXULONG_PTR     |
+	// +------------------+  <- vmm_stack_base (initial SP)(eg, AED36FF8)
+	// |                  |    v
+	// | (VMM Stack)      |    v (grow)
+	// |                  |    v
+	// +------------------+  <- vmm_stack_limit            (eg, AED34000)
+	// (Low)
+	const auto vmm_stack_region_base =
+		reinterpret_cast<ULONG_PTR>(processor_data->vmm_stack_limit) +
+		KERNEL_STACK_SIZE;
+	const auto vmm_stack_data = vmm_stack_region_base - sizeof(void *);
+	const auto vmm_stack_base = vmm_stack_data - sizeof(void *);
+	HYPERPLATFORM_LOG_DEBUG("vmm_stack_limit       = %p",
+		processor_data->vmm_stack_limit);
+	HYPERPLATFORM_LOG_DEBUG("vmm_stack_region_base = %p", vmm_stack_region_base);
+	HYPERPLATFORM_LOG_DEBUG("vmm_stack_data        = %p", vmm_stack_data);
+	HYPERPLATFORM_LOG_DEBUG("vmm_stack_base        = %p", vmm_stack_base);
+	HYPERPLATFORM_LOG_DEBUG("processor_data        = %p stored at %p",
+		processor_data, vmm_stack_data);
+	HYPERPLATFORM_LOG_DEBUG("guest_stack_pointer   = %p", guest_stack_pointer);
+	HYPERPLATFORM_LOG_DEBUG("guest_inst_pointer    = %p",
+		guest_instruction_pointer);
+	*reinterpret_cast<ULONG_PTR *>(vmm_stack_base) = MAXULONG_PTR;
+	*reinterpret_cast<ProcessorData **>(vmm_stack_data) = processor_data;
+
+
+	Ia32VmxBasicMsr msr1 = { UtilReadMsr64(Msr::kIa32VmxBasic) };
+	Ia32FeatureControlMsr msr2 = { UtilReadMsr64(Msr::kIa32FeatureControl) };
+	msr2.fields.lock = false;
+	msr2.fields.enable_vmxon = true;
+	
+	processor_data->VmxBasicMsr.QuadPart = msr1.all;
+	processor_data->Ia32FeatureMsr.QuadPart = msr2.all;
+	processor_data->VmxEptMsr.QuadPart =  0;
+
+ // Set up VMCS
   if (!VmpEnterVmxMode(processor_data)) {
     goto ReturnFalse;
   }
@@ -561,6 +583,8 @@ _Use_decl_annotations_ static bool VmpEnterVmxMode(
   if (__vmx_on(&vmxon_region_pa)) {
     return false;
   }
+
+  processor_data->CpuMode = ~IN_VMX_MODE;
 
   // See: Guidelines for Use of the INVVPID Instruction, and Guidelines for Use
   // of the INVEPT Instruction
@@ -653,9 +677,9 @@ _Use_decl_annotations_ static bool VmpSetupVmcs(
 
   // NOTE: Comment in any of those as needed
   const auto exception_bitmap =
-      // 1 << InterruptionVector::kBreakpointException |
+	   1 << InterruptionVector::kBreakpointException |
       // 1 << InterruptionVector::kGeneralProtectionException |
-       1 << InterruptionVector::kPageFaultException |
+      //  1 << InterruptionVector::kPageFaultException |
       0;
 
   // Set up CR0 and CR4 bitmaps
@@ -1027,10 +1051,10 @@ _Use_decl_annotations_ static bool VmpIsHyperPlatformInstalled() {
   int cpu_info[4] = {};
   __cpuid(cpu_info, 1);
   const CpuFeaturesEcx cpu_features = {static_cast<ULONG_PTR>(cpu_info[2])};
-  if (!cpu_features.fields.not_used) {
+ /* if (!cpu_features.fields.not_used) {
     return false;
   }
-
+  */
   __cpuid(cpu_info, kHyperVCpuidInterface);
   return cpu_info[0] == 'PpyH';
 }

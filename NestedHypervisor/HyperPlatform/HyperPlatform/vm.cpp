@@ -124,15 +124,15 @@ inline ULONG GetSegmentLimit(_In_ ULONG selector) {
  
 SharedShadowHookData* sharedata;
 _Use_decl_annotations_ NTSTATUS VmInitialization() {  
- /* if (VmpIsVmmInstalled()) {
-    return STATUS_CANCELLED;
+  
+  if (VmpIsVmmInstalled()) {
+		return STATUS_CANCELLED;
   }
-  */ 
-
-  /*if (!VmpIsVmxAvailable()) {
+   
+  if (!VmpIsVmxAvailable()) {
     return STATUS_HV_FEATURE_UNAVAILABLE;
-  }*/
-
+  }
+  
   //Prepared a MST-Bitmap and EMPTY HOOKDATA data array
 
   const auto shared_data = VmpInitializeSharedData();
@@ -146,6 +146,7 @@ _Use_decl_annotations_ NTSTATUS VmInitialization() {
     return status;
   } 
   // HYPERPLATFORM_COMMON_DBG_BREAK();
+
 
   return status;
 }
@@ -163,7 +164,7 @@ _Use_decl_annotations_ static bool VmpIsVmxAvailable() {
     HYPERPLATFORM_LOG_ERROR("VMX features are not supported.");
     return false;
   }
-
+  
   // See: BASIC VMX INFORMATION
   // The first processors to support VMX operation use the write-back type.
   const Ia32VmxBasicMsr vmx_basic_msr = {UtilReadMsr64(Msr::kIa32VmxBasic)};
@@ -173,6 +174,7 @@ _Use_decl_annotations_ static bool VmpIsVmxAvailable() {
     return false;
   }
 
+ 
   // See: ENABLING AND ENTERING VMX OPERATION
   Ia32FeatureControlMsr vmx_feature_control = {
       UtilReadMsr64(Msr::kIa32FeatureControl)};
@@ -187,11 +189,13 @@ _Use_decl_annotations_ static bool VmpIsVmxAvailable() {
     HYPERPLATFORM_LOG_ERROR("VMX features are not enabled.");
     return false;
   }
-
+  /*
   if (!EptIsEptAvailable()) {
     HYPERPLATFORM_LOG_ERROR("EPT features are not fully supported.");
     return false;
   }
+  */
+
   return true;
 }
 
@@ -551,8 +555,7 @@ _Use_decl_annotations_ static bool VmpSetupVMCS(
    
   VmxSecondaryProcessorBasedControls vm_procctl2_requested = {}; 
   vm_procctl2_requested.fields.enable_rdtscp = true;   
-  vm_procctl2_requested.fields.descriptor_table_exiting = true; 
-   
+  vm_procctl2_requested.fields.descriptor_table_exiting = true;  
   vm_procctl2_requested.fields.enable_xsaves_xstors = true; 
   VmxSecondaryProcessorBasedControls vm_procctl2 = {VmpAdjustControlValue(Msr::kIa32VmxProcBasedCtls2, vm_procctl2_requested.all)};
 
@@ -1108,6 +1111,8 @@ _Use_decl_annotations_ static void VmpFreeProcessorData(
   RtlCopyMemory(&vendor_id[0], &cpu_info[1], 4);  // ebx
   RtlCopyMemory(&vendor_id[4], &cpu_info[3], 4);  // edx
   RtlCopyMemory(&vendor_id[8], &cpu_info[2], 4);  // ecx
+
+  HYPERPLATFORM_LOG_DEBUG("VendorId: %s ", vendor_id);
   return RtlCompareMemory(vendor_id, "Pong by VMM!\0", sizeof(vendor_id)) ==
          sizeof(vendor_id);
 }

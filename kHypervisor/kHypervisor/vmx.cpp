@@ -13,6 +13,7 @@
 #include "vmx_common.h"
 extern "C"
 {
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //// Prototype
 ////
@@ -21,22 +22,26 @@ extern GpRegisters*  GetGpReg(GuestContext* guest_context);
 extern FlagRegister* GetFlagReg(GuestContext* guest_context);
 extern KIRQL		 GetGuestIrql(GuestContext* guest_context);
 extern ULONG_PTR	 GetGuestCr8(GuestContext* guest_context);
+extern NestedVmm*	 GetCurrentNestedCpu(_In_ GuestContext* guest_context);
+extern VOID			 SetCurrentNestedCpu(GuestContext* guest_context, NestedVmm* NestedVmm);
+extern VOID			 vCpuEnterVmxMode(GuestContext* guest_context);
+extern VOID			 vCpuLeaveVmxMode(GuestContext* guest_context);
+extern ULONG		 GetvCpuMode(GuestContext* guest_context);
 void				 SaveGuestCr8(NestedVmm* vcpu, ULONG_PTR cr8);
 void				 SaveGuestMsrs(NestedVmm* vcpu);
-
-NestedVmm*			 GetCurrentCPU(bool IsNested);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //// Marco
 ////
-
+ 
+ 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //// 
 //// Variable
 ////
-NestedVmm*	         g_vcpus[64] = {};
-volatile LONG		 g_vpid = 1;
 volatile LONG	     g_VM_Core_Count = 0;
+
+extern BOOLEAN		 IsEmulateVMExit;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,46 +61,20 @@ enum VMX_state
 
 
 VOID	LEAVE_GUEST_MODE(NestedVmm* vm) { vm->inRoot = TRUE; }
-VOID	ENTER_GUEST_MODE(NestedVmm* vm) { vm->inRoot = FALSE; }
-BOOLEAN IsRootMode(NestedVmm* vm) { return vm->inRoot; }
-
+VOID	ENTER_GUEST_MODE(NestedVmm* vm) { vm->inRoot = FALSE; } 
 //---------------------------------------------------------------------------------------------------------------------//
-NestedVmm* GetCurrentCPU(bool IsNested = true)
-{
-	ULONG64 vmcs12_va = 0;
-	ULONG64 vmcs_pa;
-	NestedVmm* ret = NULL;
-	int i = 0;
-	__vmx_vmptrst(&vmcs_pa);
-	if (vmcs_pa)
+BOOLEAN IsRootMode(NestedVmm* vm) 
+{ 
+	if (vm) 
 	{
-		for (i = 0; i < (int)KeQueryMaximumProcessorCount(); i++)
-		{
-			if (!g_vcpus[i])
-			{
-				break;
-			}
-			if (IsNested)
-			{
-				if (g_vcpus[i]->vmcs02_pa == vmcs_pa ||		//L2
-					g_vcpus[i]->vmcs01_pa == vmcs_pa)		//L1
-				{
-					ret = g_vcpus[i];
-					break;
-				}
-			}
-			else
-			{
-				if (g_vcpus[i]->vmcs02_pa == vmcs_pa)		//L2
-				{
-					ret = g_vcpus[i];
-					break;
-				}
-			}
-		}
+		return vm->inRoot;
 	}
-	return ret;
+	else
+	{
+		return true;
+	}
 }
+ 
 //---------------------------------------------------------------------------------------------------------------------//
 void DumpVcpu()
 {
@@ -104,7 +83,7 @@ void DumpVcpu()
 	NestedVmm* ret = NULL;
 	int i = 0;
 	__vmx_vmptrst(&vmcs_pa);
-	if (vmcs_pa)
+	/*if (vmcs_pa)
 	{
 		for (i = 0; i < (int)KeQueryMaximumProcessorCount(); i++)
 		{
@@ -115,6 +94,7 @@ void DumpVcpu()
 			HYPERPLATFORM_LOG_DEBUG_SAFE("Current Vmcs: %I64X i:%d vmcs02: %I64X", vmcs_pa, i, g_vcpus[i]->vmcs02_pa);
 		}
 	}
+	*/
 }
 //----------------------------------------------------------------------------------------------------------------------//
 /*
@@ -383,7 +363,7 @@ VOID VmExitDispatcher(NestedVmm* vcpu, ULONG64 vmcs12_va)
 	}
 }
 //------------------------------------------------------------------------------------------------------------
-BOOLEAN VMExitEmulationTest(VmExitInformation exit_reason, GuestContext* guest_context)
+BOOLEAN VMExitEmulationTest(NestedVmm* vCPU , VmExitInformation exit_reason, GuestContext* guest_context)
 {
 	/*
 	We need to emulate the exception if and only if the vCPU mode is Guest Mode ,
@@ -401,67 +381,42 @@ BOOLEAN VMExitEmulationTest(VmExitInformation exit_reason, GuestContext* guest_c
 	We desginated the L1 wants to handle any breakpoint exception but the others.
 	So that we only nested it for testing purpose.
 	*/
-
-
 	ULONG64 vmcs12_va = 0;
 	NestedVmm* vm = NULL;
 	BOOLEAN	ret;
-
 	// Unit-Testing with nested INT 3 exception
 
 	do
 	{
-		const VmExitInterruptionInformationField exception =
-		{
-			static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrInfo))
-		};
-
-		vm = GetCurrentCPU(false);
-		if (!vm)
+		if (!vCPU)
 		{
 			ret = FALSE;
 			break;
 		}
 
 		// Since VMXON, but VMPTRLD 
-		if (!vm->vmcs02_pa || !vm->vmcs12_pa || vm->vmcs12_pa == ~0x0 || vm->vmcs02_pa == ~0x0)
+		if (!vCPU->vmcs02_pa || !vCPU->vmcs12_pa || vCPU->vmcs12_pa == ~0x0 || vCPU->vmcs02_pa == ~0x0)
 		{
 			//HYPERPLATFORM_LOG_DEBUG_SAFE("cannot find vmcs \r\n");
 			ret = FALSE;
 			break;
 		}
 
-		vmcs12_va = (ULONG64)UtilVaFromPa(vm->vmcs12_pa);
-		// Test L0 exception
-		if (static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kPageFaultException)
-		{
-			ret = FALSE;
-			break;
-		}
+		vmcs12_va = (ULONG64)UtilVaFromPa(vCPU->vmcs12_pa);
+	
 		// Test L1 exception
-		if (!IsRootMode(vm) &&
-			static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kBreakpointException)
+		if (vmcs12_va)
 		{
-			if (vmcs12_va)
-			{
-				SaveGuestFieldFromVmcs02(vmcs12_va);
-				SaveExceptionInformationFromVmcs02(exit_reason, vmcs12_va); 
-				SaveGuestMsrs(vm);
-				SaveGuestCr8(vm, GetGuestCr8(guest_context));
+			SaveGuestFieldFromVmcs02(vmcs12_va);
+			SaveExceptionInformationFromVmcs02(exit_reason, vmcs12_va); 
+			SaveGuestMsrs(vCPU);
+			SaveGuestCr8(vCPU, GetGuestCr8(guest_context));
 
-				// Emulated VMExit 
-				LEAVE_GUEST_MODE(vm); 
-				VmExitDispatcher(vm, vmcs12_va); 
-
-				ret = TRUE;
-			} 
-		}
-		else
-		{
-			ret = FALSE;
-			break;
-		}
-
+			// Emulated VMExit 
+			LEAVE_GUEST_MODE(vCPU);
+			VmExitDispatcher(vCPU, vmcs12_va);
+			ret = TRUE;
+		} 
 	} while (0);
 
 	return ret;
@@ -507,23 +462,20 @@ VOID VmxonEmulate(GuestContext* guest_context)
 {
 	do
 	{
+
 		ULONG64				InstructionPointer = { UtilVmRead64(VmcsField::kGuestRip) };
 		ULONG64				StackPointer = { UtilVmRead64(VmcsField::kGuestRsp) };
 		ULONG64				vmxon_region_pa = *(PULONG64)DecodeVmclearOrVmptrldOrVmptrstOrVmxon(guest_context);
 		ULONG64				debug_vmxon_region_pa = DecodeVmclearOrVmptrldOrVmptrstOrVmxon(guest_context);
 		VmControlStructure*   vmxon_region_struct = (VmControlStructure*)UtilVaFromPa(vmxon_region_pa);
 		PROCESSOR_NUMBER      number;
+		NestedVmm*			NestedvCPU = GetCurrentNestedCpu(guest_context);
 
-		HYPERPLATFORM_LOG_DEBUG_SAFE("UtilVmRead: %I64X", &UtilVmRead);
-		HYPERPLATFORM_LOG_DEBUG_SAFE("UtilVmRead64: %I64X", &UtilVmRead64);
-		HYPERPLATFORM_LOG_DEBUG_SAFE("UtilVmWrite: %I64X", &UtilVmWrite);
-		HYPERPLATFORM_LOG_DEBUG_SAFE("UtilVmWrite64: %I64X", &UtilVmWrite64);
-		HYPERPLATFORM_LOG_DEBUG_SAFE("VmRead: %I64X", &VmRead16);
-		HYPERPLATFORM_LOG_DEBUG_SAFE("VmRead32: %I64X", &VmRead32);
-		HYPERPLATFORM_LOG_DEBUG_SAFE("VmRead64: %I64X", &VmRead64);
-		HYPERPLATFORM_LOG_DEBUG_SAFE("VmWrite: %I64X", &VmWrite16);
-		HYPERPLATFORM_LOG_DEBUG_SAFE("VmWrite32: %I64X", &VmWrite32);
-		HYPERPLATFORM_LOG_DEBUG_SAFE("VmWrite64: %I64X", &VmWrite64);
+		if (GetvCpuMode(guest_context) == IN_VMX_MODE)
+		{
+			HYPERPLATFORM_LOG_DEBUG_SAFE(("Current vCPU already in VMX mode !"));
+			break;
+		}
 		// VMXON_REGION IS NULL 
 		if (!vmxon_region_pa)
 		{
@@ -533,8 +485,9 @@ VOID VmxonEmulate(GuestContext* guest_context)
 			break;
 		}
 
+
 		// If already VCPU run in VMX operation
-		if (g_vcpus[KeGetCurrentProcessorNumberEx(&number)])
+		if (NestedvCPU)
 		{
 			///TODO: 
 			///if( it is non root ) 
@@ -643,25 +596,28 @@ VOID VmxonEmulate(GuestContext* guest_context)
 		}
 		///TODO: a20m and in SMX operation3 and bit 1 of IA32_FEATURE_CONTROL MSR is clear
 
-		NestedVmm* vm = (NestedVmm*)ExAllocatePool(NonPagedPoolNx, sizeof(NestedVmm));
-		vm->inVMX = TRUE;
-		vm->inRoot = TRUE;
-		vm->blockINITsignal = TRUE;
-		vm->blockAndDisableA20M = TRUE;
-		vm->vmcs02_pa = 0xFFFFFFFFFFFFFFFF;
-		vm->vmcs12_pa = 0xFFFFFFFFFFFFFFFF;
-		__vmx_vmptrst(&vm->vmcs01_pa);
-		vm->vmxon_region = vmxon_region_pa;
-		vm->CpuNumber = KeGetCurrentProcessorNumberEx(&number);
-		g_vcpus[vm->CpuNumber] = vm;
+		NestedVmm* NestedvCpu = (NestedVmm*)ExAllocatePool(NonPagedPoolNx, sizeof(NestedVmm));
+		NestedvCpu->inVMX = TRUE;
+		NestedvCpu->inRoot = TRUE;
+		NestedvCpu->blockINITsignal = TRUE;
+		NestedvCpu->blockAndDisableA20M = TRUE;
+		NestedvCpu->vmcs02_pa = 0xFFFFFFFFFFFFFFFF;
+		NestedvCpu->vmcs12_pa = 0xFFFFFFFFFFFFFFFF;
+		__vmx_vmptrst(&NestedvCpu->vmcs01_pa);
+		NestedvCpu->vmxon_region = vmxon_region_pa;
+		NestedvCpu->CpuNumber = KeGetCurrentProcessorNumberEx(&number);
+
+		vCpuEnterVmxMode(guest_context);
+		SetCurrentNestedCpu(guest_context, NestedvCpu);
+
 		HYPERPLATFORM_LOG_DEBUG_SAFE("VMXON: Guest Instruction Pointer %I64X Guest Stack Pointer: %I64X  Guest VMXON_Region: %I64X stored at %I64x physical address\r\n",
 			InstructionPointer, StackPointer, vmxon_region_pa, debug_vmxon_region_pa);
 
 		HYPERPLATFORM_LOG_DEBUG_SAFE("VMXON: Run Successfully with VMXON_Region:  %I64X Total Vitrualized Core: %x  Current Cpu: %x in Cpu Group : %x  Number: %x \r\n",
-			vmxon_region_pa, g_VM_Core_Count, vm->CpuNumber, number.Group, number.Number);
+			vmxon_region_pa, g_VM_Core_Count, NestedvCpu->CpuNumber, number.Group, number.Number);
 
 		HYPERPLATFORM_LOG_DEBUG_SAFE("VMXON: VCPU No.: %i Mode: %s Current VMCS : %I64X VMXON Region : %I64X  ",
-			g_vcpus[vm->CpuNumber]->CpuNumber, (g_vcpus[vm->CpuNumber]->inVMX) ? "VMX" : "No VMX", g_vcpus[vm->CpuNumber]->vmcs02_pa, g_vcpus[vm->CpuNumber]->vmxon_region);
+			NestedvCpu->CpuNumber, (NestedvCpu->inVMX) ? "VMX" : "No VMX", NestedvCpu->vmcs02_pa, NestedvCpu->vmxon_region);
 
 		//a group of CPU maximum is 64 core
 		if (g_VM_Core_Count < 64)
@@ -675,32 +631,46 @@ VOID VmxonEmulate(GuestContext* guest_context)
 
 	} while (FALSE);
 }
-
+//---------------------------------------------------------------------------------------------------------------//
 VOID VmxoffEmulate(
-	GuestContext* guest_context
+	_In_ GuestContext* guest_context
 )
 {
 	do
 	{
-		NestedVmm*				vm = GetCurrentCPU();
+		NestedVmm* NestedvCPU = NULL; 
 
-		if (!vm)
+		if (GetvCpuMode(guest_context) != IN_VMX_MODE)
 		{
-			DumpVcpu();
+			HYPERPLATFORM_LOG_DEBUG_SAFE(("Current vCPU already in VMX mode ! \r\n"));
+			VMfailInvalid(GetFlagReg(guest_context));
+			break;
+		}
+
+		NestedvCPU = GetCurrentNestedCpu(guest_context);
+		if (!NestedvCPU)
+		{
+			HYPERPLATFORM_LOG_DEBUG_SAFE(("Don't have Nested vCPU ! \r\n"));
+			VMfailInvalid(GetFlagReg(guest_context));
 			HYPERPLATFORM_COMMON_DBG_BREAK();
 			break;
 		}
-		//load back vmcs01
-		__vmx_vmptrld(&vm->vmcs01_pa);
-		vm = { 0 };
 
+		//load back vmcs01
+		__vmx_vmptrld(&NestedvCPU->vmcs01_pa);
+	
+		SetCurrentNestedCpu(guest_context, NULL);
+
+		vCpuLeaveVmxMode(guest_context);
+	
 		VMSucceed(GetFlagReg(guest_context));
 
-		HYPERPLATFORM_LOG_DEBUG_SAFE("VMXOff");
 	} while (0);
+		
 }
 //---------------------------------------------------------------------------------------------------------------------//
-VOID VmclearEmulate(GuestContext* guest_context)
+VOID VmclearEmulate(
+	_In_ GuestContext* guest_context)
 {
 	do
 	{
@@ -710,9 +680,16 @@ VOID VmclearEmulate(GuestContext* guest_context)
 		ULONG64				debug_vmcs_region_pa = DecodeVmclearOrVmptrldOrVmptrstOrVmxon(guest_context);
 		PROCESSOR_NUMBER	procnumber = {};
 		VmControlStructure* vmcs_region_va = (VmControlStructure*)UtilVaFromPa(vmcs_region_pa);
-		NestedVmm*				vm = GetCurrentCPU();
+		NestedVmm* NestedvCPU = GetCurrentNestedCpu(guest_context);
+		
+		if (GetvCpuMode(guest_context) != IN_VMX_MODE)
+		{
+			HYPERPLATFORM_LOG_DEBUG_SAFE(("Current vCPU already in VMX mode ! \r\n"));
+			VMfailInvalid(GetFlagReg(guest_context));
+			break;
+		}
 
-		if (!vm)
+		if (!NestedvCPU)
 		{
 			DumpVcpu();
 			HYPERPLATFORM_COMMON_DBG_BREAK();
@@ -729,7 +706,7 @@ VOID VmclearEmulate(GuestContext* guest_context)
 		}
 
 		//If VCPU is not run in VMX mode
-		if (!vm->inVMX)
+		if (!NestedvCPU->inVMX)
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXCLEAR: VMXON is required ! \r\n"));
 			//#UD
@@ -798,32 +775,32 @@ VOID VmclearEmulate(GuestContext* guest_context)
 			break;
 		}
 		//if vmcs != vmregion 
-		if (vm && (vmcs_region_pa == vm->vmxon_region))
+		if (NestedvCPU && (vmcs_region_pa == NestedvCPU->vmxon_region))
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXCLEAR: VMCS region %I64X same as VMXON region %I64X ! \r\n"),
-				vmcs_region_pa, vm->vmxon_region);
+				vmcs_region_pa, NestedvCPU->vmxon_region);
 
 			VMfailInvalid(GetFlagReg(guest_context));
 			break;
 		}
 
 		*(PLONG)(&vmcs_region_va->data) = VMCS_STATE_CLEAR;
-		if (vmcs_region_pa == vm->vmcs12_pa)
+		if (vmcs_region_pa == NestedvCPU->vmcs12_pa)
 		{
-			vm->vmcs12_pa = 0xFFFFFFFFFFFFFFFF;
+			NestedvCPU->vmcs12_pa = 0xFFFFFFFFFFFFFFFF;
 		}
 
-		__vmx_vmclear(&vm->vmcs02_pa);
-		vm->vmcs02_pa = 0xFFFFFFFFFFFFFFFF;
+		__vmx_vmclear(&NestedvCPU->vmcs02_pa);
+		NestedvCPU->vmcs02_pa = 0xFFFFFFFFFFFFFFFF;
 
 		HYPERPLATFORM_LOG_DEBUG_SAFE("VMCLEAR: Guest Instruction Pointer %I64X Guest Stack Pointer: %I64X  Guest vmcs region: %I64X stored at %I64x on stack\r\n",
 			InstructionPointer, StackPointer, vmcs_region_pa, debug_vmcs_region_pa);
 
 		HYPERPLATFORM_LOG_DEBUG_SAFE("VMCLEAR: Run Successfully with VMCS_Region:  %I64X Total Vitrualized Core: %x  Current Cpu: %x in Cpu Group : %x  Number: %x \r\n",
-			vmcs_region_pa, g_VM_Core_Count, vm->CpuNumber, procnumber.Group, procnumber.Number);
+			vmcs_region_pa, g_VM_Core_Count, NestedvCPU->CpuNumber, procnumber.Group, procnumber.Number);
 
 		HYPERPLATFORM_LOG_DEBUG_SAFE("VMCLEAR: VCPU No.: %i Mode: %s Current VMCS : %I64X VMXON Region : %I64X  ",
-			vm->CpuNumber, (vm->inVMX) ? "VMX" : "No VMX", vm->vmcs02_pa, vm->vmxon_region);
+			NestedvCPU->CpuNumber, (NestedvCPU->inVMX) ? "VMX" : "No VMX", NestedvCPU->vmcs02_pa, NestedvCPU->vmxon_region);
 
 		VMSucceed(GetFlagReg(guest_context));
 	} while (FALSE);
@@ -838,10 +815,17 @@ VOID VmptrldEmulate(GuestContext* guest_context)
 		ULONG64				InstructionPointer = { UtilVmRead64(VmcsField::kGuestRip) };
 		ULONG64				StackPointer = { UtilVmRead64(VmcsField::kGuestRsp) };
 		ULONG64				vmcs12_region_pa = *(PULONG64)DecodeVmclearOrVmptrldOrVmptrstOrVmxon(guest_context);
-		VmControlStructure*   vmcs12_region_va = (VmControlStructure*)UtilVaFromPa(vmcs12_region_pa);
-		NestedVmm*				vm = GetCurrentCPU();
+		VmControlStructure* vmcs12_region_va = (VmControlStructure*)UtilVaFromPa(vmcs12_region_pa);
+		NestedVmm*			NestedvCPU = GetCurrentNestedCpu(guest_context);
 
-		if (!vm)
+		if (GetvCpuMode(guest_context) != IN_VMX_MODE)
+		{
+			HYPERPLATFORM_LOG_DEBUG_SAFE(("Current vCPU already in VMX mode ! \r\n"));
+			VMfailInvalid(GetFlagReg(guest_context));
+			break;
+		}
+
+		if (!NestedvCPU)
 		{
 			DumpVcpu();
 			HYPERPLATFORM_COMMON_DBG_BREAK();
@@ -857,7 +841,7 @@ VOID VmptrldEmulate(GuestContext* guest_context)
 			break;
 		}
 		// if VCPU not run in VMX mode 
-		if (!vm->inVMX)
+		if (!NestedvCPU->inVMX)
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("kVmptrld: VMXON is required ! \r\n"));
 			//#UD
@@ -925,10 +909,10 @@ VOID VmptrldEmulate(GuestContext* guest_context)
 			break;
 		}
 
-		if (vm && (vmcs12_region_pa == vm->vmxon_region))
+		if (NestedvCPU && (vmcs12_region_pa == NestedvCPU->vmxon_region))
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("kVmptrld: VMCS region %I64X same as VMXON region %I64X ! \r\n"),
-				vmcs12_region_pa, vm->vmxon_region);
+				vmcs12_region_pa, NestedvCPU->vmxon_region);
 
 			VMfailInvalid(GetFlagReg(guest_context));
 			break;
@@ -947,15 +931,15 @@ VOID VmptrldEmulate(GuestContext* guest_context)
 
 		RtlFillMemory(vmcs02_region_va, PAGE_SIZE, 0x0);
 
-		vm->vmcs02_pa = vmcs02_region_pa;		    //vmcs02' physical address - DIRECT VMREAD/WRITE
-		vm->vmcs12_pa = vmcs12_region_pa;		    //vmcs12' physical address - we will control its structure in Vmread/Vmwrite
-		vm->kVirtualProcessorId = (USHORT)KeGetCurrentProcessorNumberEx(nullptr) + 1;
+		NestedvCPU->vmcs02_pa = vmcs02_region_pa;		    //vmcs02' physical address - DIRECT VMREAD/WRITE
+		NestedvCPU->vmcs12_pa = vmcs12_region_pa;		    //vmcs12' physical address - we will control its structure in Vmread/Vmwrite
+		NestedvCPU->kVirtualProcessorId = (USHORT)KeGetCurrentProcessorNumberEx(nullptr) + 1;
 
 		HYPERPLATFORM_LOG_DEBUG_SAFE("[VMPTRLD] Run Successfully \r\n");
 		HYPERPLATFORM_LOG_DEBUG_SAFE("[VMPTRLD] VMCS02 PA: %I64X VA: %I64X  \r\n", vmcs02_region_pa, vmcs02_region_va);
 		HYPERPLATFORM_LOG_DEBUG_SAFE("[VMPTRLD] VMCS12 PA: %I64X VA: %I64X \r\n", vmcs12_region_pa, vmcs12_region_va);
-		HYPERPLATFORM_LOG_DEBUG_SAFE("[VMPTRLD] VMCS01 PA: %I64X VA: %I64X \r\n", vm->vmcs01_pa, UtilVaFromPa(vm->vmcs01_pa));
-		HYPERPLATFORM_LOG_DEBUG_SAFE("[VMPTRLD] Current Cpu: %x in Cpu Group : %x  Number: %x \r\n", vm->CpuNumber, procnumber.Group, procnumber.Number);
+		HYPERPLATFORM_LOG_DEBUG_SAFE("[VMPTRLD] VMCS01 PA: %I64X VA: %I64X \r\n", NestedvCPU->vmcs01_pa, UtilVaFromPa(NestedvCPU->vmcs01_pa));
+		HYPERPLATFORM_LOG_DEBUG_SAFE("[VMPTRLD] Current Cpu: %x in Cpu Group : %x  Number: %x \r\n", NestedvCPU->CpuNumber, procnumber.Group, procnumber.Number);
 
 		VMSucceed(GetFlagReg(guest_context));
 
@@ -969,17 +953,25 @@ VOID VmreadEmulate(GuestContext* guest_context)
 	do
 	{
 		PROCESSOR_NUMBER  procnumber = { 0 };
-		NestedVmm*				 vm = GetCurrentCPU();
-		ULONG64			  vmcs12_pa = vm->vmcs12_pa;
+		NestedVmm*		  NestedvCPU = GetCurrentNestedCpu(guest_context);
+		ULONG64			  vmcs12_pa = NestedvCPU->vmcs12_pa;
 		ULONG64			  vmcs12_va = (ULONG64)UtilVaFromPa(vmcs12_pa);
-		if (!vm)
+		
+		if (GetvCpuMode(guest_context) != IN_VMX_MODE)
+		{
+			HYPERPLATFORM_LOG_DEBUG_SAFE(("Current vCPU already in VMX mode ! \r\n"));
+			VMfailInvalid(GetFlagReg(guest_context));
+			break;
+		}
+
+		if (!NestedvCPU)
 		{
 			DumpVcpu();
 			HYPERPLATFORM_COMMON_DBG_BREAK();
 			break;
 		}
 		// if VCPU not run in VMX mode
-		if (!vm->inVMX)
+		if (!NestedvCPU->inVMX)
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMREAD: VMXON is required ! \r\n"));
 			//#UD
@@ -1113,17 +1105,25 @@ VOID VmwriteEmulate(GuestContext* guest_context)
 	do
 	{
 		PROCESSOR_NUMBER    procnumber = { 0 };
-		NestedVmm*				 vm = GetCurrentCPU();
-		ULONG64			  vmcs12_pa = (ULONG64)vm->vmcs12_pa;
+		NestedVmm*		  NestedvCPU = GetCurrentNestedCpu(guest_context);
+		ULONG64			  vmcs12_pa = (ULONG64)NestedvCPU->vmcs12_pa;
 		ULONG64			  vmcs12_va = (ULONG64)UtilVaFromPa(vmcs12_pa);
-		if (!vm)
+
+		if (GetvCpuMode(guest_context) != IN_VMX_MODE)
+		{
+			HYPERPLATFORM_LOG_DEBUG_SAFE(("Current vCPU already in VMX mode ! \r\n"));
+			VMfailInvalid(GetFlagReg(guest_context));
+			break;
+		}
+
+		if (!NestedvCPU)
 		{
 			DumpVcpu();
 			HYPERPLATFORM_COMMON_DBG_BREAK();
 			break;
 		}
 		// if VCPU not run in VMX mode
-		if (!vm->inVMX)
+		if (!NestedvCPU->inVMX)
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: VMXON is required ! \r\n"));
 			//#UD
@@ -1265,18 +1265,26 @@ VOID VmlaunchEmulate(GuestContext* guest_context)
 {
 
 	PROCESSOR_NUMBER  procnumber = { 0 };
-	NestedVmm* vm = GetCurrentCPU();
+	NestedVmm*		  NestedvCPU = GetCurrentNestedCpu(guest_context);
 	VmxStatus		  status;
 	do { 
 		HYPERPLATFORM_LOG_DEBUG_SAFE("-----start vmlaunch---- \r\n");
-		if (!vm)
+
+		if (GetvCpuMode(guest_context) != IN_VMX_MODE)
+		{
+			HYPERPLATFORM_LOG_DEBUG_SAFE(("Current vCPU already in VMX mode ! \r\n"));
+			VMfailInvalid(GetFlagReg(guest_context));
+			break;
+		}
+
+		if (!NestedvCPU)
 		{
 			DumpVcpu();
 			HYPERPLATFORM_COMMON_DBG_BREAK();
 			break;
 		}
 		//not in vmx mode
-		if (!vm->inVMX)
+		if (!NestedvCPU->inVMX)
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMLAUNCH: VMXON is required ! \r\n"));
 			//#UD
@@ -1325,7 +1333,7 @@ VOID VmlaunchEmulate(GuestContext* guest_context)
 		}
 
 
-		ENTER_GUEST_MODE(vm);
+		ENTER_GUEST_MODE(NestedvCPU);
 
 		/*
 		if (!g_vcpus[vcpu_index]->inRoot)
@@ -1338,8 +1346,8 @@ VOID VmlaunchEmulate(GuestContext* guest_context)
 		//Get vmcs02 / vmcs12
 
 
-		auto    vmcs02_pa = vm->vmcs02_pa;
-		auto	vmcs12_pa = vm->vmcs12_pa;
+		auto    vmcs02_pa = NestedvCPU->vmcs02_pa;
+		auto	vmcs12_pa = NestedvCPU->vmcs12_pa;
 
 		if (!vmcs02_pa || !vmcs12_pa)
 		{
@@ -1384,6 +1392,8 @@ VOID VmlaunchEmulate(GuestContext* guest_context)
 			KeLowerIrql(GetGuestIrql(guest_context));
 		}
 
+		IsEmulateVMExit = FALSE;
+
 		if (VmxStatus::kOk != (status = static_cast<VmxStatus>(__vmx_vmlaunch())))
 		{
 			VmxInstructionError error2 = static_cast<VmxInstructionError>(UtilVmRead(VmcsField::kVmInstructionError));
@@ -1402,17 +1412,24 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 	do
 	{
 		PROCESSOR_NUMBER  procnumber = { 0 };
-		NestedVmm* vm = GetCurrentCPU();
-	//	HYPERPLATFORM_LOG_DEBUG_SAFE("----Start Emulate VMRESUME---");
+		NestedVmm*		  NestedvCPU	 = GetCurrentNestedCpu(guest_context);
+		//	HYPERPLATFORM_LOG_DEBUG_SAFE("----Start Emulate VMRESUME---");
 
-		if (!vm)
+		if (GetvCpuMode(guest_context) != IN_VMX_MODE)
+		{
+			HYPERPLATFORM_LOG_DEBUG_SAFE(("Current vCPU already in VMX mode ! \r\n"));
+			VMfailInvalid(GetFlagReg(guest_context));
+			break;
+		}
+
+		if (!NestedvCPU)
 		{
 			DumpVcpu();
 			HYPERPLATFORM_COMMON_DBG_BREAK();
 			break;
 		}
  		//not in vmx mode
-		if (!vm->inVMX)
+		if (!NestedvCPU->inVMX)
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMRESUME: VMXON is required ! \r\n"));
 			//#UD
@@ -1461,10 +1478,10 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 		}
 
 
-		ENTER_GUEST_MODE(vm);
+		ENTER_GUEST_MODE(NestedvCPU);
 
-		auto      vmcs02_pa = vm->vmcs02_pa;
-		auto	  vmcs12_pa = vm->vmcs12_pa;
+		auto      vmcs02_pa = NestedvCPU->vmcs02_pa;
+		auto	  vmcs12_pa = NestedvCPU->vmcs12_pa;
 
 		if (!vmcs02_pa || !vmcs12_pa)
 		{
@@ -1483,8 +1500,8 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 		ptr->revision_identifier = vmx_basic_msr.fields.revision_identifier;
 
 		//Restore some MSR & cr8 we may need to ensure the consistency  
-		RestoreGuestMsrs(vm);
-		RestoreGuestCr8(vm);
+		RestoreGuestMsrs(NestedvCPU);
+		RestoreGuestCr8(NestedvCPU);
 
 		//Prepare VMCS01 Host / Control Field
 		PrepareHostAndControlField(vmcs12_va, vmcs02_pa, FALSE);
@@ -1497,6 +1514,12 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 		VM Guest state field End
 		*/
 
+		if (GetGuestIrql(guest_context) < DISPATCH_LEVEL)
+		{
+			KeLowerIrql(GetGuestIrql(guest_context));
+		}
+
+		IsEmulateVMExit = FALSE;
 		//--------------------------------------------------------------------------------------//
 
 		/*
@@ -1515,7 +1538,7 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 		PrintVMCS();   
 		
 		HYPERPLATFORM_COMMON_DBG_BREAK();
-
+		 
 		__vmx_vmresume();
 
 	} while (FALSE);
@@ -1532,6 +1555,13 @@ VOID VmptrstEmulate(GuestContext* guest_context)
 		ULONG64				vmcs12_region_pa = *(PULONG64)DecodeVmclearOrVmptrldOrVmptrstOrVmxon(guest_context);
 		ULONG64				vmcs12_region_va = (ULONG64)UtilVaFromPa(vmcs12_region_pa);
 		ULONG				vcpu_index = KeGetCurrentProcessorNumberEx(&procnumber);
+
+		if (GetvCpuMode(guest_context) != IN_VMX_MODE)
+		{
+			HYPERPLATFORM_LOG_DEBUG_SAFE(("Current vCPU already in VMX mode ! \r\n"));
+			VMfailInvalid(GetFlagReg(guest_context));
+			break;
+		}
 
 		__vmx_vmptrst(&vmcs12_region_va);
 		VMSucceed(GetFlagReg(guest_context));

@@ -29,7 +29,7 @@ extern "C" {
 //
 BOOLEAN IsEmulateVMExit = FALSE;
 // Whether VM-exit recording is enabled
-static const long kVmmpEnableRecordVmExit = false;
+static const long kVmmpEnableRecordVmExit = true;
 
 // How many events should be recorded per a processor
 static const long kVmmpNumberOfRecords = 100;
@@ -216,6 +216,36 @@ ULONG GetvCpuMode(GuestContext* guest_context)
 	return guest_context->stack->processor_data->CpuMode;
 }
 
+<<<<<<< HEAD
+//----------------------------------------------------------------------------------------------------------------//
+VOID SetvCpuMode(GuestContext* guest_context, CPU_MODE CpuMode)
+{
+	guest_context->stack->processor_data->CpuMode = CpuMode;
+} 
+ 
+//----------------------------------------------------------------------------------------------------------------//
+VOID EnterVmxMode(GuestContext* guest_context)
+{
+	SetvCpuMode(guest_context ,VmxMode);
+} 
+
+//----------------------------------------------------------------------------------------------------------------//
+VOID LeaveVmxMode(GuestContext* guest_context)
+{
+	SetvCpuMode(guest_context, ProtectedMode);
+}
+
+//----------------------------------------------------------------------------------------------------------------//
+VCPUVMX* GetVcpuVmx(GuestContext* guest_context)
+{
+	return guest_context->stack->processor_data->vcpu_vmx;
+}
+
+//----------------------------------------------------------------------------------------------------------------//
+VOID SetvCpuVmx(GuestContext* guest_context, VCPUVMX* VCPUVMX)
+{
+	guest_context->stack->processor_data->vcpu_vmx = VCPUVMX;
+=======
 
 //----------------------------------------------------------------------------------------------------------------//
 VOID vCpuEnterVmxMode(GuestContext* guest_context)
@@ -240,6 +270,7 @@ NestedVmm* GetCurrentNestedCpu(GuestContext* guest_context)
 VOID SetCurrentNestedCpu(GuestContext* guest_context, NestedVmm* NestedVmm)
 {
 	guest_context->stack->processor_data->vCPU = NestedVmm;
+>>>>>>> origin/master
 }
 
 //----------------------------------------------------------------------------------------------------------------//
@@ -375,21 +406,38 @@ _Use_decl_annotations_ static void VmmpHandleVmExitForL1(VmExitInformation exit_
 	}
 }
 //-----------------------------------------------------------------------------------------------------------------------//
+<<<<<<< HEAD
+_Use_decl_annotations_ static BOOLEAN VmmpHandleExceptionForL2(
+=======
 _Use_decl_annotations_ static void VmmpHandleExceptionForL2(
+>>>>>>> origin/master
 	_In_ VmExitInformation exit_reason, 
 	_In_ GuestContext *guest_context
 )
 {
+<<<<<<< HEAD
+	BOOLEAN status = FALSE;
+=======
+>>>>>>> origin/master
 	VmExitInterruptionInformationField 	exception = { static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrInfo)) };
 	if (static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kBreakpointException)
 	{
 		HYPERPLATFORM_COMMON_DBG_BREAK();
+<<<<<<< HEAD
+		HYPERPLATFORM_LOG_DEBUG_SAFE("Nested VMExit Ready !!!! \r\n");
+		if (status = VMExitEmulationTest(GetVcpuVmx(guest_context), exit_reason, guest_context))
+=======
 		HYPERPLATFORM_LOG_DEBUG("Nested VMExit Ready !!!! \r\n");
 		if (VMExitEmulationTest(GetCurrentNestedCpu(guest_context), exit_reason, guest_context))
+>>>>>>> origin/master
 		{
 			IsEmulateVMExit = true;
 		}
 	}
+<<<<<<< HEAD
+	return status; 
+=======
+>>>>>>> origin/master
 }
 
 //-----------------------------------------------------------------------------------------------------------------------//
@@ -398,7 +446,11 @@ _Use_decl_annotations_ static void VmmpHandleCpuidForL2(
 	_In_ GuestContext *guest_context
 )
 {
+<<<<<<< HEAD
+	if (VMExitEmulationTest(GetVcpuVmx(guest_context), exit_reason, guest_context))
+=======
 	if (VMExitEmulationTest(GetCurrentNestedCpu(guest_context), exit_reason, guest_context))
+>>>>>>> origin/master
 	{
 		IsEmulateVMExit = true;
 	}
@@ -414,12 +466,20 @@ _Use_decl_annotations_ static BOOLEAN VmmpHandleVmExitForL2(
 	switch (exit_reason.fields.reason) 
 	{
 		case VmxExitReason::kCpuid: 
+<<<<<<< HEAD
+		 ///	VmmpHandleCpuidForL2(exit_reason, guest_context);
+		///	IsHandled = TRUE;
+		break;
+		case VmxExitReason::kExceptionOrNmi: 
+			IsHandled = VmmpHandleExceptionForL2(exit_reason, guest_context);
+=======
 		//	VmmpHandleCpuidForL2(exit_reason, guest_context);
 			IsHandled = FALSE;
 		break;
 		case VmxExitReason::kExceptionOrNmi:
 			VmmpHandleExceptionForL2(exit_reason, guest_context);
 			IsHandled = TRUE; 
+>>>>>>> origin/master
 		break;
 		case VmxExitReason::kTripleFault:
 			break;
@@ -478,7 +538,11 @@ _Use_decl_annotations_ static void VmmpHandleVmExit(GuestContext *guest_context)
 	HYPERPLATFORM_PERFORMANCE_MEASURE_THIS_SCOPE();
 
 	ULONG64 vmcs_pa = 0;
+<<<<<<< HEAD
+	VCPUVMX* vCPU = GetVcpuVmx(guest_context);
+=======
 	NestedVmm*	 vCPU = GetCurrentNestedCpu(guest_context);
+>>>>>>> origin/master
 
 	const VmExitInformation exit_reason = { static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitReason)) };
 
@@ -501,12 +565,25 @@ _Use_decl_annotations_ static void VmmpHandleVmExit(GuestContext *guest_context)
 	}
  
 	__vmx_vmptrst(&vmcs_pa);
+<<<<<<< HEAD
+		
+	IsEmulateVMExit = FALSE;
+	//after vmxon emulation
+	if (GetvCpuMode(guest_context) == VmxMode)
+	{
+		//after vmptrld emulation
+		//after vmlaunch / vmresume emulation
+		if(GetVmxMode(vCPU) == GuestMode && 
+			vCPU->vmcs02_pa == vmcs_pa)
+		{
+=======
 	
 	if (GetvCpuMode(guest_context) == IN_VMX_MODE)
 	{
 		if(!IsRootMode(vCPU) && (vCPU->vmcs02_pa == vmcs_pa))
 		{
 			IsEmulateVMExit = FALSE;
+>>>>>>> origin/master
 			if (!VmmpHandleVmExitForL2(exit_reason, guest_context))
 			{
 				VmmpHandleVmExitForL1(exit_reason, guest_context); 
@@ -514,8 +591,12 @@ _Use_decl_annotations_ static void VmmpHandleVmExit(GuestContext *guest_context)
 		}
 		else
 		{
+<<<<<<< HEAD
+ 			VmmpHandleVmExitForL1(exit_reason, guest_context);
+=======
 			HYPERPLATFORM_COMMON_DBG_BREAK();
 			VmmpHandleVmExitForL1(exit_reason, guest_context);
+>>>>>>> origin/master
 		}
 	}
 	else
@@ -653,7 +734,11 @@ _Use_decl_annotations_ static void VmmpHandleCpuid(
   guest_context->gp_regs->cx = cpu_info[2];
   guest_context->gp_regs->dx = cpu_info[3];
 
+<<<<<<< HEAD
+  HYPERPLATFORM_LOG_DEBUG_SAFE("Root CPUID Called with id : %x sid: %x !!!!!!!!!!!!!!! \r\n", function_id, sub_function_id);
+=======
   HYPERPLATFORM_LOG_DEBUG("Root CPUID Called with id : %x sid: %x !!!!!!!!!!!!!!! \r\n", function_id, sub_function_id);
+>>>>>>> origin/master
   VmmpAdjustGuestInstructionPointer(guest_context);
 }
 
@@ -749,6 +834,7 @@ _Use_decl_annotations_ static void VmmpHandleMsrAccess(
 	}
     case Msr::kIa32FsBase:
 		vmcs_field = VmcsField::kGuestFsBase;
+		transfer_to_vmcs = true;
       break;
     default:
       break;
@@ -1777,7 +1863,6 @@ _Use_decl_annotations_ static void VmmpHandleVmx(GuestContext *guest_context)
 			  //- We saved the vmcs02 GuestRip into VMCS12 our VMExit Handler, 
 			  //- because when L1 is executing VMRESUME, it is running on VMCS01
 			  VmresumeEmulate(guest_context);
-			  return;
 		  }
 		  break;
 

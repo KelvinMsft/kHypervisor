@@ -49,17 +49,21 @@ VOID VmptrstEmulate(
 );
 
 VOID LEAVE_GUEST_MODE(
-	NestedVmm* vcpu
+	VCPUVMX* vcpu
 );
 VOID ENTER_GUEST_MODE(
-	NestedVmm* vcpu
+	VCPUVMX* vcpu
 );
-BOOLEAN IsRootMode(
-	NestedVmm* vcpu
+VMX_MODE GetVmxMode(
+	VCPUVMX* vcpu
 );  
 
 BOOLEAN VMExitEmulationTest(
+<<<<<<< HEAD
+	VCPUVMX* vCPU,
+=======
 	NestedVmm* vCPU,
+>>>>>>> origin/master
 	VmExitInformation exit_reason,
 	GuestContext* guest_context
 );

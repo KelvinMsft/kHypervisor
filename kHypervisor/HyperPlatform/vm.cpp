@@ -395,8 +395,13 @@ _Use_decl_annotations_ static void VmpInitializeVm(
 	}
 	RtlZeroMemory(processor_data, sizeof(ProcessorData));
 	processor_data->shared_data = shared_data;
+<<<<<<< HEAD
+	processor_data->vcpu_vmx = NULL;
+	processor_data->CpuMode = ProtectedMode;
+=======
 	processor_data->vCPU = NULL;
 	processor_data->CpuMode		= IN_ROOT_MODE;
+>>>>>>> origin/master
 
 	InterlockedIncrement(&processor_data->shared_data->reference_count);
 
@@ -582,7 +587,7 @@ _Use_decl_annotations_ static bool VmpEnterVmxMode(
   auto vmxon_region_pa = UtilPaFromVa(processor_data->vmxon_region);
   if (__vmx_on(&vmxon_region_pa)) {
     return false;
-  }
+  } 
 
   processor_data->CpuMode = ~IN_VMX_MODE;
 

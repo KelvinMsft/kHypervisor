@@ -38,8 +38,7 @@ void				 SaveGuestMsrs(VCPUVMX* vcpu);
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //// 
 //// Variable
-////
-volatile LONG	     g_VM_Core_Count = 0;
+//// 
 
 extern BOOLEAN		 IsEmulateVMExit;
 
@@ -567,20 +566,44 @@ VOID VmxoffEmulate(
 			break;
 		}
 
+		// if VCPU not run in VMX mode 
+		if (GetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
+		{
+			// Inject ...'
+			HYPERPLATFORM_LOG_DEBUG_SAFE(("Unimplemented third level virualization \r\n"));
+			VMfailInvalid(GetFlagReg(guest_context));
+			break;
+		}
+
 		//load back vmcs01
 		__vmx_vmptrld(&vcpu_vmx->vmcs01_pa); 
+	
+		ULONG_PTR vmcs12_va = (ULONG_PTR)UtilVaFromPa(vcpu_vmx->vmcs12_pa);
+		ULONG64 Len = 0;
+		VmRead64(VmcsField::kVmExitInstructionLen, vmcs12_va, &Len);
 
+		PrepareGuestStateField(vmcs12_va);
+
+		UtilVmWrite(VmcsField::kGuestRip,UtilVmRead64(VmcsField::kGuestRip) + Len);
+	
 		SetvCpuVmx(guest_context, NULL);
 
 		LeaveVmxMode(guest_context);
-	 
+	 	
+		if (vcpu_vmx->guest_irql < DISPATCH_LEVEL)
+		{
+			KeLowerIrql(vcpu_vmx->guest_irql);
+		}	
+
+		HYPERPLATFORM_LOG_DEBUG_SAFE("OldIrql : %x \r\n", vcpu_vmx->guest_irql);
+
 		ExFreePool(vcpu_vmx);
 		vcpu_vmx = NULL;
-			
-		VMSucceed(GetFlagReg(guest_context));
+	
+		__vmx_vmresume();
 
+		VMSucceed(GetFlagReg(guest_context));
 	} while (0);
-		
 }
 //---------------------------------------------------------------------------------------------------------------------//
 VOID VmclearEmulate(
@@ -802,6 +825,13 @@ VOID VmreadEmulate(GuestContext* guest_context)
 
 	do
 	{
+
+		VmcsField		  field;
+		ULONG_PTR		  offset;
+		ULONG_PTR		  value;
+		BOOLEAN			  RorM;
+		ULONG_PTR		  regIndex;
+		ULONG_PTR		  memAddress;
 		PROCESSOR_NUMBER  procnumber = { 0 };
 		VCPUVMX*		  NestedvCPU = GetVcpuVmx(guest_context);
 		ULONG64			  vmcs12_pa = NestedvCPU->vmcs12_pa;
@@ -830,56 +860,6 @@ VOID VmreadEmulate(GuestContext* guest_context)
 			break;
 		}
 
-		//CR0.PE = 0;
-		if (!IsGuestInProtectedMode())
-		{
-			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMREAD: Please running in Protected Mode ! \r\n"));
-			//#UD
-			ThrowInvalidCodeException();
-			break;
-		}
-
-		//If guest run in virtual-8086 mode
-		//RFLAGS.VM = 1
-		if (IsGuestInVirtual8086())
-		{
-			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMREAD: Guest is running in virtual-8086 mode ! \r\n"));
-			//#UD
-			ThrowInvalidCodeException();
-			break;
-		}
-
-		//If guest run in IA32-e 
-		//kGuestIa32Efer.LMA = 1
-		if (IsGuestInIA32eMode())
-		{
-			//If CS.L == 0 , means compability mode (32bit addressing), CS.L == 1 is 64bit mode , default operand is 32bit
-			if (!IsGuestinCompatibliltyMode())
-			{
-				HYPERPLATFORM_LOG_DEBUG_SAFE(("VMREAD: Guest is IA-32e mode but not in 64bit mode ! \r\n"));
-				//#UD
-				ThrowInvalidCodeException();
-				break;
-			}
-		}
-
-		///TODO: If in VMX non-root operation, should be VM Exit
-
-		//Get Guest CPLvm
-		if (GetGuestCPL() > 0)
-		{
-			HYPERPLATFORM_LOG_DEBUG_SAFE("VMREAD: Need running in Ring - 0 ! , now is cs.cpi: %x \r\n", GetGuestCPL()); 	  //#gp
-			ThrowGerneralFaultInterrupt();
-			break;
-		}
-
-		VmcsField field;
-		ULONG_PTR offset;
-		ULONG_PTR value;
-		BOOLEAN   RorM;
-		ULONG_PTR regIndex;
-		ULONG_PTR memAddress;
-
 		field = DecodeVmwriteOrVmRead(GetGpReg(guest_context), &offset, &value, &RorM, &regIndex, &memAddress);
 
 		if (!is_vmcs_field_supported(field))
@@ -896,16 +876,7 @@ VOID VmreadEmulate(GuestContext* guest_context)
 			break;
 		}
 
-
-		/*  if (!g_vcpus[vcpu_index]->inRoot)
-		{
-		///TODO: Should INJECT vmexit to L1
-		///	   And Handle it well
-		break;
-		}
-		*/
 		auto operand_size = VMCS_FIELD_WIDTH((int)field);
-
 
 		if (RorM)
 		{
@@ -946,7 +917,9 @@ VOID VmreadEmulate(GuestContext* guest_context)
 				HYPERPLATFORM_LOG_DEBUG_SAFE("VMREAD64: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PULONG64)memAddress);
 			}
 		}
+
 		VMSucceed(GetFlagReg(guest_context));
+
 	} while (FALSE);
 }
 
@@ -956,10 +929,14 @@ VOID VmwriteEmulate(GuestContext* guest_context)
 
 	do
 	{
+		VmcsField			field;
+		ULONG_PTR			offset;
+		ULONG_PTR			Value;
+		BOOLEAN				RorM;
 		PROCESSOR_NUMBER    procnumber = { 0 };
-		VCPUVMX*		  NestedvCPU = GetVcpuVmx(guest_context);
-		ULONG64			  vmcs12_pa = (ULONG64)NestedvCPU->vmcs12_pa;
-		ULONG64			  vmcs12_va = (ULONG64)UtilVaFromPa(vmcs12_pa);
+		VCPUVMX*			NestedvCPU = GetVcpuVmx(guest_context);
+		ULONG64				vmcs12_pa = (ULONG64)NestedvCPU->vmcs12_pa;
+		ULONG64				vmcs12_va = (ULONG64)UtilVaFromPa(vmcs12_pa);
 
 		if (GetvCpuMode(guest_context) != VmxMode)
 		{
@@ -967,14 +944,7 @@ VOID VmwriteEmulate(GuestContext* guest_context)
 			VMfailInvalid(GetFlagReg(guest_context));
 			break;
 		}
-
-		if (!NestedvCPU)
-		{
-			DumpVcpu(guest_context);
-			HYPERPLATFORM_COMMON_DBG_BREAK();
-			break;
-		}
-		 
+		
 		// if VCPU not run in VMX mode 
 		if (GetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
 		{
@@ -983,54 +953,16 @@ VOID VmwriteEmulate(GuestContext* guest_context)
 			VMfailInvalid(GetFlagReg(guest_context));
 			break;
 		}
-
-		//CR0.PE = 0;
-		if (!IsGuestInProtectedMode())
+		
+		if (!NestedvCPU)
 		{
-			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: Please running in Protected Mode ! \r\n"));
-			//#UD
-			ThrowInvalidCodeException();
+			DumpVcpu(guest_context);
+			HYPERPLATFORM_COMMON_DBG_BREAK();
 			break;
 		}
-
-		//If guest run in virtual-8086 mode
-		//RFLAGS.VM = 1
-		if (IsGuestInVirtual8086())
-		{
-			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: Guest is running in virtual-8086 mode ! \r\n"));
-			//#UD
-			ThrowInvalidCodeException();
-			break;
-		}
-
-		//If guest run in IA32-e 
-		//kGuestIa32Efer.LMA = 1
-		if (IsGuestInIA32eMode())
-		{
-			//If CS.L == 0 , means compability mode (32bit addressing), CS.L == 1 is 64bit mode , default operand is 32bit
-			if (!IsGuestinCompatibliltyMode())
-			{
-				HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: Guest is IA-32e mode but not in 64bit mode ! \r\n"));
-				//#UD
-				ThrowInvalidCodeException();
-				break;
-			}
-		}
-
+		 
+	
 		///TODO: If in VMX non-root operation, should be VM Exit
-
-		//Get Guest CPL
-		if (GetGuestCPL() > 0)
-		{
-			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMWRITE: Need running in Ring - 0 ! \r\n")); 	  //#gp
-			ThrowGerneralFaultInterrupt();
-			break;
-		}
-
-		VmcsField field;
-		ULONG_PTR offset;
-		ULONG_PTR Value;
-		BOOLEAN   RorM;
 
 		field = DecodeVmwriteOrVmRead(GetGpReg(guest_context), &offset, &Value, &RorM);
 
@@ -1069,6 +1001,7 @@ VOID VmwriteEmulate(GuestContext* guest_context)
 		VMSucceed(GetFlagReg(guest_context));
 	} while (FALSE);
 }
+
 /*
 64 bit Control field is not used
 
@@ -1146,47 +1079,6 @@ VOID VmlaunchEmulate(GuestContext* guest_context)
 			VMfailInvalid(GetFlagReg(guest_context));
 			break;
 		}
-
-		//CR0.PE = 0;
-		if (!IsGuestInProtectedMode())
-		{
-			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMLAUNCH: Please running in Protected Mode ! \r\n"));
-			//#UD
-			ThrowInvalidCodeException();
-			break;
-		}
-
-		//If guest run in virtual-8086 mode
-		//RFLAGS.VM = 1
-		if (IsGuestInVirtual8086())
-		{
-			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMLAUNCH: Guest is running in virtual-8086 mode ! \r\n"));
-			//#UD
-			ThrowInvalidCodeException();
-			break;
-		}
-
-		//If guest run in IA32-e
-		//kGuestIa32Efer.LMA = 1
-		if (IsGuestInIA32eMode())
-		{
-			//If CS.L == 0 , means compability mode (32bit addressing), CS.L == 1 is 64bit mode , default operand is 32bit
-			if (!IsGuestinCompatibliltyMode())
-			{
-				HYPERPLATFORM_LOG_DEBUG_SAFE(("VMLAUNCH: Guest is IA-32e mode but not in 64bit mode ! \r\n"));
-				//#UD
-				ThrowInvalidCodeException();
-				break;
-			}
-		}
-		//Get Guest CPL
-		if (GetGuestCPL() > 0)
-		{
-			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMLAUNCH: Need running in Ring - 0 ! \r\n")); 	  //#gp
-			ThrowGerneralFaultInterrupt();
-			break;
-		}
-
 
 		ENTER_GUEST_MODE(NestedvCPU);
 
@@ -1292,47 +1184,6 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 			break;
 		}
 
-		//CR0.PE = 0;
-		if (!IsGuestInProtectedMode())
-		{
-			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMRESUME: Please running in Protected Mode ! \r\n"));
-			//#UD
-			ThrowInvalidCodeException();
-			break;
-		}
-
-		//If guest run in virtual-8086 mode
-		//RFLAGS.VM = 1
-		if (IsGuestInVirtual8086())
-		{
-			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMRESUME: Guest is running in virtual-8086 mode ! \r\n"));
-			//#UD
-			ThrowInvalidCodeException();
-			break;
-		}
-
-		//If guest run in IA32-e
-		//kGuestIa32Efer.LMA = 1
-		if (IsGuestInIA32eMode())
-		{
-			//If CS.L == 0 , means compability mode (32bit addressing), CS.L == 1 is 64bit mode , default operand is 32bit
-			if (!IsGuestinCompatibliltyMode())
-			{
-				HYPERPLATFORM_LOG_DEBUG_SAFE(("VMRESUME: Guest is IA-32e mode but not in 64bit mode ! \r\n"));
-				//#UD
-				ThrowInvalidCodeException();
-				break;
-			}
-		}
-		//Get Guest CPL
-		if (GetGuestCPL() > 0)
-		{
-			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMRESUME: Need running in Ring - 0 ! \r\n")); 	  //#gp
-			ThrowGerneralFaultInterrupt();
-			break;
-		}
-
-
 		ENTER_GUEST_MODE(NestedvCPU);
 
 		auto      vmcs02_pa = NestedvCPU->vmcs02_pa;
@@ -1385,10 +1236,15 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 
 		//--------------------------------------------------------------------------------------//
 
-
+		
 		PrintVMCS();   
 		
 		HYPERPLATFORM_COMMON_DBG_BREAK();
+
+		if(GetGuestIrql(guest_context) < DISPATCH_LEVEL)
+		{ 
+			KeLowerIrql(GetGuestIrql(guest_context));
+		}
 
  		if (VmxStatus::kOk != (status = static_cast<VmxStatus>(__vmx_vmresume())))
 		{

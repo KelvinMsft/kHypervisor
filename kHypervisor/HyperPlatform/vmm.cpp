@@ -200,7 +200,7 @@ extern "C" {
 	//----------------------------------------------------------------------------------------------------------------//
 	KIRQL GetGuestIrql(GuestContext* guest_context)
 	{
-		return guest_context->irql;
+		return guest_context->stack->processor_data->vcpu_vmx->guest_irql;
 	}
 
 
@@ -389,12 +389,27 @@ extern "C" {
 		if (static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kBreakpointException)
 		{
 			HYPERPLATFORM_COMMON_DBG_BREAK();
-			HYPERPLATFORM_LOG_DEBUG_SAFE("Nested VMExit Ready !!!! \r\n");
+			HYPERPLATFORM_LOG_DEBUG_SAFE("Nested VMExit INT 3 Ready !!!! \r\n");
 			if (status = VMExitEmulationTest(GetVcpuVmx(guest_context), exit_reason, guest_context))
 			{
 				IsEmulateVMExit = true;
 			}
 		}
+		return status;
+	}
+	//-----------------------------------------------------------------------------------------------------------------------//
+	_Use_decl_annotations_ static BOOLEAN VmmpHandleVmcallForL2(
+		_In_ VmExitInformation exit_reason,
+		_In_ GuestContext *guest_context
+	)
+	{ 
+		BOOLEAN status = false;
+			HYPERPLATFORM_COMMON_DBG_BREAK();
+			HYPERPLATFORM_LOG_DEBUG_SAFE("Nested VMExit - vmcall Ready !!!! \r\n");
+			if (status = VMExitEmulationTest(GetVcpuVmx(guest_context), exit_reason, guest_context))
+			{
+				IsEmulateVMExit = true;
+			}
 		return status;
 	}
 
@@ -455,6 +470,7 @@ extern "C" {
 		case VmxExitReason::kEptMisconfig:
 			break;
 		case VmxExitReason::kVmcall:
+			IsHandled = VmmpHandleVmcallForL2(exit_reason, guest_context);
 			break;
 		case VmxExitReason::kVmclear:
 		case VmxExitReason::kVmlaunch:
@@ -480,11 +496,7 @@ extern "C" {
 	// Dispatches VM-exit to a corresponding handler
 	_Use_decl_annotations_ static void VmmpHandleVmExit(GuestContext *guest_context)
 	{
-		HYPERPLATFORM_PERFORMANCE_MEASURE_THIS_SCOPE();
-
-		ULONG64 vmcs_pa = 0;
-		VCPUVMX* vCPU = GetVcpuVmx(guest_context);
-
+		HYPERPLATFORM_PERFORMANCE_MEASURE_THIS_SCOPE(); 
 		const VmExitInformation exit_reason = { static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitReason)) };
 
 		if (kVmmpEnableRecordVmExit)
@@ -504,21 +516,27 @@ extern "C" {
 				index = 0;
 			}
 		}
-
-		__vmx_vmptrst(&vmcs_pa);
-
+		
 		IsEmulateVMExit = FALSE;
 		//after vmxon emulation
 		if (GetvCpuMode(guest_context) == VmxMode)
 		{
 			//after vmptrld emulation
-			//after vmlaunch / vmresume emulation
-			if (GetVmxMode(vCPU) == GuestMode &&
-				vCPU->vmcs02_pa == vmcs_pa)
+			//after vmlaunch / vmresume emulation		
+			ULONG64 vmcs_pa = 0;
+			VCPUVMX* vCPU = GetVcpuVmx(guest_context);
+
+			__vmx_vmptrst(&vmcs_pa);
+			
+			if (GetVmxMode(vCPU) == GuestMode && vCPU->vmcs02_pa == vmcs_pa)
 			{
 				if (!VmmpHandleVmExitForL2(exit_reason, guest_context))
 				{
 					VmmpHandleVmExitForL1(exit_reason, guest_context);
+				}
+				else 
+				{
+					guest_context->stack->processor_data->vcpu_vmx->guest_irql = guest_context->irql;
 				}
 			}
 			else
@@ -528,6 +546,10 @@ extern "C" {
 		}
 		else
 		{
+			if (exit_reason.fields.reason == VmxExitReason::kExceptionOrNmi)
+			{
+				HYPERPLATFORM_LOG_DEBUG("reason: %x \r\n", exit_reason.fields.reason);
+			}
 			VmmpHandleVmExitForL1(exit_reason, guest_context);
 		}
 	}
@@ -1759,8 +1781,7 @@ extern "C" {
 		break;
 		/// TODO:
 		case VmxExitReason::kVmoff:
-		{
-
+		{ 
 			VmxoffEmulate(guest_context);
 		}
 		break;

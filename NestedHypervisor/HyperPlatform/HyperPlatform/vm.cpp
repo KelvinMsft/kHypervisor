@@ -1112,11 +1112,7 @@ _Use_decl_annotations_ static void VmpFreeProcessorData(
   RtlCopyMemory(&vendor_id[4], &cpu_info[3], 4);  // edx
   RtlCopyMemory(&vendor_id[8], &cpu_info[2], 4);  // ecx
 
-<<<<<<< HEAD
   HYPERPLATFORM_LOG_DEBUG_SAFE("VendorId: %s ", vendor_id);
-=======
-  HYPERPLATFORM_LOG_DEBUG("VendorId: %s ", vendor_id);
->>>>>>> origin/master
   return RtlCompareMemory(vendor_id, "Pong by VMM!\0", sizeof(vendor_id)) ==
          sizeof(vendor_id);
 }

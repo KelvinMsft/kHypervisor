@@ -431,11 +431,7 @@ _Use_decl_annotations_ static void VmmpHandleCpuid(
     guest_context->gp_regs->dx = cpu_info[3];
   }
   
-<<<<<<< HEAD
   HYPERPLATFORM_LOG_DEBUG_SAFE("Nested CPUID Called !!!!!!!!!!!!! \r\n");
-=======
-  HYPERPLATFORM_LOG_DEBUG("Nested CPUID Called !!!!!!!!!!!!! \r\n");
->>>>>>> origin/master
 
 
   VmmpAdjustGuestInstructionPointer(guest_context->ip);

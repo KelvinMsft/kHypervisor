@@ -288,7 +288,7 @@ _Use_decl_annotations_ static NTSTATUS UtilpInitializePhysicalMemoryRanges() {
   for (auto i = 0ul; i < ranges->number_of_runs; ++i) {
     const auto base_addr =
         static_cast<ULONG64>(ranges->run[i].base_page) * PAGE_SIZE;
-    HYPERPLATFORM_LOG_DEBUG("Physical Memory Range: %016llx - %016llx",
+    HYPERPLATFORM_LOG_DEBUG_SAFE("Physical Memory Range: %016llx - %016llx",
                             base_addr,
                             base_addr + ranges->run[i].page_count * PAGE_SIZE);
   }
@@ -296,7 +296,7 @@ _Use_decl_annotations_ static NTSTATUS UtilpInitializePhysicalMemoryRanges() {
   const auto pm_size = static_cast<ULONG64>(ranges->number_of_pages) * PAGE_SIZE;
 
   //µÃµ½KB”µ
-  HYPERPLATFORM_LOG_DEBUG("Physical Memory Total: %llu KB", pm_size / 1024);
+  HYPERPLATFORM_LOG_DEBUG_SAFE("Physical Memory Total: %llu KB", pm_size / 1024);
 
   return STATUS_SUCCESS;
 }

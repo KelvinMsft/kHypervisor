@@ -174,7 +174,7 @@ LogInitialization(ULONG flag, const wchar_t *log_file_path) {
   if (!NT_SUCCESS(status)) {
     goto Fail;
   }
-  HYPERPLATFORM_LOG_DEBUG("Info= %p, Buffer= %p %p, File= %S",
+  HYPERPLATFORM_LOG_DEBUG_SAFE("Info= %p, Buffer= %p %p, File= %S",
                           &g_logp_log_buffer_info,
                           g_logp_log_buffer_info.log_buffer1,
                           g_logp_log_buffer_info.log_buffer2, log_file_path);
@@ -324,7 +324,7 @@ _Use_decl_annotations_ VOID static LogpReinitializationRoutine(
 _Use_decl_annotations_ void LogIrpShutdownHandler() {
   PAGED_CODE();
 
-  HYPERPLATFORM_LOG_DEBUG("Flushing... (Max log usage = %08x bytes)",
+  HYPERPLATFORM_LOG_DEBUG_SAFE("Flushing... (Max log usage = %08x bytes)",
                           g_logp_log_buffer_info.log_max_usage);
   HYPERPLATFORM_LOG_INFO("Bye!");
   g_logp_debug_flag = kLogPutLevelDisable;
@@ -340,7 +340,7 @@ _Use_decl_annotations_ void LogIrpShutdownHandler() {
 _Use_decl_annotations_ void LogTermination() {
   PAGED_CODE();
 
-  HYPERPLATFORM_LOG_DEBUG("Finalizing... (Max log usage = %08x bytes)",
+  HYPERPLATFORM_LOG_DEBUG_SAFE("Finalizing... (Max log usage = %08x bytes)",
                           g_logp_log_buffer_info.log_max_usage);
   HYPERPLATFORM_LOG_INFO("Bye!");
   g_logp_debug_flag = kLogPutLevelDisable;
@@ -734,7 +734,7 @@ _Use_decl_annotations_ static VOID LogpBufferFlushThreadRoutine(
   auto status = STATUS_SUCCESS;
   auto info = reinterpret_cast<LogBufferInfo *>(start_context);
   info->buffer_flush_thread_started = true;
-  HYPERPLATFORM_LOG_DEBUG("Log thread started (TID= %p).",
+  HYPERPLATFORM_LOG_DEBUG_SAFE("Log thread started (TID= %p).",
                           PsGetCurrentThreadId());
 
   while (info->buffer_flush_thread_should_be_alive) {

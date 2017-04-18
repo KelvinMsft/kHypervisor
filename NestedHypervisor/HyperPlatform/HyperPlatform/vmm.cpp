@@ -387,7 +387,7 @@ _Use_decl_annotations_ static void VmmpHandleException(GuestContext *guest_conte
 		inject.fields.valid = true;
 		UtilVmWrite(VmcsField::kVmEntryIntrInfoField, inject.all);
 		UtilVmWrite(VmcsField::kVmEntryInstructionLen, 1);
-	  HYPERPLATFORM_LOG_DEBUG("L1 GuestIp= %p, #BP ", guest_context->ip);
+	  HYPERPLATFORM_LOG_DEBUG_SAFE("L1 GuestIp= %p, #BP ", guest_context->ip);
      }
 	else if (static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kTrapFlags)
 	{
@@ -397,7 +397,7 @@ _Use_decl_annotations_ static void VmmpHandleException(GuestContext *guest_conte
 		inject.fields.deliver_error_code = false;
 		inject.fields.valid = true;
 		UtilVmWrite(VmcsField::kVmEntryIntrInfoField, inject.all);
-		HYPERPLATFORM_LOG_DEBUG("L1 GuestIp= %p, #TF ", guest_context->ip);
+		HYPERPLATFORM_LOG_DEBUG_SAFE("L1 GuestIp= %p, #TF ", guest_context->ip);
 
 	}
 	else 
@@ -431,7 +431,11 @@ _Use_decl_annotations_ static void VmmpHandleCpuid(
     guest_context->gp_regs->dx = cpu_info[3];
   }
   
+<<<<<<< HEAD
+  HYPERPLATFORM_LOG_DEBUG_SAFE("Nested CPUID Called !!!!!!!!!!!!! \r\n");
+=======
   HYPERPLATFORM_LOG_DEBUG("Nested CPUID Called !!!!!!!!!!!!! \r\n");
+>>>>>>> origin/master
 
 
   VmmpAdjustGuestInstructionPointer(guest_context->ip);

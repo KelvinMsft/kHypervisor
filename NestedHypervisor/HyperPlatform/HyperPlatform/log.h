@@ -31,18 +31,18 @@ extern "C" {
 ///
 /// A message should not exceede 512 bytes after all string construction is
 /// done; otherwise this macro fails to log and returns non STATUS_SUCCESS.
-#define HYPERPLATFORM_LOG_DEBUG(format, ...) \
+#define HYPERPLATFORM_LOG_DEBUG_SAFE(format, ...) \
   LogpPrint(kLogpLevelDebug, __FUNCTION__, (format), __VA_ARGS__)
 
-/// @see HYPERPLATFORM_LOG_DEBUG
+/// @see HYPERPLATFORM_LOG_DEBUG_SAFE
 #define HYPERPLATFORM_LOG_INFO(format, ...) \
   LogpPrint(kLogpLevelInfo, __FUNCTION__, (format), __VA_ARGS__)
 
-/// @see HYPERPLATFORM_LOG_DEBUG
+/// @see HYPERPLATFORM_LOG_DEBUG_SAFE
 #define HYPERPLATFORM_LOG_WARN(format, ...) \
   LogpPrint(kLogpLevelWarn, __FUNCTION__, (format), __VA_ARGS__)
 
-/// @see HYPERPLATFORM_LOG_DEBUG
+/// @see HYPERPLATFORM_LOG_DEBUG_SAFE
 #define HYPERPLATFORM_LOG_ERROR(format, ...) \
   LogpPrint(kLogpLevelError, __FUNCTION__, (format), __VA_ARGS__)
 
@@ -53,7 +53,7 @@ extern "C" {
 /// Buffers the log to buffer and neither calls DbgPrint() nor writes to a file.
 /// It is strongly recommended to use it when a status of a system is not
 /// expectable in order to avoid system instability.
-/// @see HYPERPLATFORM_LOG_DEBUG
+/// @see HYPERPLATFORM_LOG_DEBUG_SAFE
 #define HYPERPLATFORM_LOG_DEBUG_SAFE(format, ...)                        \
   LogpPrint(kLogpLevelDebug | kLogpLevelOptSafe, __FUNCTION__, (format), \
             __VA_ARGS__)
@@ -161,7 +161,7 @@ _IRQL_requires_max_(PASSIVE_LEVEL) void LogTermination();
 /// @param function_name   A name of a function called this function
 /// @param format   A format string
 /// @return STATUS_SUCCESS on success
-/// @see HYPERPLATFORM_LOG_DEBUG
+/// @see HYPERPLATFORM_LOG_DEBUG_SAFE
 /// @see HYPERPLATFORM_LOG_DEBUG_SAFE
 NTSTATUS LogpPrint(_In_ ULONG level, _In_ const char *function_name,
                    _In_ const char *format, ...);

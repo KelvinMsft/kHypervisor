@@ -154,7 +154,7 @@ extern "C" {
 
 		UNREFERENCED_PARAMETER(registry_path);
 		PAGED_CODE();
-		HYPERPLATFORM_LOG_DEBUG("start nested test \r\n");
+		HYPERPLATFORM_LOG_DEBUG_SAFE("start nested test \r\n");
 
 		static const wchar_t kLogFilePath[] = L"\\SystemRoot\\DdiMon33.log";
 
@@ -200,7 +200,7 @@ extern "C" {
 		if (!NT_SUCCESS(status)) {
 			//PerfTermination();
 			// LogTermination();
-			HYPERPLATFORM_LOG_DEBUG("UtilInitialization FAILED\r\n");
+			HYPERPLATFORM_LOG_DEBUG_SAFE("UtilInitialization FAILED\r\n");
 			return status;
 		}
 

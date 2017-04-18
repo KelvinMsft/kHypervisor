@@ -155,7 +155,7 @@ _Use_decl_annotations_ bool EptIsEptAvailable()
   int regs[4] = {};
   __cpuidex(regs, 0x80000008, 0);
   Cpuid80000008Eax cpuidEax = {static_cast<ULONG32>(regs[0])};
-  HYPERPLATFORM_LOG_DEBUG("Physical Address Range = %d bits",
+  HYPERPLATFORM_LOG_DEBUG_SAFE("Physical Address Range = %d bits",
                           cpuidEax.fields.physical_address_bits);
 
   // No processors supporting the Intel 64 architecture support more than 48
@@ -666,7 +666,7 @@ _Use_decl_annotations_ static EptCommonEntry *EptpGetEptPtEntry(
 
 // Frees all EPT stuff
 _Use_decl_annotations_ void EptTermination(EptData *ept_data) {
-  HYPERPLATFORM_LOG_DEBUG("Used pre-allocated entries  = %2d / %2d",
+  HYPERPLATFORM_LOG_DEBUG_SAFE("Used pre-allocated entries  = %2d / %2d",
                           ept_data->preallocated_entries_count,
                           kVmxpNumberOfPreallocatedEntries);
 

@@ -320,7 +320,7 @@ _Use_decl_annotations_ EXTERN_C bool ShInstallHook(
     return false;
   }
 
-  HYPERPLATFORM_LOG_DEBUG(
+  HYPERPLATFORM_LOG_DEBUG_SAFE(
       "Patch = %p, Exec = %p, RW = %p, Trampoline = %p", info->patch_address,
       info->shadow_page_base_for_exec->page + BYTE_OFFSET(info->patch_address),
       info->shadow_page_base_for_rw->page + BYTE_OFFSET(info->patch_address),

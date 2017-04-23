@@ -125,11 +125,16 @@ inline ULONG GetSegmentLimit(_In_ ULONG selector) {
 SharedShadowHookData* sharedata;
 _Use_decl_annotations_ NTSTATUS VmInitialization() {  
   
-  if (VmpIsVmmInstalled()) {
-		return STATUS_CANCELLED;
+  if (VmpIsVmmInstalled()) 
+  {
+	  HYPERPLATFORM_LOG_DEBUG_SAFE("Vmp is installed %x \r\n", KeGetCurrentIrql());
+	  return STATUS_CANCELLED;
   }
    
-  if (!VmpIsVmxAvailable()) {
+  if (!VmpIsVmxAvailable())
+  {
+	  HYPERPLATFORM_LOG_DEBUG_SAFE("vmx not avaiable %x \r\n", KeGetCurrentIrql());
+
     return STATUS_HV_FEATURE_UNAVAILABLE;
   }
   
@@ -137,17 +142,17 @@ _Use_decl_annotations_ NTSTATUS VmInitialization() {
 
   const auto shared_data = VmpInitializeSharedData();
   if (!shared_data) {
+	  HYPERPLATFORM_LOG_DEBUG_SAFE("VmpInitializeSharedData not avaiable %x \r\n",KeGetCurrentIrql());
     return STATUS_MEMORY_NOT_ALLOCATED;
   }
 
   auto status = UtilForEachProcessor(VmpStartVM, shared_data);
   if (!NT_SUCCESS(status)) {
-    //UtilForEachProcessor(VmpStopVM, nullptr);
+	  HYPERPLATFORM_LOG_DEBUG_SAFE("VmpStartVM not avaiable %x ", KeGetCurrentIrql());
+    UtilForEachProcessor(VmpStopVM, nullptr);
     return status;
   } 
-  // HYPERPLATFORM_COMMON_DBG_BREAK();
-
-
+   HYPERPLATFORM_COMMON_DBG_BREAK();
   return status;
 }
 

@@ -590,16 +590,25 @@ VOID VmxoffEmulate(
 
 		LeaveVmxMode(guest_context);
 	 	
-		if (vcpu_vmx->guest_irql < DISPATCH_LEVEL)
+		/*if (vcpu_vmx->guest_irql < DISPATCH_LEVEL)
 		{
 			KeLowerIrql(vcpu_vmx->guest_irql);
-		}	
+		}
+		*/	
 
 		HYPERPLATFORM_LOG_DEBUG_SAFE("OldIrql : %x \r\n", vcpu_vmx->guest_irql);
 
 		ExFreePool(vcpu_vmx);
 		vcpu_vmx = NULL;
 	
+		// Restore guest's context
+		if (GetGuestIrql(guest_context) < DISPATCH_LEVEL)//&& !IsEmulateVMExit)
+		{
+			KeLowerIrql(GetGuestIrql(guest_context));
+		}
+
+		__writecr8(GetGuestCr8(guest_context));
+		
 		__vmx_vmresume();
 
 		VMSucceed(GetFlagReg(guest_context));

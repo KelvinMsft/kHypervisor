@@ -200,7 +200,7 @@ extern "C" {
 	//----------------------------------------------------------------------------------------------------------------//
 	KIRQL GetGuestIrql(GuestContext* guest_context)
 	{
-		return guest_context->stack->processor_data->vcpu_vmx->guest_irql;
+		return guest_context->irql;
 	}
 
 
@@ -289,13 +289,14 @@ extern "C" {
 		}
 
 		// Restore guest's context
-		if (guest_context.irql < DISPATCH_LEVEL && !IsEmulateVMExit)
+		if (guest_context.irql < DISPATCH_LEVEL)//&& !IsEmulateVMExit)
 		{
 			KeLowerIrql(guest_context.irql);
 		}
 
 		// Apply possibly updated CR8 by the handler
-		if (IsX64() && !IsEmulateVMExit) {
+		if (IsX64()) //&& !IsEmulateVMExit) {
+		{
 			__writecr8(guest_context.cr8);
 		}
 		return guest_context.vm_continue;
@@ -536,7 +537,7 @@ extern "C" {
 				}
 				else 
 				{
-					guest_context->stack->processor_data->vcpu_vmx->guest_irql = guest_context->irql;
+					//guest_context->stack->processor_data->vcpu_vmx->guest_irql = guest_context->irql;
 				}
 			}
 			else

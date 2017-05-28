@@ -25,6 +25,8 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
 
 2017-02-08 : Emulate VMExit behaviour has been slightly Changed. in case of L2 is trapped by L0, and L0 emulate VMExit to L1, this time of VMRESUME will not be restore a Guest CR8 and Guest IRQL, it is until VMRESUME by L1. (L0 helps L1 resume to L2) 
 
+2017-05-28 : Fixed Nested-CPUID problem, and add Nested-VMCALL.
+
 # Installation
 
  - kHypervisor extended HyperPlatform which is created by Tandasat, it is a Nested-Virtual Machine Monitor, and DdiMon is one of Tandasat's product of HyperPlatform for test demo in kHypervisor.

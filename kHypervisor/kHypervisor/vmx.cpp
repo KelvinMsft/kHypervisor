@@ -954,7 +954,6 @@ VOID VmwriteEmulate(GuestContext* guest_context)
 			VMfailInvalid(GetFlagReg(guest_context));
 			break;
 		}
-		
 		// if VCPU not run in VMX mode 
 		if (GetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
 		{
@@ -1189,7 +1188,7 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 		if (GetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
 		{
 			// Inject ...'
-			HYPERPLATFORM_LOG_DEBUG_SAFE(("Unimplemented third level virualization \r\n"));
+			HYPERPLATFORM_LOG_DEBUG_SAFE(("vmresume: Unimplemented third level virualization \r\n"));
 			VMfailInvalid(GetFlagReg(guest_context));
 			break;
 		}

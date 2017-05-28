@@ -406,7 +406,17 @@ _Use_decl_annotations_ static void VmmpHandleException(GuestContext *guest_conte
     }
   }
   else {
-	  HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 3, 0, 0);
+	//  HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 3, 0, 0);
+	  VmEntryInterruptionInformationField inject = {};
+	  const auto error_code =
+		  static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrErrorCode));
+	  inject.fields.interruption_type = exception.fields.interruption_type;
+	  inject.fields.vector = exception.fields.vector;
+	  inject.fields.deliver_error_code = error_code;
+	  inject.fields.valid = true;
+	  UtilVmWrite(VmcsField::kVmEntryIntrInfoField, inject.all);
+	  HYPERPLATFORM_LOG_DEBUG_SAFE("interruption_type= %x, vector=: %x ", inject.fields.interruption_type, inject.fields.vector, guest_context->ip);
+
   }
 }//VMM異常捕?函數完
 

@@ -289,7 +289,7 @@ extern "C" {
 		}
 
 		// Restore guest's context
-		if (guest_context.irql < DISPATCH_LEVEL)//&& !IsEmulateVMExit)
+		if (guest_context.irql < DISPATCH_LEVEL && !IsEmulateVMExit)
 		{
 			KeLowerIrql(guest_context.irql);
 		}
@@ -415,15 +415,17 @@ extern "C" {
 	}
 
 	//-----------------------------------------------------------------------------------------------------------------------//
-	_Use_decl_annotations_ static void VmmpHandleCpuidForL2(
+	_Use_decl_annotations_ static BOOLEAN VmmpHandleCpuidForL2(
 		_In_ VmExitInformation exit_reason,
 		_In_ GuestContext *guest_context
 	)
 	{
-		if (VMExitEmulationTest(GetVcpuVmx(guest_context), exit_reason, guest_context))
+		BOOLEAN status = false;
+		if (status = VMExitEmulationTest(GetVcpuVmx(guest_context), exit_reason, guest_context))
 		{
 			IsEmulateVMExit = true;
 		}
+		return status;
 	}
 
 	//-----------------------------------------------------------------------------------------------------------------------//
@@ -436,8 +438,7 @@ extern "C" {
 		switch (exit_reason.fields.reason)
 		{
 		case VmxExitReason::kCpuid:
-			VmmpHandleCpuidForL2(exit_reason, guest_context);
-			IsHandled = TRUE;
+			IsHandled = VmmpHandleCpuidForL2(exit_reason, guest_context);
 			break;
 		case VmxExitReason::kExceptionOrNmi:
 			IsHandled = VmmpHandleExceptionForL2(exit_reason, guest_context);
@@ -519,6 +520,9 @@ extern "C" {
 		}
 		
 		IsEmulateVMExit = FALSE;
+	
+		HYPERPLATFORM_LOG_DEBUG(0, 0, "Mode: %x Reason: %x ", GetVmxMode(GetVcpuVmx(guest_context)), exit_reason);
+		
 		//after vmxon emulation
 		if (GetvCpuMode(guest_context) == VmxMode)
 		{

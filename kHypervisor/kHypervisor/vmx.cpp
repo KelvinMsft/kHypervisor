@@ -427,7 +427,8 @@ void SaveGuestMsrs(VCPUVMX* vcpu)
 	vcpu->guest_IA32_STAR = UtilReadMsr(Msr::kIa32Star);
 	vcpu->guest_IA32_LSTAR	= UtilReadMsr(Msr::kIa32Lstar);
 	vcpu->guest_IA32_FMASK	= UtilReadMsr(Msr::kIa32Fmask); 
-	//HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Save GS base: %I64X \r\n ", vcpu->guest_gs_kernel_base);
+	HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Save GS base: %I64X kernel GS Base : %I64X \r\n ",
+		UtilReadMsr64(Msr::kIa32GsBase), vcpu->guest_gs_kernel_base);
 }
 //---------------------------------------------------------------------------------------------------------------------//
 void RestoreGuestMsrs(VCPUVMX* vcpu)
@@ -1249,18 +1250,6 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 		PrintVMCS();   
 		
 		HYPERPLATFORM_COMMON_DBG_BREAK();
-
-		if(GetGuestIrql(guest_context) < DISPATCH_LEVEL)
-		{ 
-			KeLowerIrql(GetGuestIrql(guest_context));
-		}
-
- 		if (VmxStatus::kOk != (status = static_cast<VmxStatus>(__vmx_vmresume())))
-		{
-			VmxInstructionError error2 = static_cast<VmxInstructionError>(UtilVmRead(VmcsField::kVmInstructionError));
-			HYPERPLATFORM_LOG_DEBUG_SAFE("Error vmresume error code :%x , %x ", status, error2);
-			HYPERPLATFORM_COMMON_DBG_BREAK();
-		}
 
 	} while (FALSE);
 }

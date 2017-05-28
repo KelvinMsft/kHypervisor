@@ -405,12 +405,12 @@ extern "C" {
 	)
 	{ 
 		BOOLEAN status = false;
-			HYPERPLATFORM_COMMON_DBG_BREAK();
-			HYPERPLATFORM_LOG_DEBUG_SAFE("Nested VMExit - vmcall Ready !!!! \r\n");
-			if (status = VMExitEmulationTest(GetVcpuVmx(guest_context), exit_reason, guest_context))
-			{
-				IsEmulateVMExit = true;
-			}
+		HYPERPLATFORM_COMMON_DBG_BREAK();
+		HYPERPLATFORM_LOG_DEBUG_SAFE("Nested VMExit - vmcall Ready !!!! \r\n");
+		if (status = VMExitEmulationTest(GetVcpuVmx(guest_context), exit_reason, guest_context))
+		{
+			IsEmulateVMExit = true;
+		}
 		return status;
 	}
 
@@ -436,8 +436,8 @@ extern "C" {
 		switch (exit_reason.fields.reason)
 		{
 		case VmxExitReason::kCpuid:
-			///	VmmpHandleCpuidForL2(exit_reason, guest_context);
-			///	IsHandled = TRUE;
+			VmmpHandleCpuidForL2(exit_reason, guest_context);
+			IsHandled = TRUE;
 			break;
 		case VmxExitReason::kExceptionOrNmi:
 			IsHandled = VmmpHandleExceptionForL2(exit_reason, guest_context);
@@ -547,10 +547,6 @@ extern "C" {
 		}
 		else
 		{
-			if (exit_reason.fields.reason == VmxExitReason::kExceptionOrNmi)
-			{
-				HYPERPLATFORM_LOG_DEBUG("reason: %x \r\n", exit_reason.fields.reason);
-			}
 			VmmpHandleVmExitForL1(exit_reason, guest_context);
 		}
 	}
@@ -687,7 +683,7 @@ extern "C" {
 		guest_context->gp_regs->cx = cpu_info[2];
 		guest_context->gp_regs->dx = cpu_info[3];
 
-		HYPERPLATFORM_LOG_DEBUG_SAFE("Root CPUID Called with id : %x sid: %x !!!!!!!!!!!!!!! \r\n", function_id, sub_function_id);
+		HYPERPLATFORM_LOG_DEBUG("Root CPUID Called with id : %x sid: %x !!!!!!!!!!!!!!! \r\n", function_id, sub_function_id);
 		VmmpAdjustGuestInstructionPointer(guest_context);
 	}
 
@@ -1821,6 +1817,7 @@ extern "C" {
 			//- We saved the vmcs02 GuestRip into VMCS12 our VMExit Handler, 
 			//- because when L1 is executing VMRESUME, it is running on VMCS01
 			VmresumeEmulate(guest_context);
+			return;
 		}
 		break;
 
@@ -1842,6 +1839,5 @@ extern "C" {
 
 		UtilVmWrite(VmcsField::kGuestRflags, guest_context->flag_reg.all);
 		VmmpAdjustGuestInstructionPointer(guest_context);
-
 	}
 }  // extern "C"

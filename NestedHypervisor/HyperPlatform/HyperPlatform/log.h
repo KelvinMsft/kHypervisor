@@ -31,7 +31,7 @@ extern "C" {
 ///
 /// A message should not exceede 512 bytes after all string construction is
 /// done; otherwise this macro fails to log and returns non STATUS_SUCCESS.
-#define HYPERPLATFORM_LOG_DEBUG_SAFE(format, ...) \
+#define HYPERPLATFORM_LOG_DEBUG(format, ...) \
   LogpPrint(kLogpLevelDebug, __FUNCTION__, (format), __VA_ARGS__)
 
 /// @see HYPERPLATFORM_LOG_DEBUG_SAFE

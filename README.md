@@ -69,6 +69,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
  2:  we handled it, and we will emulate the VMExit to L1 by execute VMRESUME with L1's host VMM Handler address (guest rip == L1's host rip, the mode of VCPU will be rooted, but actually it is non-rooted, so that after the L1's VMM handled it, it called VMRESUME will trapped by L0 again. )</br>
  <img src="https://cloud.githubusercontent.com/assets/22551808/21672419/6d74a1cc-d35d-11e6-9c96-3a7b3547bd4f.png" width="70%" height="70%"/>
  </img>
+ </br>
  3:  Once again trapped by VMRESUME , we emulated the VMRESUME with trapped address. Help L1 resume to L2</br>
  <img src="https://cloud.githubusercontent.com/assets/22551808/21672420/6d7935e8-d35d-11e6-989c-4afb97f65047.png" width="70%" height="70%"/>
 </img></br>

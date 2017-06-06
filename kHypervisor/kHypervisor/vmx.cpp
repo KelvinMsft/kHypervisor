@@ -550,7 +550,9 @@ VOID VmxoffEmulate(
 	{
 		VCPUVMX* vcpu_vmx = NULL; 
 
-		HYPERPLATFORM_COMMON_DBG_BREAK();
+	 
+		HYPERPLATFORM_LOG_DEBUG_SAFE("vmxoff.... \r\n"); 
+
 		if (GetvCpuMode(guest_context) != VmxMode)
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("Current vCPU already in VMX mode ! \r\n"));
@@ -601,12 +603,19 @@ VOID VmxoffEmulate(
 
 		ExFreePool(vcpu_vmx);
 		vcpu_vmx = NULL;
+<<<<<<< HEAD
+			
+		HYPERPLATFORM_LOG_DEBUG_SAFE("vmxoff....2 \r\n");
+
+		VMSucceed(GetFlagReg(guest_context));
+=======
 	
 		// Restore guest's context
 		if (GetGuestIrql(guest_context) < DISPATCH_LEVEL)//&& !IsEmulateVMExit)
 		{
 			KeLowerIrql(GetGuestIrql(guest_context));
 		}
+>>>>>>> origin/master
 
 		__writecr8(GetGuestCr8(guest_context));
 		

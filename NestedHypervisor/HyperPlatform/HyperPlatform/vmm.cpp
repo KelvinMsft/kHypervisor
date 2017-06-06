@@ -441,7 +441,7 @@ _Use_decl_annotations_ static void VmmpHandleCpuid(
     guest_context->gp_regs->dx = cpu_info[3];
   }
   
-  HYPERPLATFORM_LOG_DEBUG("Nested CPUID Called with id : %x sid: %x !!!!!!!!!!!!!!! \r\n", function_id, sub_function_id);
+  HYPERPLATFORM_LOG_DEBUG_SAFE("Nested CPUID Called with id : %x sid: %x !!!!!!!!!!!!!!! \r\n", function_id, sub_function_id);
   VmmpAdjustGuestInstructionPointer(guest_context->ip);
 }
 

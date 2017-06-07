@@ -17,6 +17,8 @@ extern "C"
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //// Prototype
 ////
+
+extern ULONG		 VmpGetSegmentAccessRight(USHORT segment_selector);
 extern ULONG_PTR*	 VmmpSelectRegister(_In_ ULONG index, _In_ GuestContext *guest_context);
 extern GpRegisters*  GetGpReg(GuestContext* guest_context);
 extern FlagRegister* GetFlagReg(GuestContext* guest_context);
@@ -26,9 +28,8 @@ extern VCPUVMX*	 	 GetVcpuVmx(_In_ GuestContext* guest_context);
 extern VOID			 SetvCpuVmx(GuestContext* guest_context, VCPUVMX* VCPUVMX);
 extern VOID			 EnterVmxMode(GuestContext* guest_context);
 extern VOID			 LeaveVmxMode(GuestContext* guest_context);
-extern ULONG		 GetvCpuMode(GuestContext* guest_context);
-void				 SaveGuestCr8(VCPUVMX* vcpu, ULONG_PTR cr8);
-void				 SaveGuestMsrs(VCPUVMX* vcpu);
+extern ULONG		 GetvCpuMode(GuestContext* guest_context); 
+void				 SaveGuestCr8(VCPUVMX* vcpu, ULONG_PTR cr8); 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //// Marco
@@ -123,9 +124,28 @@ Parameters:
 2. Physical Address for VMCS1-2
 
 */
-VOID SaveExceptionInformationFromVmcs02(VmExitInformation exit_reason, ULONG64 vmcs12_va)
+NTSTATUS SaveExceptionInformationFromVmcs02(VCPUVMX* vcpu)
 {
+	ULONG_PTR vmcs12_va = 0;
+	//all nested vm-exit should record 
+	if (!vcpu)
+	{
+		return STATUS_UNSUCCESSFUL;
+	}
 
+	if (!vcpu->vmcs12_pa)
+	{
+		return STATUS_UNSUCCESSFUL;
+	}
+
+	vmcs12_va = (ULONG_PTR)UtilVaFromPa(vcpu->vmcs12_pa);
+
+	if (!vmcs12_va)
+	{
+		return STATUS_UNSUCCESSFUL;
+	}
+	const VmExitInformation exit_reason = {UtilVmRead(VmcsField::kVmExitReason)};
+	
 	const VmExitInterruptionInformationField exception = {
 		static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrInfo))
 	};
@@ -156,9 +176,26 @@ Parameters:
 1.	Physical Address for VMCS1-2
 
 */
-VOID SaveGuestFieldFromVmcs02(ULONG64 vmcs12_va)
+NTSTATUS SaveGuestFieldFromVmcs02(VCPUVMX* vcpu)
 {
+	ULONG_PTR vmcs12_va = 0;
 	//all nested vm-exit should record 
+	if(!vcpu)
+	{ 
+		return STATUS_UNSUCCESSFUL;
+	}
+
+	if (!vcpu->vmcs12_pa)
+	{
+		return STATUS_UNSUCCESSFUL;
+	}
+
+	vmcs12_va = (ULONG_PTR)UtilVaFromPa(vcpu->vmcs12_pa);
+
+	if (!vmcs12_va)
+	{
+		return STATUS_UNSUCCESSFUL;
+	}
 
 	VmWrite64(VmcsField::kGuestRip, vmcs12_va, UtilVmRead(VmcsField::kGuestRip));
 	VmWrite64(VmcsField::kGuestRsp, vmcs12_va, UtilVmRead(VmcsField::kGuestRsp));
@@ -167,7 +204,6 @@ VOID SaveGuestFieldFromVmcs02(ULONG64 vmcs12_va)
 	VmWrite64(VmcsField::kGuestCr4, vmcs12_va, UtilVmRead(VmcsField::kGuestCr4));
 	VmWrite64(VmcsField::kGuestDr7, vmcs12_va, UtilVmRead(VmcsField::kGuestDr7));
 	VmWrite64(VmcsField::kGuestRflags, vmcs12_va, UtilVmRead(VmcsField::kGuestRflags));
-
 
 	VmWrite16(VmcsField::kGuestEsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestEsSelector));
 	VmWrite16(VmcsField::kGuestCsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestCsSelector));
@@ -226,154 +262,147 @@ VOID SaveGuestFieldFromVmcs02(ULONG64 vmcs12_va)
 	VmWrite64(VmcsField::kGuestPdptr3, vmcs12_va, UtilVmRead(VmcsField::kGuestPdptr3));
 	*/
 }
+
 //---------------------------------------------------------------------------------------------------------------------//
-/*
-Descritpion:
-1.  Emulate a VMExit, After Saving All Guest Field and Exception Information
-From VMCS0-2, And backup into VMCS1-2, We need to modify VMCS0-1 and get
-ready to back VMCS0-1.
+NTSTATUS LoadHostStateForLevel1(
+	_In_ VCPUVMX* vcpu
+)
+{ 
+	ULONG_PTR Vmcs01_pa = 0;
+	ULONG_PTR Vmcs12_va = 0;
 
-The VMCS0-1's Guest RIP, RSP,CR0,CR3,CR4 should be modified to VMCS1-2's Host RIP
-(Since L1 will fill the VMExit Handler when initialization stage)
+	if (!vcpu || !vcpu->vmcs01_pa || !vcpu->vmcs12_pa)
+	{
+		HYPERPLATFORM_COMMON_DBG_BREAK();
+		return STATUS_UNSUCCESSFUL;
+	}
 
-Parameters:
-1.	Physical Address for VMCS1-2
+	Vmcs01_pa = vcpu->vmcs01_pa;
+	Vmcs12_va = (ULONG_PTR)UtilVaFromPa(vcpu->vmcs12_pa);
 
-*/
-VOID EmulateVmExit(ULONG64 vmcs01, ULONG64 vmcs12_va)
-{
+	if (!Vmcs01_pa || !Vmcs12_va)
+	{
+		HYPERPLATFORM_COMMON_DBG_BREAK();
+		return STATUS_UNSUCCESSFUL;
+	}
+
 
 	VmxStatus status;
 
-	ULONG64   VMCS_VMEXIT_HANDLER = 0;
-	ULONG64   VMCS_VMEXIT_STACK = 0;
-	ULONG_PTR   VMCS_VMEXIT_RFLAGs = 0;
-	ULONG64   VMCS_VMEXIT_CR4 = 0;
-	ULONG64   VMCS_VMEXIT_CR3 = 0;
-	ULONG64   VMCS_VMEXIT_CR0 = 0;
+	ULONG64   VMCS12_HOST_RIP = 0;
+	ULONG64   VMCS12_HOST_STACK = 0;
+	ULONG_PTR VMCS12_HOST_RFLAGs = 0;
+	ULONG64   VMCS12_HOST_CR4 = 0;
+	ULONG64   VMCS12_HOST_CR3 = 0;
+	ULONG64   VMCS12_HOST_CR0 = 0;
+	
+	ULONG64   VMCS12_HOST_CS = 0;
+	ULONG64   VMCS12_HOST_SS = 0;
+	ULONG64   VMCS12_HOST_DS = 0;
+	ULONG64   VMCS12_HOST_ES = 0;
+	ULONG64   VMCS12_HOST_FS = 0;
+	ULONG64   VMCS12_HOST_GS = 0;
+	ULONG64   VMCS12_HOST_TR = 0;
 
+	ULONG32   VMCS12_HOST_SYSENTER_CS = 0;
+	ULONG64   VMCS12_HOST_SYSENTER_RIP = 0;
+	ULONG64   VMCS12_HOST_SYSENTER_RSP = 0;
 
-	ULONG64   VMCS_VMEXIT_CS = 0;
-	ULONG64   VMCS_VMEXIT_SS = 0;
-	ULONG64   VMCS_VMEXIT_DS = 0;
-	ULONG64   VMCS_VMEXIT_ES = 0;
-	ULONG64   VMCS_VMEXIT_FS = 0;
-	ULONG64   VMCS_VMEXIT_GS = 0;
-	ULONG64   VMCS_VMEXIT_TR = 0;
-
-	ULONG32   VMCS_VMEXIT_SYSENTER_CS = 0;
-	ULONG64   VMCS_VMEXIT_SYSENTER_RIP = 0;
-	ULONG64   VMCS_VMEXIT_SYSENTER_RSP = 0;
-
-
-	ULONG_PTR  VMCS_VMEXIT_HOST_FS = 0;
-	ULONG_PTR  VMCS_VMEXIT_HOST_GS = 0;
-	ULONG_PTR  VMCS_VMEXIT_HOST_TR = 0;
-
-	//VMCS01 guest rip == VMCS12 host rip (should be)
-	const VmExitInformation exit_reason = { static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitReason)) };
-
-	const VmExitInterruptionInformationField exception = { static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrInfo)) };
-
-	//	PrintVMCS();
-		/*
-		1. Print about trapped reason
-		*/
-		/*
-		HYPERPLATFORM_LOG_DEBUG_SAFE("[EmulateVmExit]VMCS id %x", UtilVmRead(VmcsField::kVirtualProcessorId));
-		HYPERPLATFORM_LOG_DEBUG_SAFE("[EmulateVmExit]Trapped by %I64X ", UtilVmRead(VmcsField::kGuestRip));
-		HYPERPLATFORM_LOG_DEBUG_SAFE("[EmulateVmExit]Trapped Reason: %I64X ", exit_reason.fields.reason);
-		HYPERPLATFORM_LOG_DEBUG_SAFE("[EmulateVmExit]Trapped Intrreupt: %I64X ", exception.fields.interruption_type);
-		HYPERPLATFORM_LOG_DEBUG_SAFE("[EmulateVmExit]Trapped Intrreupt vector: %I64X ", exception.fields.vector);
-		HYPERPLATFORM_LOG_DEBUG_SAFE("[EmulateVmExit]Trapped kVmExitInstructionLen: %I64X ", UtilVmRead(VmcsField::kVmExitInstructionLen));
-		*/
-	if (VmxStatus::kOk != (status = static_cast<VmxStatus>(__vmx_vmptrld(&vmcs01))))
+	if (VmxStatus::kOk != (status = static_cast<VmxStatus>(__vmx_vmptrld(&Vmcs01_pa))))
 	{
 		VmxInstructionError error = static_cast<VmxInstructionError>(UtilVmRead(VmcsField::kVmInstructionError));
 		HYPERPLATFORM_LOG_DEBUG_SAFE("Error vmptrld error code :%x , %x", status, error);
 	}
-
-	//Read from vmcs12_va get it host vmexit handler
-	VmRead64(VmcsField::kHostRip, vmcs12_va, &VMCS_VMEXIT_HANDLER);
-	VmRead64(VmcsField::kHostRsp, vmcs12_va, &VMCS_VMEXIT_STACK);
-	VmRead64(VmcsField::kHostCr0, vmcs12_va, &VMCS_VMEXIT_CR0);
-	VmRead64(VmcsField::kHostCr3, vmcs12_va, &VMCS_VMEXIT_CR3);
-	VmRead64(VmcsField::kHostCr4, vmcs12_va, &VMCS_VMEXIT_CR4);
-
-
-	VmRead64(VmcsField::kHostCsSelector, vmcs12_va, &VMCS_VMEXIT_CS);
-	VmRead64(VmcsField::kHostSsSelector, vmcs12_va, &VMCS_VMEXIT_SS);
-	VmRead64(VmcsField::kHostDsSelector, vmcs12_va, &VMCS_VMEXIT_DS);
-	VmRead64(VmcsField::kHostEsSelector, vmcs12_va, &VMCS_VMEXIT_ES);
-	VmRead64(VmcsField::kHostFsSelector, vmcs12_va, &VMCS_VMEXIT_FS);
-	VmRead64(VmcsField::kHostGsSelector, vmcs12_va, &VMCS_VMEXIT_GS);
-	VmRead64(VmcsField::kHostTrSelector, vmcs12_va, &VMCS_VMEXIT_TR);
-
-
-	VmRead32(VmcsField::kHostIa32SysenterCs, vmcs12_va, &VMCS_VMEXIT_SYSENTER_CS);
-	VmRead64(VmcsField::kHostIa32SysenterEip, vmcs12_va, &VMCS_VMEXIT_SYSENTER_RSP);
-	VmRead64(VmcsField::kHostIa32SysenterEsp, vmcs12_va, &VMCS_VMEXIT_SYSENTER_RIP);
-
-
-	VmRead64(VmcsField::kHostFsBase, vmcs12_va, &VMCS_VMEXIT_HOST_FS);
-	VmRead64(VmcsField::kHostGsBase, vmcs12_va, &VMCS_VMEXIT_HOST_GS);
-	VmRead64(VmcsField::kHostTrBase, vmcs12_va, &VMCS_VMEXIT_HOST_TR);
+ 
+	VmRead64(VmcsField::kHostRip, Vmcs12_va, &VMCS12_HOST_RIP);
+	VmRead64(VmcsField::kHostRsp, Vmcs12_va, &VMCS12_HOST_STACK);
+	VmRead64(VmcsField::kHostCr0, Vmcs12_va, &VMCS12_HOST_CR0);
+	VmRead64(VmcsField::kHostCr3, Vmcs12_va, &VMCS12_HOST_CR3);
+	VmRead64(VmcsField::kHostCr4, Vmcs12_va, &VMCS12_HOST_CR4);
 	 
-	//Write VMCS01 for L1's VMExit handler
-	FlagRegister rflags = { VMCS_VMEXIT_RFLAGs };
+	VmRead64(VmcsField::kHostCsSelector, Vmcs12_va, &VMCS12_HOST_CS);
+	VmRead64(VmcsField::kHostSsSelector, Vmcs12_va, &VMCS12_HOST_SS);
+	VmRead64(VmcsField::kHostDsSelector, Vmcs12_va, &VMCS12_HOST_DS);
+	VmRead64(VmcsField::kHostEsSelector, Vmcs12_va, &VMCS12_HOST_ES);
+	VmRead64(VmcsField::kHostFsSelector, Vmcs12_va, &VMCS12_HOST_FS);
+	VmRead64(VmcsField::kHostGsSelector, Vmcs12_va, &VMCS12_HOST_GS);
+	VmRead64(VmcsField::kHostTrSelector, Vmcs12_va, &VMCS12_HOST_TR);
+	 
+	VmRead32(VmcsField::kHostIa32SysenterCs, Vmcs12_va, &VMCS12_HOST_SYSENTER_CS);
+	VmRead64(VmcsField::kHostIa32SysenterEip, Vmcs12_va, &VMCS12_HOST_SYSENTER_RSP);
+	VmRead64(VmcsField::kHostIa32SysenterEsp, Vmcs12_va, &VMCS12_HOST_SYSENTER_RIP);
+
+
+	VmRead64(VmcsField::kHostFsBase, Vmcs12_va, &VMCS12_HOST_FS);
+	VmRead64(VmcsField::kHostGsBase, Vmcs12_va, &VMCS12_HOST_GS);
+	VmRead64(VmcsField::kHostTrBase, Vmcs12_va, &VMCS12_HOST_TR);
+
+	//Disable Interrupt Flags
+	FlagRegister rflags = { VMCS12_HOST_RFLAGs };
 	rflags.fields.reserved1 = 1;
 	UtilVmWrite(VmcsField::kGuestRflags, rflags.all);
-	UtilVmWrite(VmcsField::kGuestRip, VMCS_VMEXIT_HANDLER);
-	UtilVmWrite(VmcsField::kGuestRsp, VMCS_VMEXIT_STACK);
-	UtilVmWrite(VmcsField::kGuestCr0, VMCS_VMEXIT_CR0);
-	UtilVmWrite(VmcsField::kGuestCr3, VMCS_VMEXIT_CR3);
-	UtilVmWrite(VmcsField::kGuestCr4, VMCS_VMEXIT_CR4);
+
+	UtilVmWrite(VmcsField::kGuestRip, VMCS12_HOST_RIP);
+	UtilVmWrite(VmcsField::kGuestRsp, VMCS12_HOST_STACK);
+	UtilVmWrite(VmcsField::kGuestCr0, VMCS12_HOST_CR0);
+	UtilVmWrite(VmcsField::kGuestCr3, VMCS12_HOST_CR3);
+	UtilVmWrite(VmcsField::kGuestCr4, VMCS12_HOST_CR4);
 	UtilVmWrite(VmcsField::kGuestDr7, 0x400);
 
-	UtilVmWrite(VmcsField::kGuestCsSelector, VMCS_VMEXIT_CS);
-	UtilVmWrite(VmcsField::kGuestSsSelector, VMCS_VMEXIT_SS);
-	UtilVmWrite(VmcsField::kGuestDsSelector, VMCS_VMEXIT_DS);
-	UtilVmWrite(VmcsField::kGuestEsSelector, VMCS_VMEXIT_ES);
-	UtilVmWrite(VmcsField::kGuestFsSelector, VMCS_VMEXIT_FS);
-	UtilVmWrite(VmcsField::kGuestGsSelector, VMCS_VMEXIT_GS);
-	UtilVmWrite(VmcsField::kGuestTrSelector, VMCS_VMEXIT_TR);
+	UtilVmWrite(VmcsField::kGuestCsSelector, VMCS12_HOST_CS);
+	UtilVmWrite(VmcsField::kGuestSsSelector, VMCS12_HOST_SS);
+	UtilVmWrite(VmcsField::kGuestDsSelector, VMCS12_HOST_DS);
+	UtilVmWrite(VmcsField::kGuestEsSelector, VMCS12_HOST_ES);
+	UtilVmWrite(VmcsField::kGuestFsSelector, VMCS12_HOST_FS);
+	UtilVmWrite(VmcsField::kGuestGsSelector, VMCS12_HOST_GS);
+	UtilVmWrite(VmcsField::kGuestTrSelector, VMCS12_HOST_TR);
 
-	UtilVmWrite(VmcsField::kGuestSysenterCs, VMCS_VMEXIT_SYSENTER_CS);
-	UtilVmWrite(VmcsField::kGuestSysenterEsp, VMCS_VMEXIT_SYSENTER_RSP);
-	UtilVmWrite(VmcsField::kGuestSysenterEip, VMCS_VMEXIT_SYSENTER_RIP);
+	UtilVmWrite(VmcsField::kGuestSysenterCs,  VMCS12_HOST_SYSENTER_CS);
+	UtilVmWrite(VmcsField::kGuestSysenterEsp, VMCS12_HOST_SYSENTER_RSP);
+	UtilVmWrite(VmcsField::kGuestSysenterEip, VMCS12_HOST_SYSENTER_RIP);
 
-	UtilVmWrite(VmcsField::kGuestFsBase, VMCS_VMEXIT_HOST_FS);
-	UtilVmWrite(VmcsField::kGuestGsBase, VMCS_VMEXIT_HOST_GS);
-	UtilVmWrite(VmcsField::kGuestTrBase, VMCS_VMEXIT_HOST_TR);
+	// Sync L1's Host segment base with L0 VMM Host Host segment base
+	UtilVmWrite(VmcsField::kGuestCsBase, 0);
+	UtilVmWrite(VmcsField::kGuestSsBase, 0);
+	UtilVmWrite(VmcsField::kGuestDsBase, 0);
+	UtilVmWrite(VmcsField::kGuestEsBase, 0);
+	UtilVmWrite(VmcsField::kGuestFsBase, VMCS12_HOST_FS);
+	UtilVmWrite(VmcsField::kGuestGsBase, VMCS12_HOST_GS);
+	UtilVmWrite(VmcsField::kGuestTrBase, VMCS12_HOST_TR);
+	  
+	// Sync L1's Host Host segment Limit with L0 Host Host segment Limit
+	UtilVmWrite(VmcsField::kGuestEsLimit, GetSegmentLimit(AsmReadES()));
+	UtilVmWrite(VmcsField::kGuestCsLimit, GetSegmentLimit(AsmReadCS()));
+	UtilVmWrite(VmcsField::kGuestSsLimit, GetSegmentLimit(AsmReadSS()));
+	UtilVmWrite(VmcsField::kGuestDsLimit, GetSegmentLimit(AsmReadDS()));
+	UtilVmWrite(VmcsField::kGuestFsLimit, GetSegmentLimit(AsmReadFS()));
+	UtilVmWrite(VmcsField::kGuestGsLimit, GetSegmentLimit(AsmReadGS()));
+	UtilVmWrite(VmcsField::kGuestLdtrLimit, GetSegmentLimit(AsmReadLDTR()));
+	UtilVmWrite(VmcsField::kGuestTrLimit, GetSegmentLimit(AsmReadTR())); 
 
-	VmWrite32(VmcsField::kVmEntryIntrInfoField, vmcs12_va, 0);
-	VmWrite32(VmcsField::kVmEntryExceptionErrorCode, vmcs12_va, 0);
+	// Sync L1's Host segment ArBytes with L0  Host segment ArBytes 
+	UtilVmWrite(VmcsField::kGuestEsArBytes,	  VmpGetSegmentAccessRight(AsmReadES()));
+	UtilVmWrite(VmcsField::kGuestCsArBytes,	  VmpGetSegmentAccessRight(AsmReadCS()));
+	UtilVmWrite(VmcsField::kGuestSsArBytes,	  VmpGetSegmentAccessRight(AsmReadSS()));
+	UtilVmWrite(VmcsField::kGuestDsArBytes,	  VmpGetSegmentAccessRight(AsmReadDS()));
+	UtilVmWrite(VmcsField::kGuestFsArBytes,	  VmpGetSegmentAccessRight(AsmReadFS()));
+	UtilVmWrite(VmcsField::kGuestGsArBytes,	  VmpGetSegmentAccessRight(AsmReadGS()));
+	UtilVmWrite(VmcsField::kGuestLdtrArBytes, VmpGetSegmentAccessRight(AsmReadLDTR()));
+	UtilVmWrite(VmcsField::kGuestTrArBytes,	  VmpGetSegmentAccessRight(AsmReadTR())); 
 
+	//Clean VMCS1-2 Injecting event since it shouldn't be injected 
+	VmWrite32(VmcsField::kVmEntryIntrInfoField, Vmcs12_va, 0);
+	VmWrite32(VmcsField::kVmEntryExceptionErrorCode, Vmcs12_va, 0); 
 	UtilVmWrite(VmcsField::kVmEntryIntrInfoField, 0);
 	UtilVmWrite(VmcsField::kVmEntryExceptionErrorCode, 0);
 
-//	 PrintVMCS();
-//	 PrintVMCS12(vmcs12_va);
+	return STATUS_SUCCESS;
 }
-//---------------------------------------------------------------------------------------------------------------------//
-//Nested breakpoint dispatcher
-VOID VmExitDispatcher(VCPUVMX* vcpu, ULONG64 vmcs12_va)
-{
-	if (!vcpu->vmcs01_pa)
-	{
-		HYPERPLATFORM_COMMON_DBG_BREAK();
-	}
 
-	if (vmcs12_va)
-	{
-		EmulateVmExit(vcpu->vmcs01_pa, vmcs12_va);
-		HYPERPLATFORM_COMMON_DBG_BREAK();
-	}
-}
-//------------------------------------------------------------------------------------------------------------
-BOOLEAN VMExitEmulationTest(VCPUVMX* vCPU , VmExitInformation exit_reason, GuestContext* guest_context)
-{
-	/*
+
+ 
+//-----------------------------------------------------------------------------------------------------------
+/*
 	We need to emulate the exception if and only if the vCPU mode is Guest Mode ,
 	and only the exception is somethings we want to redirect to L1 for handle it.
 	GetVmxMode:
@@ -388,71 +417,31 @@ BOOLEAN VMExitEmulationTest(VCPUVMX* vCPU , VmExitInformation exit_reason, Guest
 
 	We desginated the L1 wants to handle any breakpoint exception but the others.
 	So that we only nested it for testing purpose.
-	*/
-	ULONG64 vmcs12_va = 0;
-	VCPUVMX* vm = NULL;
-	BOOLEAN	ret;
-	// Unit-Testing with nested INT 3 exception
-
-	do
+*/
+NTSTATUS VMExitEmulate(VCPUVMX* vCPU , GuestContext* guest_context)
+{ 
+	if (!vCPU)
 	{
-		if (!vCPU)
-		{
-			ret = FALSE;
-			break;
-		}
+		return STATUS_UNSUCCESSFUL;
+	}
 
-		// Since VMXON, but VMPTRLD 
-		if (!vCPU->vmcs02_pa || !vCPU->vmcs12_pa || vCPU->vmcs12_pa == ~0x0 || vCPU->vmcs02_pa == ~0x0)
-		{
-			//HYPERPLATFORM_LOG_DEBUG_SAFE("cannot find vmcs \r\n");
-			ret = FALSE;
-			break;
-		}
+	// Since VMXON, but VMPTRLD 
+	if (!vCPU->vmcs02_pa || !vCPU->vmcs12_pa || vCPU->vmcs12_pa == ~0x0 || vCPU->vmcs02_pa == ~0x0)
+	{
+		//HYPERPLATFORM_LOG_DEBUG_SAFE("cannot find vmcs \r\n");
+		return STATUS_UNSUCCESSFUL; 
+	}
+		 
+	SaveGuestFieldFromVmcs02(vCPU);
+	SaveExceptionInformationFromVmcs02(vCPU);
+	SaveGuestMsrs(vCPU);
+	SaveGuestCr8(vCPU, GetGuestCr8(guest_context)); 
+	LoadHostStateForLevel1(vCPU);
 
-		vmcs12_va = (ULONG64)UtilVaFromPa(vCPU->vmcs12_pa);
-	
-		// Test L1 exception
-		if (vmcs12_va)
-		{
-			SaveGuestFieldFromVmcs02(vmcs12_va);
-			SaveExceptionInformationFromVmcs02(exit_reason, vmcs12_va); 
-			SaveGuestMsrs(vCPU);
-			SaveGuestCr8(vCPU, GetGuestCr8(guest_context));
-
-			// Emulated VMExit 
-			LEAVE_GUEST_MODE(vCPU);
-			VmExitDispatcher(vCPU, vmcs12_va);
-			ret = TRUE;
-		} 
-	} while (0);
-
-	return ret;
-}
-//---------------------------------------------------------------------------------------------------------------------//
-void SaveGuestMsrs(VCPUVMX* vcpu)
-{
-	/*
-	* We cannot cache SHADOW_GS_BASE while the VCPU runs, as it can
-	* be updated at any time via SWAPGS, which we cannot trap.
-	*/
-	vcpu->guest_gs_kernel_base = UtilReadMsr64(Msr::kIa32KernelGsBase);
-	vcpu->guest_IA32_STAR = UtilReadMsr(Msr::kIa32Star);
-	vcpu->guest_IA32_LSTAR	= UtilReadMsr(Msr::kIa32Lstar);
-	vcpu->guest_IA32_FMASK	= UtilReadMsr(Msr::kIa32Fmask); 
-	
-	//HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Save GS base: %I64X kernel GS Base : %I64X \r\n ",
-	//	UtilReadMsr64(Msr::kIa32GsBase), vcpu->guest_gs_kernel_base);
-}
-//---------------------------------------------------------------------------------------------------------------------//
-void RestoreGuestMsrs(VCPUVMX* vcpu)
-{
-	UtilWriteMsr64(Msr::kIa32KernelGsBase, vcpu->guest_gs_kernel_base);
-	UtilWriteMsr64(Msr::kIa32Star, vcpu->guest_IA32_STAR);
-	UtilWriteMsr64(Msr::kIa32Lstar, vcpu->guest_IA32_LSTAR);
-	UtilWriteMsr64(Msr::kIa32Fmask, vcpu->guest_IA32_FMASK);
-	//HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Restore GS base: %I64X \r\n ", vcpu->guest_gs_kernel_base);
-}
+	LEAVE_GUEST_MODE(vCPU); 
+		 
+	return STATUS_SUCCESS;
+} 
 
 //---------------------------------------------------------------------------------------------------------------------//
 void SaveGuestCr8(VCPUVMX* vcpu, ULONG_PTR cr8)
@@ -1157,7 +1146,7 @@ VOID VmlaunchEmulate(GuestContext* guest_context)
 		2. Read VMCS12 Guest's field to VMCS02
 		*/
 		PrepareGuestStateField(vmcs12_va);
-
+		 
 
 		if (GetGuestIrql(guest_context) < DISPATCH_LEVEL)
 		{
@@ -1231,6 +1220,7 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 		ptr->revision_identifier = vmx_basic_msr.fields.revision_identifier;
 
 		//Restore some MSR & cr8 we may need to ensure the consistency  
+		 
 		RestoreGuestMsrs(NestedvCPU);
 		RestoreGuestCr8(NestedvCPU);
 

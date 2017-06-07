@@ -58,9 +58,8 @@ VMX_MODE GetVmxMode(
 	VCPUVMX* vcpu
 );  
 
-BOOLEAN VMExitEmulationTest(
+NTSTATUS VMExitEmulate(
 	VCPUVMX* vCPU,
-	VmExitInformation exit_reason,
 	GuestContext* guest_context
 );
 

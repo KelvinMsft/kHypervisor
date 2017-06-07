@@ -72,7 +72,7 @@ extern "C" {
 
 	_IRQL_requires_max_(PASSIVE_LEVEL) static void VmpLaunchVm();
 
-	_IRQL_requires_max_(PASSIVE_LEVEL) static ULONG
+	_IRQL_requires_max_(DISPATCH_LEVEL) ULONG
 		VmpGetSegmentAccessRight(_In_ USHORT segment_selector);
 
 	_IRQL_requires_max_(PASSIVE_LEVEL) static ULONG_PTR
@@ -757,14 +757,14 @@ extern "C" {
 		error |= UtilVmWrite(VmcsField::kSecondaryVmExecControl, vm_procctl2.all);
 
 		/* 32-Bit Guest-State Fields */
-		error |= UtilVmWrite(VmcsField::kGuestEsLimit, GetSegmentLimit(AsmReadES()));
-		error |= UtilVmWrite(VmcsField::kGuestCsLimit, GetSegmentLimit(AsmReadCS()));
-		error |= UtilVmWrite(VmcsField::kGuestSsLimit, GetSegmentLimit(AsmReadSS()));
-		error |= UtilVmWrite(VmcsField::kGuestDsLimit, GetSegmentLimit(AsmReadDS()));
-		error |= UtilVmWrite(VmcsField::kGuestFsLimit, GetSegmentLimit(AsmReadFS()));
-		error |= UtilVmWrite(VmcsField::kGuestGsLimit, GetSegmentLimit(AsmReadGS()));
-		error |= UtilVmWrite(VmcsField::kGuestLdtrLimit, GetSegmentLimit(AsmReadLDTR()));
-		error |= UtilVmWrite(VmcsField::kGuestTrLimit, GetSegmentLimit(AsmReadTR()));
+		error |= UtilVmWrite(VmcsField::kGuestEsLimit,		GetSegmentLimit(AsmReadES()));
+		error |= UtilVmWrite(VmcsField::kGuestCsLimit,		GetSegmentLimit(AsmReadCS()));
+		error |= UtilVmWrite(VmcsField::kGuestSsLimit,		GetSegmentLimit(AsmReadSS()));
+		error |= UtilVmWrite(VmcsField::kGuestDsLimit,		GetSegmentLimit(AsmReadDS()));
+		error |= UtilVmWrite(VmcsField::kGuestFsLimit,		GetSegmentLimit(AsmReadFS()));
+		error |= UtilVmWrite(VmcsField::kGuestGsLimit,		GetSegmentLimit(AsmReadGS()));
+		error |= UtilVmWrite(VmcsField::kGuestLdtrLimit,	GetSegmentLimit(AsmReadLDTR()));
+		error |= UtilVmWrite(VmcsField::kGuestTrLimit,		GetSegmentLimit(AsmReadTR()));
 		error |= UtilVmWrite(VmcsField::kGuestGdtrLimit, gdtr.limit);
 		error |= UtilVmWrite(VmcsField::kGuestIdtrLimit, idtr.limit);
 		error |= UtilVmWrite(VmcsField::kGuestEsArBytes, VmpGetSegmentAccessRight(AsmReadES()));
@@ -859,9 +859,8 @@ extern "C" {
 	}
 
 	// Returns access right of the segment specified by the SegmentSelector for VMX
-	_Use_decl_annotations_ static ULONG VmpGetSegmentAccessRight(USHORT segment_selector)
+	_Use_decl_annotations_ ULONG VmpGetSegmentAccessRight(USHORT segment_selector)
 	{
-		PAGED_CODE();
 		VmxRegmentDescriptorAccessRight access_right = {};
 		const SegmentSelector ss = { segment_selector };
 		if (segment_selector)

@@ -43,8 +43,18 @@ VOID	ThrowGerneralFaultInterrupt();
 //Decode for VMCLEAR, VMPTRLD, VMPTRST, VMXON instruction
 ULONG64 DecodeVmclearOrVmptrldOrVmptrstOrVmxon(GuestContext* guest_context);
 
-VOID	init_vmx_extensions_bitmask(void);
-BOOLEAN is_eptptr_valid(ULONG64 eptptr);
+VOID	InitVmxExtensionMask();
+BOOLEAN IsEptptrValid(ULONG64 eptptr);
 
 SegmentDescriptor* GetSegmentDesctiptor(SegmentSelector ss, ULONG64 gdtBase);
+ 
+/*
+void	SaveGuestKernelGsBase(VCPUVMX* vcpu); 
+void	LoadGuestKernelGsBase(VCPUVMX* vcpu); 
+void	SaveHostKernelGsBase(VCPUVMX* vcpu); 
+void	LoadHostKernelGsBase(VCPUVMX* vcpu);
+*/
+
+void RestoreGuestMsrs(VCPUVMX* vcpu);
+void SaveGuestMsrs(VCPUVMX* vcpu);
 }

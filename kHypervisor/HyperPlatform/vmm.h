@@ -57,13 +57,16 @@ typedef struct _VCPU_VMX
 	BOOLEAN   blockAndDisableA20M;		///NOT USED
 	VMX_MODE  inRoot;					///is it in root mode
 	USHORT	  kVirtualProcessorId;		///NOT USED
-	ULONG_PTR guest_gs_kernel_base;		///guest_gs_kernel_base 
-	ULONG_PTR guest_IA32_STAR;		///IA32_STAR 
-	ULONG_PTR guest_IA32_LSTAR;		///IA32_LSTAR 
-	ULONG_PTR guest_IA32_FMASK;		///IA32_FMASK
-
+	ULONG_PTR HostKernelGsBase;		///guest_gs_kernel_base 
+	ULONG_PTR GuestKernelGsBase;		///guest_gs_kernel_base  
 	ULONG_PTR guest_irql;
 	ULONG_PTR guest_cr8;
+
+	ULONG_PTR	guest_gs_kernel_base;
+	ULONG_PTR	guest_IA32_STAR;
+	ULONG_PTR	guest_IA32_LSTAR;
+	ULONG_PTR	guest_IA32_FMASK;
+
 }VCPUVMX, *PVCPUVMX;
 
 /// Represents VMM related data associated with each processor

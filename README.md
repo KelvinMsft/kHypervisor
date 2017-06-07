@@ -27,6 +27,8 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
 
 2017-05-28 : Fixed Nested-CPUID problem, and add Nested-VMCALL.
 
+2017-06-07 : Fixed a VMExit buggy , clear the guest eflags, and reserved bit[1] == 1 
+
 # Installation
 
  - kHypervisor extended HyperPlatform which is created by Tandasat, it is a Nested-Virtual Machine Monitor, and DdiMon is one of Tandasat's product of HyperPlatform for test demo in kHypervisor.

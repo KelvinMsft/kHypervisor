@@ -29,6 +29,8 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
 
 2017-06-07 : Fixed a VMExit buggy , clear the guest eflags, and reserved bit[1] == 1 
 
+2017-06-08 : Adding a support for CR Access , DR Access , Monitor Trap Flags , IDT , GDT , LDT Segment Descriptor Access from L2  and perform Nested VMExit (i.e. CR3 will have a performance issue. fix it later.')
+
 # Installation
 
  - kHypervisor extended HyperPlatform which is created by Tandasat, it is a Nested-Virtual Machine Monitor, and DdiMon is one of Tandasat's product of HyperPlatform for test demo in kHypervisor.

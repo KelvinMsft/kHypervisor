@@ -289,6 +289,7 @@ NTSTATUS LoadHostStateForLevel1(
 
 	VmxStatus status;
 
+	// Host Data Field  
 	ULONG64   VMCS12_HOST_RIP = 0;
 	ULONG64   VMCS12_HOST_STACK = 0;
 	ULONG_PTR VMCS12_HOST_RFLAGs = 0;
@@ -390,6 +391,9 @@ NTSTATUS LoadHostStateForLevel1(
 	UtilVmWrite(VmcsField::kGuestLdtrArBytes, VmpGetSegmentAccessRight(AsmReadLDTR()));
 	UtilVmWrite(VmcsField::kGuestTrArBytes,	  VmpGetSegmentAccessRight(AsmReadTR())); 
 
+	UtilVmWrite(VmcsField::kGuestIa32Debugctl, 0);
+	 
+
 	//Clean VMCS1-2 Injecting event since it shouldn't be injected 
 	VmWrite32(VmcsField::kVmEntryIntrInfoField, Vmcs12_va, 0);
 	VmWrite32(VmcsField::kVmEntryExceptionErrorCode, Vmcs12_va, 0); 
@@ -431,15 +435,14 @@ NTSTATUS VMExitEmulate(VCPUVMX* vCPU , GuestContext* guest_context)
 		//HYPERPLATFORM_LOG_DEBUG_SAFE("cannot find vmcs \r\n");
 		return STATUS_UNSUCCESSFUL; 
 	}
-		 
+
+	LEAVE_GUEST_MODE(vCPU); 
 	SaveGuestFieldFromVmcs02(vCPU);
 	SaveExceptionInformationFromVmcs02(vCPU);
 	SaveGuestMsrs(vCPU);
 	SaveGuestCr8(vCPU, GetGuestCr8(guest_context)); 
 	LoadHostStateForLevel1(vCPU);
-
-	LEAVE_GUEST_MODE(vCPU); 
-		 
+	 
 	return STATUS_SUCCESS;
 } 
 
@@ -580,42 +583,19 @@ VOID VmxoffEmulate(
 			VMfailInvalid(GetFlagReg(guest_context));
 			break;
 		}
-
+		ULONG GuestRip = UtilVmRead(VmcsField::kGuestRip);
+		ULONG InstLen  = UtilVmRead(VmcsField::kVmExitInstructionLen);
 		//load back vmcs01
 		__vmx_vmptrld(&vcpu_vmx->vmcs01_pa); 
-	
-		ULONG_PTR vmcs12_va = (ULONG_PTR)UtilVaFromPa(vcpu_vmx->vmcs12_pa);
-		ULONG64 Len = 0;
-		VmRead64(VmcsField::kVmExitInstructionLen, vmcs12_va, &Len);
-
-		PrepareGuestStateField(vmcs12_va);
-
-		UtilVmWrite(VmcsField::kGuestRip,UtilVmRead64(VmcsField::kGuestRip) + Len);
+	 
+		UtilVmWrite(VmcsField::kGuestRip, GuestRip + InstLen);
 	
 		SetvCpuVmx(guest_context, NULL);
 
 		LeaveVmxMode(guest_context);
-	 	
-		/*if (vcpu_vmx->guest_irql < DISPATCH_LEVEL)
-		{
-			KeLowerIrql(vcpu_vmx->guest_irql);
-		}
-		*/	
-
-		HYPERPLATFORM_LOG_DEBUG_SAFE("OldIrql : %x \r\n", vcpu_vmx->guest_irql);
 
 		ExFreePool(vcpu_vmx);
-		vcpu_vmx = NULL;
-	
-		// Restore guest's context
-		if (GetGuestIrql(guest_context) < DISPATCH_LEVEL)//&& !IsEmulateVMExit)
-		{
-			KeLowerIrql(GetGuestIrql(guest_context));
-		}
-
-		__writecr8(GetGuestCr8(guest_context));
-		
-		__vmx_vmresume();
+		vcpu_vmx = NULL;  
 
 		VMSucceed(GetFlagReg(guest_context));
 	} while (0);

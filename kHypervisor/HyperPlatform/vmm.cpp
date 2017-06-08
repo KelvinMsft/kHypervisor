@@ -382,16 +382,89 @@ extern "C" {
 		}
 	}
 	//-----------------------------------------------------------------------------------------------------------------------//
+	_Use_decl_annotations_ static ULONG_PTR GetCurrentVmcs12(
+		_In_ GuestContext *guest_context
+	)
+	{
+		if (!guest_context)
+		{
+			return 0;
+		}
+
+		VCPUVMX* vcpu_vmx = GetVcpuVmx(guest_context);
+		if (!vcpu_vmx || !vcpu_vmx->vmcs12_pa)
+		{
+			return 0;
+		}
+
+		ULONG_PTR vmcs12_va = (ULONG_PTR)UtilVaFromPa(vcpu_vmx->vmcs12_pa);
+		if (!vmcs12_va)
+		{
+			return  0;
+		}
+
+		return vmcs12_va;
+	}
+	//-----------------------------------------------------------------------------------------------------------------------//
+	_Use_decl_annotations_ VmxSecondaryProcessorBasedControls GetSecondaryCpuBasedVmexitCtrlForLevel1(
+		_In_	GuestContext* guest_context
+	)
+	{
+		ULONG_PTR				  vmcs12_va = 0;
+		ULONG32					  CpuBasedVmExitCtrl = 0;
+		VmxProcessorBasedControls ctrl = { 0 };
+		VmxSecondaryProcessorBasedControls SecondaryCtrl = { 0 };
+		if (!guest_context)
+		{
+			return SecondaryCtrl;
+		}
+ 
+		vmcs12_va = GetCurrentVmcs12(guest_context);
+		if (!vmcs12_va)
+		{
+			return  SecondaryCtrl;
+		}
+		VmRead32(VmcsField::kSecondaryVmExecControl, vmcs12_va, &CpuBasedVmExitCtrl);
+		SecondaryCtrl = { CpuBasedVmExitCtrl };
+		return SecondaryCtrl;
+	}
+	//-----------------------------------------------------------------------------------------------------------------------//
+	_Use_decl_annotations_ VmxProcessorBasedControls GetCpuBasedVmexitCtrlForLevel1(
+		_In_	GuestContext* guest_context
+	)
+	{
+		ULONG_PTR				  vmcs12_va = 0;
+		ULONG32					  CpuBasedVmExitCtrl = 0;
+		VmxProcessorBasedControls ctrl = { 0 };
+
+		if (!guest_context)
+		{
+			return ctrl;
+		}
+		vmcs12_va = GetCurrentVmcs12(guest_context);
+		if (!vmcs12_va)
+		{
+			return  ctrl;
+		}
+		VmRead32(VmcsField::kCpuBasedVmExecControl, vmcs12_va, &CpuBasedVmExitCtrl);
+		ctrl = { CpuBasedVmExitCtrl };
+		return ctrl;
+	}
+	//-----------------------------------------------------------------------------------------------------------------------//
 	_Use_decl_annotations_ static NTSTATUS VmmpHandleExceptionForL2(
 		_In_ GuestContext *guest_context
 	)
 	{
 		NTSTATUS status = STATUS_UNSUCCESSFUL;
-		VmExitInterruptionInformationField 	exception = { static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrInfo)) };
-		if (static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kBreakpointException)
+		VmExitInterruptionInformationField 	exception = { static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitIntrInfo)) }; 
+		ULONG32    ExceptionBitmap = 0; 
+		ULONG_PTR  vmcs12_va = GetCurrentVmcs12(guest_context);
+
+		VmRead32(VmcsField::kExceptionBitmap, vmcs12_va, &ExceptionBitmap); 
+		if (ExceptionBitmap & (1 << exception.fields.vector))
 		{
-			HYPERPLATFORM_COMMON_DBG_BREAK();
-			HYPERPLATFORM_LOG_DEBUG_SAFE("Nested VMExit INT 3 Ready !!!! \r\n");
+			HYPERPLATFORM_COMMON_DBG_BREAK(); 
+			HYPERPLATFORM_LOG_DEBUG_SAFE("Exception vector: %x", exception.fields.vector);
 			status =  VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
 		}
 		return status;
@@ -409,10 +482,149 @@ extern "C" {
 	_Use_decl_annotations_ static NTSTATUS VmmpHandleCpuidForL2(
 		_In_ GuestContext *guest_context
 	)
+	{  
+		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+	}
+	//-----------------------------------------------------------------------------------------------------------------------//
+	_Use_decl_annotations_ static NTSTATUS VmmpHandlerRdtscForL2(
+		_In_ GuestContext *guest_context
+	)
 	{ 
+		VmxProcessorBasedControls ctrl = GetCpuBasedVmexitCtrlForLevel1(guest_context);
+		if (!ctrl.fields.rdtsc_exiting)
+		{
+			return STATUS_UNSUCCESSFUL;
+		}
+
+		HYPERPLATFORM_LOG_DEBUG_SAFE("Rdtsc VMExit to L1");
+		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+	} 
+	//-----------------------------------------------------------------------------------------------------------------------//
+	_Use_decl_annotations_ static NTSTATUS VmmpHandlerCrAccessForL2(
+		_In_ GuestContext *guest_context
+	)
+	{
+		HYPERPLATFORM_LOG_DEBUG_SAFE("Cr VMExit to L1");
+		BOOLEAN ExitOrNot = FALSE;
+		const MovCrQualification exit_qualification = {	UtilVmRead(VmcsField::kExitQualification) };
+		VmxProcessorBasedControls ctrl = GetCpuBasedVmexitCtrlForLevel1(guest_context);
+
+		switch (static_cast<MovCrAccessType>(exit_qualification.fields.access_type))
+		{
+
+			case MovCrAccessType::kMoveToCr:
+				switch (exit_qualification.fields.control_register) 
+				{
+					// CR0 <- Reg
+					case 0: {
+						ExitOrNot = FALSE;
+						break;
+					}
+
+					// CR3 <- Reg
+					case 3: {
+						ExitOrNot = ctrl.fields.cr3_load_exiting;
+						break;
+					}
+
+					// CR4 <- Reg
+					case 4: { 
+						ExitOrNot = FALSE; 
+						break;
+					}
+
+					// CR8 <- Reg
+					case 8: { 
+						ExitOrNot = ctrl.fields.cr8_load_exiting;
+						break;
+					}
+
+					default: 
+						break;
+				}
+			break; 
+			case MovCrAccessType::kMoveFromCr:
+				switch (exit_qualification.fields.control_register) 
+				{
+					// Reg <- CR3
+					case 3: 
+					{  
+						ExitOrNot = ctrl.fields.cr3_store_exiting; 
+						break;
+					}
+
+					// Reg <- CR8
+					case 8: 
+					{
+						ExitOrNot = ctrl.fields.cr8_store_exiting;
+						break;
+					}
+
+					default:
+						HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 0,
+							0, 0);
+						break;
+				}
+			break;
+			// Unimplemented
+			case MovCrAccessType::kClts:
+			case MovCrAccessType::kLmsw:
+			default:
+				ExitOrNot = FALSE; 
+				HYPERPLATFORM_COMMON_DBG_BREAK();
+				break;
+		}
+
+		if (!ExitOrNot)
+		{
+			return STATUS_UNSUCCESSFUL;
+		}
+		HYPERPLATFORM_LOG_DEBUG_SAFE("CrAccess Exit to L1");
 		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
 	}
 
+	//-----------------------------------------------------------------------------------------------------------------------//
+	_Use_decl_annotations_ static NTSTATUS VmmpHandlerDrAccessForL2(
+		_In_ GuestContext *guest_context
+	)
+	{ 
+		VmxProcessorBasedControls ctrl = GetCpuBasedVmexitCtrlForLevel1(guest_context);
+		if (!ctrl.fields.mov_dr_exiting)
+		{
+			return STATUS_UNSUCCESSFUL;
+		} 
+		HYPERPLATFORM_LOG_DEBUG_SAFE("DrAccess VMExit to L1");
+		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+	}
+
+	//-----------------------------------------------------------------------------------------------------------------------//
+	_Use_decl_annotations_ static NTSTATUS VmmpHandlerMontiorTrapFlagForL2(
+		_In_ GuestContext *guest_context
+	)
+	{ 
+		VmxProcessorBasedControls ctrl = GetCpuBasedVmexitCtrlForLevel1(guest_context);
+		if (!ctrl.fields.monitor_trap_flag)
+		{
+			return STATUS_UNSUCCESSFUL;
+		}
+		HYPERPLATFORM_LOG_DEBUG_SAFE("MontiorTrapFlag VMExit to L1");
+		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+	}
+	 
+	//-----------------------------------------------------------------------------------------------------------------------//
+	_Use_decl_annotations_ static NTSTATUS VmmpHandleDescriptorTableAccessForL2(
+		_In_ GuestContext *guest_context
+	)
+	{
+		VmxSecondaryProcessorBasedControls ctrl = GetSecondaryCpuBasedVmexitCtrlForLevel1(guest_context);
+		if (!ctrl.fields.descriptor_table_exiting)
+		{
+			return STATUS_UNSUCCESSFUL;
+		}
+		HYPERPLATFORM_LOG_DEBUG_SAFE("DescriptorTableAccess VMExit to L1"); 
+		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+	}
+	  
 	//-----------------------------------------------------------------------------------------------------------------------//
 	_Use_decl_annotations_ static NTSTATUS VmmpHandleVmExitForL2(
 		_In_ GuestContext *guest_context
@@ -435,10 +647,13 @@ extern "C" {
 		case VmxExitReason::kInvlpg:
 			break;
 		case VmxExitReason::kRdtsc:
+			IsHandled = VmmpHandlerRdtscForL2(guest_context);
 			break;
 		case VmxExitReason::kCrAccess:
+			IsHandled = VmmpHandlerCrAccessForL2(guest_context); 
 			break;
-		case VmxExitReason::kDrAccess:
+		case VmxExitReason::kDrAccess:		
+			IsHandled = VmmpHandlerDrAccessForL2(guest_context);
 			break;
 		case VmxExitReason::kIoInstruction:
 			break;
@@ -447,12 +662,14 @@ extern "C" {
 		case VmxExitReason::kMsrWrite:
 			break;
 		case VmxExitReason::kMonitorTrapFlag:
+			IsHandled = VmmpHandlerMontiorTrapFlagForL2(guest_context);
 			break;
-		case VmxExitReason::kGdtrOrIdtrAccess:
-			break;
+		case VmxExitReason::kGdtrOrIdtrAccess: 
 		case VmxExitReason::kLdtrOrTrAccess:
-			break;
+			IsHandled = VmmpHandleDescriptorTableAccessForL2(guest_context);
+			break; 
 		case VmxExitReason::kEptViolation:
+			
 			break;
 		case VmxExitReason::kEptMisconfig:
 			break;

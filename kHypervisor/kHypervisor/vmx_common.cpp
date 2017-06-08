@@ -61,8 +61,7 @@ void LoadHostKernelGsBase(VCPUVMX* vcpu)
 {
 	UtilWriteMsr64(Msr::kIa32KernelGsBase, vcpu->HostKernelGsBase);
 }
-*/
-
+*/ 
 //---------------------------------------------------------------------------------------------------------------------//
 void SaveGuestMsrs(VCPUVMX* vcpu)
 {

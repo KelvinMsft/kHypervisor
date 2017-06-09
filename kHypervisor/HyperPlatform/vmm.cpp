@@ -202,8 +202,11 @@ extern "C" {
 	{
 		return guest_context->irql;
 	}
-
-
+	//----------------------------------------------------------------------------------------------------------------//
+	ProcessorData* GetProcessorData(GuestContext* guest_context)
+	{
+		return guest_context->stack->processor_data;
+	} 
 	//----------------------------------------------------------------------------------------------------------------//
 	ULONG_PTR GetGuestCr8(GuestContext* guest_context)
 	{
@@ -650,10 +653,10 @@ extern "C" {
 			IsHandled = VmmpHandlerRdtscForL2(guest_context);
 			break;
 		case VmxExitReason::kCrAccess:
-			IsHandled = VmmpHandlerCrAccessForL2(guest_context); 
+			//IsHandled = VmmpHandlerCrAccessForL2(guest_context); 
 			break;
 		case VmxExitReason::kDrAccess:		
-			IsHandled = VmmpHandlerDrAccessForL2(guest_context);
+			//IsHandled = VmmpHandlerDrAccessForL2(guest_context);
 			break;
 		case VmxExitReason::kIoInstruction:
 			break;
@@ -666,7 +669,7 @@ extern "C" {
 			break;
 		case VmxExitReason::kGdtrOrIdtrAccess: 
 		case VmxExitReason::kLdtrOrTrAccess:
-			IsHandled = VmmpHandleDescriptorTableAccessForL2(guest_context);
+			//IsHandled = VmmpHandleDescriptorTableAccessForL2(guest_context);
 			break; 
 		case VmxExitReason::kEptViolation:
 			
@@ -967,18 +970,10 @@ extern "C" {
 			vmcs_field = VmcsField::kGuestIa32Debugctl;
 			transfer_to_vmcs = true;
 			break;
-		case Msr::kIa32GsBase:
-		{
+		case Msr::kIa32GsBase: 
 			vmcs_field = VmcsField::kGuestGsBase;
 			transfer_to_vmcs = true;
-			break;
-
-		}
-		case Msr::kIa32KernelGsBase:
-		{
-			transfer_to_vmcs = false;
-			break;
-		}
+			break;   
 		case Msr::kIa32FsBase:
 			vmcs_field = VmcsField::kGuestFsBase;
 			transfer_to_vmcs = true;
@@ -1007,25 +1002,34 @@ extern "C" {
 			}
 			else
 			{
-				if (msr == Msr::kIa32VmxEptVpidCap)
+				switch (msr)
 				{
-					msr_value.LowPart = guest_context->stack->processor_data->VmxEptMsr.LowPart;
-					msr_value.HighPart = guest_context->stack->processor_data->VmxEptMsr.HighPart;
-				}
-				else if (msr == Msr::kIa32FeatureControl)
-				{
-					msr_value.LowPart = guest_context->stack->processor_data->Ia32FeatureMsr.LowPart;
-					msr_value.HighPart = guest_context->stack->processor_data->Ia32FeatureMsr.HighPart;
-					HYPERPLATFORM_LOG_DEBUG("Writing Ia32FeactureCtrl : %I64x \r\n ", msr_value.QuadPart);
-				}
-				else if (msr == Msr::kIa32VmxBasic)
-				{
-					msr_value.LowPart = guest_context->stack->processor_data->VmxBasicMsr.LowPart;
-					msr_value.HighPart = guest_context->stack->processor_data->VmxBasicMsr.HighPart;
-				}
-				else
-				{
-					msr_value.QuadPart = UtilReadMsr64(msr);
+					case Msr::kIa32VmxEptVpidCap:
+					{
+						msr_value.LowPart = guest_context->stack->processor_data->VmxEptMsr.LowPart;
+						msr_value.HighPart = guest_context->stack->processor_data->VmxEptMsr.HighPart;
+					}
+					break;
+					case Msr::kIa32FeatureControl:
+					{
+						msr_value.LowPart = guest_context->stack->processor_data->Ia32FeatureMsr.LowPart;
+						msr_value.HighPart = guest_context->stack->processor_data->Ia32FeatureMsr.HighPart;
+					}
+					break;
+					case Msr::kIa32VmxBasic:
+					{
+						msr_value.LowPart = guest_context->stack->processor_data->VmxBasicMsr.LowPart;
+						msr_value.HighPart = guest_context->stack->processor_data->VmxBasicMsr.HighPart;
+					}
+					break;
+					case Msr::kIa32KernelGsBase:
+						 msr_value.QuadPart = guest_context->stack->processor_data->GuestKernelGsBase.QuadPart;
+					break;
+					default:
+					{
+						msr_value.QuadPart = UtilReadMsr64(msr);
+					}
+					break;
 				}
 			}
 			guest_context->gp_regs->ax = msr_value.LowPart;
@@ -1048,22 +1052,23 @@ extern "C" {
 			}
 			else
 			{
-				if (msr == Msr::kIa32VmxEptVpidCap)
+				switch (msr)
 				{
-					guest_context->stack->processor_data->VmxEptMsr.QuadPart = msr_value.QuadPart;
-				}
-				else if (msr == Msr::kIa32FeatureControl)
-				{
-					guest_context->stack->processor_data->Ia32FeatureMsr.QuadPart = msr_value.QuadPart;
-					HYPERPLATFORM_LOG_DEBUG("Reading Ia32FeactureCtrl : %I64x \r\n ", msr_value.QuadPart);
-				}
-				else if (msr == Msr::kIa32VmxBasic)
-				{
-					guest_context->stack->processor_data->VmxBasicMsr.QuadPart = msr_value.QuadPart;
-				}
-				else
-				{
-					UtilWriteMsr64(msr, msr_value.QuadPart);
+					case Msr::kIa32VmxEptVpidCap:
+						guest_context->stack->processor_data->VmxEptMsr.QuadPart = msr_value.QuadPart;
+					break;
+					case Msr::kIa32FeatureControl:
+						guest_context->stack->processor_data->Ia32FeatureMsr.QuadPart = msr_value.QuadPart;
+					break;
+					case  Msr::kIa32VmxBasic:
+						guest_context->stack->processor_data->VmxBasicMsr.QuadPart = msr_value.QuadPart;
+					break;
+					case Msr::kIa32KernelGsBase:
+						guest_context->stack->processor_data->GuestKernelGsBase.QuadPart = msr_value.QuadPart;
+					break;
+					default:
+						UtilWriteMsr64(msr, msr_value.QuadPart); 
+					break;
 				}
 			}
 		}

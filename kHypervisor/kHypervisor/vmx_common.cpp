@@ -37,56 +37,30 @@ extern "C"
 extern ULONG_PTR*	 VmmpSelectRegister(_In_ ULONG index, _In_ GuestContext *guest_context);
 
 ULONG32				 g_vmx_extensions_bitmask;
-/*
+ 
 //---------------------------------------------------------------------------------------------------------------------//
-void SaveGuestKernelGsBase(VCPUVMX* vcpu)
+void SaveGuestKernelGsBase(ProcessorData* vcpu)
 {
-	vcpu->HostKernelGsBase = UtilReadMsr64(Msr::kIa32KernelGsBase);
+	vcpu->GuestKernelGsBase.QuadPart = UtilReadMsr64(Msr::kIa32KernelGsBase);
 }
 
 //---------------------------------------------------------------------------------------------------------------------//
-void LoadGuestKernelGsBase(VCPUVMX* vcpu)
+void LoadGuestKernelGsBase(ProcessorData* vcpu)
 {
-	UtilWriteMsr64(Msr::kIa32KernelGsBase, vcpu->GuestKernelGsBase);
+	UtilWriteMsr64(Msr::kIa32KernelGsBase, vcpu->GuestKernelGsBase.QuadPart);
 }
 
 //---------------------------------------------------------------------------------------------------------------------//
-void SaveHostKernelGsBase(VCPUVMX* vcpu)
+void SaveHostKernelGsBase(ProcessorData* vcpu)
 {
-	vcpu->HostKernelGsBase = UtilReadMsr64(Msr::kIa32KernelGsBase);
+	vcpu->HostKernelGsBase.QuadPart = UtilReadMsr64(Msr::kIa32KernelGsBase);
 }
 
 //---------------------------------------------------------------------------------------------------------------------//
-void LoadHostKernelGsBase(VCPUVMX* vcpu)
+void LoadHostKernelGsBase(ProcessorData* vcpu)
 {
-	UtilWriteMsr64(Msr::kIa32KernelGsBase, vcpu->HostKernelGsBase);
-}
-*/ 
-//---------------------------------------------------------------------------------------------------------------------//
-void SaveGuestMsrs(VCPUVMX* vcpu)
-{
-	/*
-	* We cannot cache SHADOW_GS_BASE while the VCPU runs, as it can
-	* be updated at any time via SWAPGS, which we cannot trap.
-	*/  
-	vcpu->guest_gs_kernel_base = UtilReadMsr64(Msr::kIa32KernelGsBase);
-	vcpu->guest_IA32_STAR = UtilReadMsr(Msr::kIa32Star);
-	vcpu->guest_IA32_LSTAR = UtilReadMsr(Msr::kIa32Lstar);
-	vcpu->guest_IA32_FMASK = UtilReadMsr(Msr::kIa32Fmask);
-
-	//HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Save GS base: %I64X kernel GS Base : %I64X \r\n ",
-	//	UtilReadMsr64(Msr::kIa32GsBase), vcpu->guest_gs_kernel_base);
-}
-//---------------------------------------------------------------------------------------------------------------------//
-void RestoreGuestMsrs(VCPUVMX* vcpu)
-{ 
-	UtilWriteMsr64(Msr::kIa32KernelGsBase, vcpu->guest_gs_kernel_base); 
-	UtilWriteMsr64(Msr::kIa32Star, vcpu->guest_IA32_STAR);
-	UtilWriteMsr64(Msr::kIa32Lstar, vcpu->guest_IA32_LSTAR);
-	UtilWriteMsr64(Msr::kIa32Fmask, vcpu->guest_IA32_FMASK);
-	//HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Restore GS base: %I64X \r\n ", vcpu->guest_gs_kernel_base);
-}
-
+	UtilWriteMsr64(Msr::kIa32KernelGsBase, vcpu->HostKernelGsBase.QuadPart);
+} 
 
 //---------------------------------------------------------------------------------------------------------------------//
 /*

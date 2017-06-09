@@ -56,17 +56,9 @@ typedef struct _VCPU_VMX
 	BOOLEAN   blockINITsignal;			///NOT USED
 	BOOLEAN   blockAndDisableA20M;		///NOT USED
 	VMX_MODE  inRoot;					///is it in root mode
-	USHORT	  kVirtualProcessorId;		///NOT USED
-	ULONG_PTR HostKernelGsBase;		///guest_gs_kernel_base 
-	ULONG_PTR GuestKernelGsBase;		///guest_gs_kernel_base  
-	ULONG_PTR guest_irql;
-	ULONG_PTR guest_cr8;
-
-	ULONG_PTR	guest_gs_kernel_base;
-	ULONG_PTR	guest_IA32_STAR;
-	ULONG_PTR	guest_IA32_LSTAR;
-	ULONG_PTR	guest_IA32_FMASK;
-
+	USHORT	  kVirtualProcessorId;		///NOT USED 
+	ULONG_PTR   guest_irql;
+	ULONG_PTR   guest_cr8;    
 }VCPUVMX, *PVCPUVMX;
 
 /// Represents VMM related data associated with each processor
@@ -79,11 +71,13 @@ struct ProcessorData {
 	void* xsave_area;                         //!< VA to store state components
 	ULONG64 xsave_inst_mask;                  //!< A mask to save state components
 	UCHAR fxsave_area[512 + 16];              //!< For fxsave (+16 for alignment)
-	LARGE_INTEGER Ia32FeatureMsr;				//!< For Msr Read / Write
-	LARGE_INTEGER VmxBasicMsr;				//!< For Msr Read / Write
-	LARGE_INTEGER VmxEptMsr;					//!< For Msr Read / Write
-	VCPUVMX*		vcpu_vmx;					//!< For nested vmx context
-	CPU_MODE		CpuMode;					//!< For CPU Mode
+	LARGE_INTEGER Ia32FeatureMsr;			  //!< For Msr Read / Write
+	LARGE_INTEGER VmxBasicMsr;				  //!< For Msr Read / Write
+	LARGE_INTEGER VmxEptMsr;				  //!< For Msr Read / Write   
+	LARGE_INTEGER HostKernelGsBase;			  ///guest_gs_kernel_base 
+	LARGE_INTEGER GuestKernelGsBase;		  ///guest_gs_kernel_base  
+	VCPUVMX*		vcpu_vmx;				  //!< For nested vmx context
+	CPU_MODE		CpuMode;				  //!< For CPU Mode 
 };
 
 

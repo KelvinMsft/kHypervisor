@@ -47,14 +47,12 @@ VOID	InitVmxExtensionMask();
 BOOLEAN IsEptptrValid(ULONG64 eptptr);
 
 SegmentDescriptor* GetSegmentDesctiptor(SegmentSelector ss, ULONG64 gdtBase);
- 
-/*
-void	SaveGuestKernelGsBase(VCPUVMX* vcpu); 
-void	LoadGuestKernelGsBase(VCPUVMX* vcpu); 
-void	SaveHostKernelGsBase(VCPUVMX* vcpu); 
-void	LoadHostKernelGsBase(VCPUVMX* vcpu);
-*/
+  
+struct ProcessorData;
+void	SaveGuestKernelGsBase(ProcessorData* vcpu); 
+void	LoadGuestKernelGsBase(ProcessorData* vcpu);
+void	SaveHostKernelGsBase(ProcessorData* vcpu);
+void	LoadHostKernelGsBase(ProcessorData* vcpu);
 
-void RestoreGuestMsrs(VCPUVMX* vcpu);
-void SaveGuestMsrs(VCPUVMX* vcpu);
+
 }

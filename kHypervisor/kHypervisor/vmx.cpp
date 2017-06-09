@@ -30,7 +30,7 @@ extern VOID			 EnterVmxMode(GuestContext* guest_context);
 extern VOID			 LeaveVmxMode(GuestContext* guest_context);
 extern ULONG		 GetvCpuMode(GuestContext* guest_context); 
 void				 SaveGuestCr8(VCPUVMX* vcpu, ULONG_PTR cr8); 
-
+extern ProcessorData* GetProcessorData(GuestContext* guest_context);
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //// Marco
 ////
@@ -392,8 +392,7 @@ NTSTATUS LoadHostStateForLevel1(
 	UtilVmWrite(VmcsField::kGuestTrArBytes,	  VmpGetSegmentAccessRight(AsmReadTR())); 
 
 	UtilVmWrite(VmcsField::kGuestIa32Debugctl, 0);
-	 
-
+	  
 	//Clean VMCS1-2 Injecting event since it shouldn't be injected 
 	VmWrite32(VmcsField::kVmEntryIntrInfoField, Vmcs12_va, 0);
 	VmWrite32(VmcsField::kVmEntryExceptionErrorCode, Vmcs12_va, 0); 
@@ -437,12 +436,15 @@ NTSTATUS VMExitEmulate(VCPUVMX* vCPU , GuestContext* guest_context)
 	}
 
 	LEAVE_GUEST_MODE(vCPU); 
+	SaveGuestKernelGsBase(GetProcessorData(guest_context)); 
+	LoadHostKernelGsBase(GetProcessorData(guest_context));
+
 	SaveGuestFieldFromVmcs02(vCPU);
 	SaveExceptionInformationFromVmcs02(vCPU);
-	SaveGuestMsrs(vCPU);
 	SaveGuestCr8(vCPU, GetGuestCr8(guest_context)); 
 	LoadHostStateForLevel1(vCPU);
-	 
+
+
 	return STATUS_SUCCESS;
 } 
 
@@ -1049,6 +1051,7 @@ VOID VmlaunchEmulate(GuestContext* guest_context)
 	VCPUVMX*		  NestedvCPU = GetVcpuVmx(guest_context);
 	VmxStatus		  status;
 	do { 
+		HYPERPLATFORM_COMMON_DBG_BREAK();
 		HYPERPLATFORM_LOG_DEBUG_SAFE("-----start vmlaunch---- \r\n");
 
 		if (GetvCpuMode(guest_context) != VmxMode)
@@ -1126,7 +1129,9 @@ VOID VmlaunchEmulate(GuestContext* guest_context)
 		2. Read VMCS12 Guest's field to VMCS02
 		*/
 		PrepareGuestStateField(vmcs12_va);
-		 
+		  
+	
+		SaveHostKernelGsBase(GetProcessorData(guest_context));
 
 		if (GetGuestIrql(guest_context) < DISPATCH_LEVEL)
 		{
@@ -1200,8 +1205,7 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 		ptr->revision_identifier = vmx_basic_msr.fields.revision_identifier;
 
 		//Restore some MSR & cr8 we may need to ensure the consistency  
-		 
-		RestoreGuestMsrs(NestedvCPU);
+		  
 		RestoreGuestCr8(NestedvCPU);
 
 		//Prepare VMCS01 Host / Control Field
@@ -1213,10 +1217,10 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 		PrepareGuestStateField(vmcs12_va); 
 		/*
 		VM Guest state field End
-		*/
-
-
-
+		*/ 
+		SaveHostKernelGsBase(GetProcessorData(guest_context)); 
+		LoadGuestKernelGsBase(GetProcessorData(guest_context));
+		 
 		//--------------------------------------------------------------------------------------//
 
 		/*

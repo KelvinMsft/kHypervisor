@@ -93,6 +93,68 @@ static const ULONG32 kHyperVCpuidInterface = 0x40000001;
 // types
 //
 
+/// See: IA32_MTRR_DEF_TYPE MSR
+union Ia32MtrrDefaultTypeMsr {
+	ULONG64 all;
+	struct {
+		ULONG64 default_mtemory_type : 8;  //<! [0:7]
+		ULONG64 reserved : 2;              //<! [8:9]
+		ULONG64 fixed_mtrrs_enabled : 1;   //<! [10]
+		ULONG64 mtrrs_enabled : 1;         //<! [11]
+	} fields;
+};
+static_assert(sizeof(Ia32MtrrDefaultTypeMsr) == 8, "Size check");
+
+/// See: Fixed Range MTRRs
+union Ia32MtrrFixedRangeMsr {
+	ULONG64 all;
+	struct {
+		UCHAR types[8];
+	} fields;
+};
+static_assert(sizeof(Ia32MtrrFixedRangeMsr) == 8, "Size check");
+
+/// See: IA32_MTRR_PHYSBASEn and IA32_MTRR_PHYSMASKn Variable-Range Register
+/// Pair
+union Ia32MtrrPhysBaseMsr {
+	ULONG64 all;
+	struct {
+		ULONG64 type : 8;        //!< [0:7]
+		ULONG64 reserved : 4;    //!< [8:11]
+		ULONG64 phys_base : 36;  //!< [12:MAXPHYADDR]
+	} fields;
+};
+static_assert(sizeof(Ia32MtrrPhysBaseMsr) == 8, "Size check");
+
+
+/// See: IA32_MTRR_PHYSBASEn and IA32_MTRR_PHYSMASKn Variable-Range Register
+/// Pair
+union Ia32MtrrPhysMaskMsr {
+	ULONG64 all;
+	struct {
+		ULONG64 reserved : 11;   //!< [0:10]
+		ULONG64 valid : 1;       //!< [11]
+		ULONG64 phys_mask : 36;  //!< [12:MAXPHYADDR]
+	} fields;
+};
+static_assert(sizeof(Ia32MtrrPhysMaskMsr) == 8, "Size check");
+
+
+
+
+/// See: IA32_MTRRCAP Register
+union Ia32MtrrCapabilitiesMsr {
+	ULONG64 all;
+	struct {
+		ULONG64 variable_range_count : 8;   //<! [0:7]
+		ULONG64 fixed_range_supported : 1;  //<! [8]
+		ULONG64 reserved : 1;               //<! [9]
+		ULONG64 write_combining : 1;        //<! [10]
+		ULONG64 smrr : 1;                   //<! [11]
+	} fields;
+};
+static_assert(sizeof(Ia32MtrrCapabilitiesMsr) == 8, "Size check");
+
 ////////////////////////////////////////////////////////////////////////////////
 //
 // prototypes
@@ -534,8 +596,7 @@ union Ia32ApicBaseMsr {
     ULONG64 apic_base : 24;           //!< [12:35]
   } fields;
 };
-static_assert(sizeof(Ia32ApicBaseMsr) == 8, "Size check");
-
+static_assert(sizeof(Ia32ApicBaseMsr) == 8, "Size check"); 
 /// See: MODEL-SPECIFIC REGISTERS (MSRS)
 enum class Msr : unsigned int {
   kIa32ApicBase = 0x01B,
@@ -547,6 +608,22 @@ enum class Msr : unsigned int {
   kIa32SysenterEip = 0x176,
 
   kIa32Debugctl = 0x1D9,
+
+  kIa32MtrrCap = 0xFE,
+  kIa32MtrrDefType = 0x2FF,
+  kIa32MtrrPhysBaseN = 0x200,
+  kIa32MtrrPhysMaskN = 0x201,
+  kIa32MtrrFix64k00000 = 0x250,
+  kIa32MtrrFix16k80000 = 0x258,
+  kIa32MtrrFix16kA0000 = 0x259,
+  kIa32MtrrFix4kC0000 = 0x268,
+  kIa32MtrrFix4kC8000 = 0x269,
+  kIa32MtrrFix4kD0000 = 0x26A,
+  kIa32MtrrFix4kD8000 = 0x26B,
+  kIa32MtrrFix4kE0000 = 0x26C,
+  kIa32MtrrFix4kE8000 = 0x26D,
+  kIa32MtrrFix4kF0000 = 0x26E,
+  kIa32MtrrFix4kF8000 = 0x26F,
 
   kIa32VmxBasic = 0x480,
   kIa32VmxPinbasedCtls = 0x481,

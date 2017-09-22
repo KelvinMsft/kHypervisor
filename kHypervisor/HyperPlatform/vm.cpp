@@ -24,7 +24,7 @@ extern "C" {
 
 	////////////////////////////////////////////////////////////////////////////////
 	//
-	// constants and macros
+	// constants and macrosv
 	//
 
 	////////////////////////////////////////////////////////////////////////////////
@@ -158,6 +158,8 @@ extern "C" {
 		if (!shared_data) {
 			return STATUS_MEMORY_NOT_ALLOCATED;
 		}
+
+		EptInitializeMtrrEntries();
 
 		// Virtualize all processors
 		auto status = UtilForEachProcessor(VmpStartVm, shared_data);
@@ -666,7 +668,7 @@ extern "C" {
 				vm_procctl_requested.all) };
 
 		VmxSecondaryProcessorBasedControls vm_procctl2_requested = {};
-		vm_procctl2_requested.fields.enable_ept = false;
+		vm_procctl2_requested.fields.enable_ept = true;
 		vm_procctl2_requested.fields.descriptor_table_exiting = true;
 		vm_procctl2_requested.fields.enable_rdtscp = true;  // for Win10
 		vm_procctl2_requested.fields.enable_vpid = false;

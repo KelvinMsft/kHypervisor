@@ -81,6 +81,9 @@ _IRQL_requires_min_(DISPATCH_LEVEL) void EptHandleEptViolation(
 EptCommonEntry* EptGetEptPtEntry(_In_ EptData* ept_data,
                                  _In_ ULONG64 physical_address);
 
+
+/// Reads and stores all MTRRs to set a correct memory type for EPT
+_IRQL_requires_max_(PASSIVE_LEVEL) void EptInitializeMtrrEntries();
 ////////////////////////////////////////////////////////////////////////////////
 //
 // variables

@@ -280,6 +280,7 @@ extern "C" {
 		UtilForceCopyMemory(_In_ void *destination, _In_ const void *source,
 			_In_ SIZE_T length);
 
+	bool UtilpIsCanonicalFormAddress(_In_ void *address);
 	////////////////////////////////////////////////////////////////////////////////
 	//
 	// variables

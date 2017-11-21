@@ -107,6 +107,94 @@ void DumpVcpu(GuestContext* guest_context)
 	HYPERPLATFORM_LOG_DEBUG_SAFE("CurrentVmcs: %I64X vm: %I64x vmcs02: %I64X vmcs01: %I64x vmcs12: %I64x root mode: %I64x \r\n",
 		vmcs_pa, vmx, vmx->vmcs02_pa, vmx->vmcs01_pa, vmx->vmcs12_pa, vmx->inRoot, GetvCpuMode(guest_context));
 }
+//-------------------------------------------------------------------------------------------------------------------------------------//
+VOID VmxVmEntryCheckGuestReg()
+{
+	VmxVmEntryControls vmentry_ctrl = { UtilVmRead(VmcsField::kVmEntryControls) };
+	FlagRegister rflags = { UtilVmRead(VmcsField::kGuestRflags) };
+	Cr0 cr0 = { UtilVmRead(VmcsField::kGuestCr0) };
+	Cr0 cr0_fixed0 = { UtilReadMsr(Msr::kIa32VmxCr0Fixed0) };
+	Cr0 cr0_fixed1 = { UtilReadMsr(Msr::kIa32VmxCr0Fixed1) };
+	Cr0 cr0_test = { 0 };
+	cr0_test.all = cr0.all;
+	cr0_test.all &= cr0_fixed1.all;
+	cr0_test.all |= cr0_fixed0.all;
+
+	NT_ASSERT(cr0_test.all == cr0.all);
+
+	Cr4 cr4 = { UtilVmRead(VmcsField::kGuestCr4) };
+	Cr4 cr4_fixed0 = { UtilReadMsr(Msr::kIa32VmxCr4Fixed0) };
+	Cr4 cr4_fixed1 = { UtilReadMsr(Msr::kIa32VmxCr4Fixed1) };
+	Cr4 cr4_test = { 0 };
+	cr4_test.all = cr4.all;
+	cr4_test.all &= cr4_fixed1.all;
+	cr4_test.all |= cr4_fixed0.all;
+
+	NT_ASSERT(cr4_test.all == cr4.all);
+
+
+	if (vmentry_ctrl.fields.ia32e_mode_guest)
+	{
+		NT_ASSERT(cr0.fields.pg && cr4.fields.pae);
+	}
+	else
+	{
+		NT_ASSERT(!cr4.fields.pcide);
+	}
+
+	NT_ASSERT(cr0.fields.pg && cr0.fields.pe);
+
+	if (vmentry_ctrl.fields.load_debug_controls)
+	{
+
+	}
+
+	NT_ASSERT(UtilpIsCanonicalFormAddress((void*)UtilVmRead64(VmcsField::kGuestSysenterEip)) &&
+		UtilpIsCanonicalFormAddress((void*)UtilVmRead64(VmcsField::kGuestSysenterEsp)));
+
+	if (vmentry_ctrl.fields.load_ia32_efer)
+	{
+		MSR_EFER efer = { UtilVmRead(VmcsField::kGuestIa32Efer) };
+		NT_ASSERT(efer.fields.LMA == vmentry_ctrl.fields.ia32e_mode_guest);
+	}
+
+	if (vmentry_ctrl.fields.ia32e_mode_guest || !cr0.fields.pe)
+	{
+		NT_ASSERT(!rflags.fields.vm);
+	}
+}
+//---------------------------------------------------------------------------------------------------------------------//
+VOID VmxVmEntryCheckGuestSegReg()
+{
+
+}
+//---------------------------------------------------------------------------------------------------------------------//
+VOID VmxVmEntryCheckGuestDescTableReg()
+{
+
+}
+
+//---------------------------------------------------------------------------------------------------------------------//
+VOID VmxVmEntryCheckGuestRipRflags()
+{
+
+}
+
+//---------------------------------------------------------------------------------------------------------------------//
+VOID VmxVmEntryCheckGuestNonRegstate()
+{
+
+}
+//---------------------------------------------------------------------------------------------------------------------//
+VOID VmEntryCheck()
+{
+	VmxVmEntryCheckGuestReg();
+	VmxVmEntryCheckGuestSegReg();
+	VmxVmEntryCheckGuestDescTableReg();
+	VmxVmEntryCheckGuestRipRflags();
+	VmxVmEntryCheckGuestNonRegstate();
+}
+
 //----------------------------------------------------------------------------------------------------------------------//
 /*
 Descritpion:
@@ -479,32 +567,42 @@ NTSTATUS VMEntryEmulate(VCPUVMX* vCPU, GuestContext* guest_context , BOOLEAN IsV
 		//HYPERPLATFORM_LOG_DEBUG_SAFE("cannot find vmcs \r\n");
 		return STATUS_UNSUCCESSFUL;
 	}
-
-	ENTER_GUEST_MODE(vCPU);
 	 
 	auto    vmcs02_va = (ULONG64)UtilVaFromPa(vCPU->vmcs02_pa);
 	auto    vmcs12_va = (ULONG64)UtilVaFromPa(vCPU->vmcs12_pa);
 
+	if (!vmcs02_va || !vmcs02_va)
+	{
+		return STATUS_UNSUCCESSFUL;
+	}
+
+	ENTER_GUEST_MODE(vCPU);
+
 	// Write a VMCS revision identifier
 	const Ia32VmxBasicMsr vmx_basic_msr = { UtilReadMsr64(Msr::kIa32VmxBasic) };
-
 	VmControlStructure* ptr = (VmControlStructure*)vmcs02_va;
 	ptr->revision_identifier = vmx_basic_msr.fields.revision_identifier;
 	 
 	//Prepare VMCS01 Host / Control Field
 	PrepareHostAndControlField(vmcs12_va,  vCPU->vmcs02_pa, IsVmLaunch);
+
 	PrepareGuestStateField(vmcs12_va); 
-	SaveHostKernelGsBase(GetProcessorData(guest_context));
 	 
+	SaveHostKernelGsBase(GetProcessorData(guest_context));
+
+	VmEntryCheck();
 
 	if (IsVmLaunch)
 	{
 		VmxStatus status;
-
+		 
+		// We must be careful of this, since we jmp back to the Guest soon. 
+		// It is a exceptional case  
 		if (GetGuestIrql(guest_context) < DISPATCH_LEVEL)
 		{
 			KeLowerIrql(GetGuestIrql(guest_context));
 		}
+
 		if (VmxStatus::kOk != (status = static_cast<VmxStatus>(__vmx_vmlaunch())))
 		{
 			VmxInstructionError error2 = static_cast<VmxInstructionError>(UtilVmRead(VmcsField::kVmInstructionError));
@@ -524,16 +622,12 @@ NTSTATUS VMEntryEmulate(VCPUVMX* vCPU, GuestContext* guest_context , BOOLEAN IsV
 //---------------------------------------------------------------------------------------------------------------------//
 void SaveGuestCr8(VCPUVMX* vcpu, ULONG_PTR cr8)
 {
-	vcpu->guest_cr8 = cr8;
-	
-	//HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Save cr8 : %I64X \r\n ", vcpu->guest_cr8);
+	vcpu->guest_cr8 = cr8; 
 }
 //---------------------------------------------------------------------------------------------------------------------//
 void RestoreGuestCr8(VCPUVMX* vcpu)
 {
-	__writecr8(vcpu->guest_cr8);
-	
-	//HYPERPLATFORM_LOG_DEBUG_SAFE("DEBUG###Restore cr8 : %I64X \r\n ", __readcr8());
+	__writecr8(vcpu->guest_cr8); 
 }
  
 //---------------------------------------------------------------------------------------------------------------------//
@@ -1107,7 +1201,7 @@ VOID VmlaunchEmulate(GuestContext* guest_context)
 		}
 		  
 		VMEntryEmulate(NestedvCPU, guest_context, TRUE);
-
+		VmEntryCheck();
 		HYPERPLATFORM_LOG_DEBUG_SAFE("Error VMLAUNCH error code :%x , %x ", 0, 0);
 		return;
 	} while (FALSE);
@@ -1146,10 +1240,8 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 			break;
 		}
 
-		VMEntryEmulate(NestedvCPU, guest_context, FALSE);
-		  
-//		PrintVMCS();   
-		
+		VMEntryEmulate(NestedvCPU, guest_context, FALSE); 
+
 		HYPERPLATFORM_COMMON_DBG_BREAK();
 
 	} while (FALSE);

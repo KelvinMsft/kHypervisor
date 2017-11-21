@@ -82,7 +82,7 @@ extern "C" {
 	_IRQL_requires_max_(PASSIVE_LEVEL) static PhysicalMemoryDescriptor
 		*UtilpBuildPhysicalMemoryRanges();
 
-	static bool UtilpIsCanonicalFormAddress(_In_ void *address);
+	bool UtilpIsCanonicalFormAddress(_In_ void *address);
 
 	static HardwarePte *UtilpAddressToPxe(_In_ const void *address);
 
@@ -544,7 +544,7 @@ extern "C" {
 	}
 
 	// Checks whether the address is the canonical address
-	_Use_decl_annotations_ static bool UtilpIsCanonicalFormAddress(void *address) {
+	_Use_decl_annotations_ bool UtilpIsCanonicalFormAddress(void *address) {
 		if (!IsX64()) {
 			return true;
 		}

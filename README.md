@@ -31,6 +31,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
 
 2017-06-08 : Adding a support for Monitor Trap Flags from L2 and perform Nested VMExit
 
+2017-11-21 : Added VM-Entry Check Emulation
 # Installation
 
  - kHypervisor extended HyperPlatform which is created by Tandasat, it is a Nested-Virtual Machine Monitor, and DdiMon is one of Tandasat's product of HyperPlatform for test demo in kHypervisor.

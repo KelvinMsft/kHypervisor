@@ -506,8 +506,7 @@ extern "C" {
 	_Use_decl_annotations_ static NTSTATUS VmmpHandlerCrAccessForL2(
 		_In_ GuestContext *guest_context
 	)
-	{
-		HYPERPLATFORM_LOG_DEBUG_SAFE("Cr VMExit to L1");
+	{ 
 		BOOLEAN ExitOrNot = FALSE;
 		const MovCrQualification exit_qualification = {	UtilVmRead(VmcsField::kExitQualification) };
 		VmxProcessorBasedControls ctrl = GetCpuBasedVmexitCtrlForLevel1(guest_context);
@@ -582,7 +581,7 @@ extern "C" {
 		{
 			return STATUS_UNSUCCESSFUL;
 		}
-		HYPERPLATFORM_LOG_DEBUG_SAFE("CrAccess Exit to L1");
+
 		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
 	}
 
@@ -653,7 +652,7 @@ extern "C" {
 			IsHandled = VmmpHandlerRdtscForL2(guest_context);
 			break;
 		case VmxExitReason::kCrAccess:
-			//IsHandled = VmmpHandlerCrAccessForL2(guest_context); 
+			IsHandled = VmmpHandlerCrAccessForL2(guest_context); 
 			break;
 		case VmxExitReason::kDrAccess:		
 			//IsHandled = VmmpHandlerDrAccessForL2(guest_context);

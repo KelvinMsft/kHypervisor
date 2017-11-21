@@ -1267,6 +1267,47 @@ union Ia32VmxEptVpidCapMsr {
 };
 static_assert(sizeof(Ia32VmxEptVpidCapMsr) == 8, "Size check");
 
+
+union MSR_IA32_DEBUGCTL
+{
+	struct
+	{
+		ULONG64 LBR : 1;				/// < [0]	 
+		ULONG64 BTF : 1;				/// < [1] 
+		ULONG64 Reserved1 : 4;			/// < [5:2]
+		ULONG64	TR : 1;					/// < [6]  
+		ULONG64	BTS : 1;				/// < [7]  
+		ULONG64	BTINT : 1;				/// < [8]  
+		ULONG64	BTS_OFF_OS : 1;			/// < [9]
+		ULONG64 BTS_OFF_USR : 1;			/// < [10]
+		ULONG64 FRZ_LBRS_ON_PMI : 1;	/// < [11]
+		ULONG64 FRZ_PERFMON_ON_PMI : 1; /// < [12]
+		ULONG64 UNCORE_PMI_EN : 1;		/// < [13]
+		ULONG64 SMM_FRZ : 1;			/// < [14]
+		ULONG64 Reserved2 : 49;			/// < [63:15]
+	}fields;
+	ULONG64 all;
+};
+static_assert(sizeof(MSR_IA32_DEBUGCTL) == 8, "Size check");
+union MSR_IA32_PERF_GLOBAL_CTRL
+{
+	struct
+	{
+		ULONG64 EN_PC0 : 1;				/// < [0]	 
+		ULONG64 EN_PC1 : 1;				/// < [1] 
+		ULONG64 EN_PC2 : 1;				/// < [2]
+		ULONG64	EN_PC3 : 1;				/// < [3]  
+		ULONG64	Reserved : 28;			/// < [31:4]  
+		ULONG64	EN_FC0 : 1;				/// < [32]  
+		ULONG64	EN_FC1 : 1;				/// < [33]
+		ULONG64 EN_FC2 : 1;				/// < [34] 
+		ULONG64 Reserved2 : 29;			/// < [63:35]
+	}fields;
+	ULONG64 all;
+};
+static_assert(sizeof(MSR_IA32_PERF_GLOBAL_CTRL) == 8, "Size check");
+
+
 /// See: Format of Exit Reason in Basic VM-Exit Information
 union VmExitInformation {
   unsigned int all;

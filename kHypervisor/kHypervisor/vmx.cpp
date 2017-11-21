@@ -110,7 +110,7 @@ void DumpVcpu(GuestContext* guest_context)
 //-------------------------------------------------------------------------------------------------------------------------------------//
 VOID VmxVmEntryCheckGuestReg()
 {
-	VmxVmEntryControls vmentry_ctrl = { UtilVmRead(VmcsField::kVmEntryControls) };
+	VmxVmEntryControls VmEntryCtrl = { UtilVmRead(VmcsField::kVmEntryControls) };
 	FlagRegister rflags = { UtilVmRead(VmcsField::kGuestRflags) };
 	Cr0 cr0 = { UtilVmRead(VmcsField::kGuestCr0) };
 	Cr0 cr0_fixed0 = { UtilReadMsr(Msr::kIa32VmxCr0Fixed0) };
@@ -133,7 +133,7 @@ VOID VmxVmEntryCheckGuestReg()
 	NT_ASSERT(cr4_test.all == cr4.all);
 
 
-	if (vmentry_ctrl.fields.ia32e_mode_guest)
+	if (VmEntryCtrl.fields.ia32e_mode_guest)
 	{
 		NT_ASSERT(cr0.fields.pg && cr4.fields.pae);
 	}
@@ -144,21 +144,36 @@ VOID VmxVmEntryCheckGuestReg()
 
 	NT_ASSERT(cr0.fields.pg && cr0.fields.pe);
 
-	if (vmentry_ctrl.fields.load_debug_controls)
+	if (VmEntryCtrl.fields.load_debug_controls)
 	{
-
+		MSR_IA32_DEBUGCTL DbgCtrl = { UtilVmRead64(VmcsField::kGuestIa32Debugctl)};
+		NT_ASSERT(!DbgCtrl.fields.Reserved1 && !DbgCtrl.fields.Reserved2);
+		NT_ASSERT(!(UtilVmRead64(VmcsField::kGuestDr7) >> 32));
 	}
-
+	 
 	NT_ASSERT(UtilpIsCanonicalFormAddress((void*)UtilVmRead64(VmcsField::kGuestSysenterEip)) &&
 		UtilpIsCanonicalFormAddress((void*)UtilVmRead64(VmcsField::kGuestSysenterEsp)));
 
-	if (vmentry_ctrl.fields.load_ia32_efer)
+	if (VmEntryCtrl.fields.load_ia32_perf_global_ctrl)
 	{
-		MSR_EFER efer = { UtilVmRead(VmcsField::kGuestIa32Efer) };
-		NT_ASSERT(efer.fields.LMA == vmentry_ctrl.fields.ia32e_mode_guest);
+		MSR_IA32_PERF_GLOBAL_CTRL PerfCtrl = { UtilVmRead(VmcsField::kGuestIa32PerfGlobalCtrl) };
+		NT_ASSERT( !PerfCtrl.fields.Reserved && !PerfCtrl.fields.Reserved2);
 	}
-
-	if (vmentry_ctrl.fields.ia32e_mode_guest || !cr0.fields.pe)
+	
+	if (VmEntryCtrl.fields.load_ia32_efer)
+	{
+		MSR_EFER efer = { UtilVmRead(VmcsField::kGuestIa32Efer) }; 
+		if (cr0.fields.pg)
+		{
+			NT_ASSERT(efer.fields.LMA == VmEntryCtrl.fields.ia32e_mode_guest == efer.fields.LME);
+		}
+		else
+		{
+			NT_ASSERT(efer.fields.LMA == VmEntryCtrl.fields.ia32e_mode_guest);
+		}
+	}
+	 
+	if (VmEntryCtrl.fields.ia32e_mode_guest || !cr0.fields.pe)
 	{
 		NT_ASSERT(!rflags.fields.vm);
 	}
@@ -166,6 +181,149 @@ VOID VmxVmEntryCheckGuestReg()
 //---------------------------------------------------------------------------------------------------------------------//
 VOID VmxVmEntryCheckGuestSegReg()
 {
+	FlagRegister		GuestRflags = { UtilVmRead64(VmcsField::kGuestRflags) };
+	VmxVmEntryControls  VmEntryCtrl = { UtilVmRead64(VmcsField::kVmEntryControls) };
+	VmxSecondaryProcessorBasedControls VmSecondProcCtrl = { UtilVmRead64(VmcsField::kSecondaryVmExecControl) };
+	BOOLEAN IsGuestOnV8086 = FALSE;
+	BOOLEAN IsGuestOnIa32e = FALSE;
+
+	if (GuestRflags.fields.vm)
+	{
+		IsGuestOnV8086 = TRUE;
+	}
+	else if (VmEntryCtrl.fields.ia32e_mode_guest)
+	{
+		IsGuestOnIa32e = TRUE;
+	}
+  
+	if (IsGuestOnV8086)
+	{
+		NT_ASSERT(UtilVmRead(VmcsField::kGuestCsBase) == UtilVmRead(VmcsField::kGuestCsSelector) << 4);
+		NT_ASSERT(UtilVmRead(VmcsField::kGuestDsBase) == UtilVmRead(VmcsField::kGuestDsSelector) << 4);
+		NT_ASSERT(UtilVmRead(VmcsField::kGuestSsBase) == UtilVmRead(VmcsField::kGuestSsSelector) << 4);
+		NT_ASSERT(UtilVmRead(VmcsField::kGuestEsBase) == UtilVmRead(VmcsField::kGuestEsSelector) << 4);
+		NT_ASSERT(UtilVmRead(VmcsField::kGuestFsBase) == UtilVmRead(VmcsField::kGuestFsSelector) << 4);
+		NT_ASSERT(UtilVmRead(VmcsField::kGuestGsBase) == UtilVmRead(VmcsField::kGuestGsSelector) << 4);
+
+		NT_ASSERT(UtilVmRead(VmcsField::kGuestCsLimit) == 0xFFFF);
+		NT_ASSERT(UtilVmRead(VmcsField::kGuestDsLimit) == 0xFFFF);
+		NT_ASSERT(UtilVmRead(VmcsField::kGuestSsLimit) == 0xFFFF);
+		NT_ASSERT(UtilVmRead(VmcsField::kGuestEsLimit) == 0xFFFF);
+		NT_ASSERT(UtilVmRead(VmcsField::kGuestFsLimit) == 0xFFFF);
+		NT_ASSERT(UtilVmRead(VmcsField::kGuestGsLimit) == 0xFFFF);
+
+		NT_ASSERT(UtilVmRead(VmcsField::kGuestCsArBytes) == 0xF3);
+		NT_ASSERT(UtilVmRead(VmcsField::kGuestDsArBytes) == 0xF3);
+		NT_ASSERT(UtilVmRead(VmcsField::kGuestSsArBytes) == 0xF3);
+		NT_ASSERT(UtilVmRead(VmcsField::kGuestEsArBytes) == 0xF3);
+		NT_ASSERT(UtilVmRead(VmcsField::kGuestFsArBytes) == 0xF3);
+		NT_ASSERT(UtilVmRead(VmcsField::kGuestGsArBytes) == 0xF3);
+	}
+	else
+	{
+		Cr0 cr0 = { UtilVmRead(VmcsField::kGuestCr0) };
+		VmxRegmentDescriptorAccessRight CsArBytes = { UtilVmRead(VmcsField::kGuestCsArBytes) };
+		VmxRegmentDescriptorAccessRight DsArBytes = { UtilVmRead(VmcsField::kGuestDsArBytes) };
+		VmxRegmentDescriptorAccessRight SsArBytes = { UtilVmRead(VmcsField::kGuestSsArBytes) };
+		VmxRegmentDescriptorAccessRight EsArBytes = { UtilVmRead(VmcsField::kGuestEsArBytes) };
+		VmxRegmentDescriptorAccessRight FsArBytes = { UtilVmRead(VmcsField::kGuestFsArBytes) };
+		VmxRegmentDescriptorAccessRight GsArBytes = { UtilVmRead(VmcsField::kGuestGsArBytes) }; 
+		VmxRegmentDescriptorAccessRight TrArBytes = { UtilVmRead(VmcsField::kGuestTrArBytes) };
+		VmxRegmentDescriptorAccessRight	LdtrArBytes = { UtilVmRead(VmcsField::kGuestLdtrArBytes) };
+
+		SegmentSelector SsSelector = { UtilVmRead(VmcsField::kGuestSsSelector) };
+		SegmentSelector CsSelector = { UtilVmRead(VmcsField::kGuestCsSelector) };
+		SegmentSelector EsSelector = { UtilVmRead(VmcsField::kGuestEsSelector) };
+		SegmentSelector FsSelector = { UtilVmRead(VmcsField::kGuestFsSelector) };
+		SegmentSelector GsSelector = { UtilVmRead(VmcsField::kGuestGsSelector) };
+		SegmentSelector DsSelector = { UtilVmRead(VmcsField::kGuestDsSelector) };
+		SegmentSelector TrSelector = { UtilVmRead(VmcsField::kGuestTrSelector) };
+		SegmentSelector LdtrSelector = { UtilVmRead(VmcsField::kGuestLdtrSelector) };
+		bool VerifiedCsSelectorAr = (CsArBytes.fields.type == 9 ||
+								 	 CsArBytes.fields.type == 11 ||
+									CsArBytes.fields.type == 13 ||
+									CsArBytes.fields.type == 15);
+	
+		if (VmSecondProcCtrl.fields.unrestricted_guest)
+		{
+			//read/write accessed expand-up data segment
+			NT_ASSERT(VerifiedCsSelectorAr || CsArBytes.fields.type == 3); 
+
+		 
+		}
+		else
+		{
+			//accessed code segment
+			NT_ASSERT(VerifiedCsSelectorAr); 
+			NT_ASSERT(VerifiedCsSelectorAr || SsArBytes.fields.dpl == SsSelector.fields.rpl);
+			NT_ASSERT(!DsArBytes.fields.unusable && (DsArBytes.fields.dpl >= DsSelector.fields.rpl) && (DsArBytes.fields.type <= 11));
+			NT_ASSERT(!EsArBytes.fields.unusable && (EsArBytes.fields.dpl >= EsSelector.fields.rpl) && (EsArBytes.fields.type <= 11));
+			NT_ASSERT(!FsArBytes.fields.unusable && (FsArBytes.fields.dpl >= FsSelector.fields.rpl) && (FsArBytes.fields.type <= 11));
+			NT_ASSERT(!GsArBytes.fields.unusable && (GsArBytes.fields.dpl >= GsSelector.fields.rpl) && (GsArBytes.fields.type <= 11));
+		}
+
+		// Check valid Type  
+		NT_ASSERT(!SsArBytes.fields.unusable && (SsArBytes.fields.type == 3 || SsArBytes.fields.type == 7));	 
+		NT_ASSERT(!DsArBytes.fields.unusable && DsArBytes.fields.type >= 1); 
+		NT_ASSERT(!EsArBytes.fields.unusable && EsArBytes.fields.type >= 1);
+	 	NT_ASSERT(!FsArBytes.fields.unusable && FsArBytes.fields.type >= 1);
+		NT_ASSERT(!GsArBytes.fields.unusable && GsArBytes.fields.type >= 1);
+
+		//Check System bit
+		NT_ASSERT(!CsArBytes.fields.unusable && CsArBytes.fields.system);
+		
+		//Check DPL , other selector is checked by unrestricted guest ....
+		switch (CsArBytes.fields.type)
+		{
+			//read/write accessed expand-up data segment
+		case 3:
+			NT_ASSERT(!CsArBytes.fields.unusable && !CsArBytes.fields.dpl && VmSecondProcCtrl.fields.unrestricted_guest); 
+			NT_ASSERT(!SsArBytes.fields.dpl);
+			break;
+
+			//non-conforming code segment
+		case 9 :
+		case 11:
+			NT_ASSERT(!CsArBytes.fields.unusable && (CsArBytes.fields.dpl == SsArBytes.fields.dpl));
+			break;
+	
+			//conforming code segment
+		case 13:
+		case 15:
+			NT_ASSERT(!CsArBytes.fields.unusable && (CsArBytes.fields.dpl < SsArBytes.fields.dpl));
+			break; 
+		}
+
+		if (!cr0.fields.pe)
+		{
+			NT_ASSERT(!SsArBytes.fields.dpl);
+		}
+		
+		//Check P bit
+		NT_ASSERT(CsArBytes.fields.present);
+		NT_ASSERT(!DsArBytes.fields.unusable && DsArBytes.fields.present);
+		NT_ASSERT(!EsArBytes.fields.unusable && EsArBytes.fields.present);
+		NT_ASSERT(!FsArBytes.fields.unusable && FsArBytes.fields.present);
+		NT_ASSERT(!GsArBytes.fields.unusable && GsArBytes.fields.present);
+		NT_ASSERT(!SsArBytes.fields.unusable && SsArBytes.fields.present);
+	
+		//Check Reserved bit
+		NT_ASSERT(!CsArBytes.fields.unusable && !CsArBytes.fields.reserved1);
+		NT_ASSERT(!DsArBytes.fields.unusable && !DsArBytes.fields.reserved1);
+		NT_ASSERT(!EsArBytes.fields.unusable && !EsArBytes.fields.reserved1);
+		NT_ASSERT(!FsArBytes.fields.unusable && !FsArBytes.fields.reserved1);
+		NT_ASSERT(!GsArBytes.fields.unusable && !GsArBytes.fields.reserved1);
+		NT_ASSERT(!SsArBytes.fields.unusable && !SsArBytes.fields.reserved1);
+ 
+	//	NT_ASSERT(!CsArBytes.fields.unusable && !CsArBytes.fields.db && VmEntryCtrl.fields.ia32e_mode_guest && (CsArBytes.fields.l == 1));
+	
+		// Check Tr , Tr must be usable~
+	//	NT_ASSERT((TrArBytes.fields.type == 11) && VmEntryCtrl.fields.ia32e_mode_guest);
+	//	NT_ASSERT((TrArBytes.fields.type == 3 || TrArBytes.fields.type == 11) && !VmEntryCtrl.fields.ia32e_mode_guest);
+	//	NT_ASSERT(!TrArBytes.fields.system && TrArBytes.fields.present && !TrArBytes.fields.unusable && !TrArBytes.fields.reserved2); 
+	//	NT_ASSERT(!LdtrArBytes.fields.unusable && (LdtrArBytes.fields.type == 2) && !LdtrArBytes.fields.system && LdtrArBytes.fields.present && !LdtrArBytes.fields.reserved1 && !LdtrArBytes.fields.reserved2);
+  
+	}
 
 }
 //---------------------------------------------------------------------------------------------------------------------//
@@ -654,14 +812,14 @@ VOID VmxonEmulate(GuestContext* guest_context)
 			break;
 		} 
 
-		if (!guest_address)
+		if (!guest_address || !UtilpIsCanonicalFormAddress((void*)guest_address))
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXON: guest_address Parameter is NULL !"));
 			//#UD
 			ThrowInvalidCodeException();
 			break;
 		}
-
+ 
 		vmxon_region_pa = *(PULONG64)guest_address;
 		// VMXON_REGION IS NULL 
 		if (!vmxon_region_pa)
@@ -788,7 +946,7 @@ VOID VmclearEmulate(
 		InstructionPointer = { UtilVmRead64(VmcsField::kGuestRip) };
 		StackPointer = { UtilVmRead64(VmcsField::kGuestRsp) };
 		guest_address = DecodeVmclearOrVmptrldOrVmptrstOrVmxon(guest_context);
-		if (!guest_address)
+		if (!guest_address || !UtilpIsCanonicalFormAddress((void*)guest_address))
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMCLEAR: guest_address NULL ! \r\n"));
 			VMfailInvalid(GetFlagReg(guest_context));
@@ -895,7 +1053,7 @@ VOID VmptrldEmulate(GuestContext* guest_context)
 		StackPointer = { UtilVmRead64(VmcsField::kGuestRsp) };
 
 		guest_address = DecodeVmclearOrVmptrldOrVmptrstOrVmxon(guest_context);
-		if (!guest_address)
+		if (!guest_address || !UtilpIsCanonicalFormAddress((void*)guest_address))
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMCLEAR: guest_address NULL ! \r\n"));
 			VMfailInvalid(GetFlagReg(guest_context));
@@ -1256,10 +1414,17 @@ VOID VmptrstEmulate(GuestContext* guest_context)
 		PROCESSOR_NUMBER	procnumber = {};
 		ULONG64				InstructionPointer = { UtilVmRead64(VmcsField::kGuestRip) };
 		ULONG64				StackPointer = { UtilVmRead64(VmcsField::kGuestRsp) };
-		ULONG64				vmcs12_region_pa = *(PULONG64)DecodeVmclearOrVmptrldOrVmptrstOrVmxon(guest_context);
-		ULONG64				vmcs12_region_va = (ULONG64)UtilVaFromPa(vmcs12_region_pa);
+		ULONG64				vmcs12_region_pa = *(PULONG64)DecodeVmclearOrVmptrldOrVmptrstOrVmxon(guest_context); 
 		ULONG				vcpu_index = KeGetCurrentProcessorNumberEx(&procnumber);
 
+		if (!vmcs12_region_pa)
+		{
+			HYPERPLATFORM_LOG_DEBUG_SAFE(("vmcs12_region_pa null ! \r\n"));
+			VMfailInvalid(GetFlagReg(guest_context));
+			break;
+		}
+
+		ULONG64	vmcs12_region_va = (ULONG64)UtilVaFromPa(vmcs12_region_pa);  
 		if (GetvCpuMode(guest_context) != VmxMode)
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("Current vCPU already in VMX mode ! \r\n"));

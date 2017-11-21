@@ -766,6 +766,7 @@ VOID VmxoffEmulate(
 		ExFreePool(vcpu_vmx);
 		vcpu_vmx = NULL;  
 
+
 		VMSucceed(GetFlagReg(guest_context));
 	} while (0);
 }

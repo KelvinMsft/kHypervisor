@@ -26,17 +26,8 @@ struct Page1 {
 	Page1();
 	~Page1();
 };
-#define DDI_WIN32_DEVICE_NAME_A		"\\\\.\\DdiMon"
-#define DDI_WIN32_DEVICE_NAME_W		L"\\\\.\\DdiMon"
-#define DDI_DEVICE_NAME_A			"\\Device\\DdiMon"
-#define DDI_DEVICE_NAME_W			L"\\Device\\DdiMon"
-#define DDI_DOS_DEVICE_NAME_A		"\\DosDevices\\DdiMon"
-#define DDI_DOS_DEVICE_NAME_W		L"\\DosDevices\\DdiMon"
-typedef struct _DEVICE_EXTENSION
-{
-	ULONG  StateVariable;
-} DEVICE_EXTENSION, *PDEVICE_EXTENSION;
- 
+
+
 
 #include "performance.h"
  

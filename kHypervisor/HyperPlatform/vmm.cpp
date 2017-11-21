@@ -304,6 +304,7 @@ extern "C" {
 		}
 		return guest_context.vm_continue;
 	}
+	//-----------------------------------------------------------------------------------------------------------------------//
 #pragma warning(pop)
 	_Use_decl_annotations_ static void VmmpHandleVmExitForL1(GuestContext *guest_context)
 	{
@@ -652,7 +653,7 @@ extern "C" {
 			IsHandled = VmmpHandlerRdtscForL2(guest_context);
 			break;
 		case VmxExitReason::kCrAccess:
-			IsHandled = VmmpHandlerCrAccessForL2(guest_context); 
+			//IsHandled = VmmpHandlerCrAccessForL2(guest_context); 
 			break;
 		case VmxExitReason::kDrAccess:		
 			//IsHandled = VmmpHandlerDrAccessForL2(guest_context);
@@ -676,7 +677,10 @@ extern "C" {
 		case VmxExitReason::kEptMisconfig:
 			break;
 		case VmxExitReason::kVmcall:
+		{	
 			IsHandled = VmmpHandleVmcallForL2(exit_reason, guest_context);
+			HYPERPLATFORM_LOG_DEBUG("Vmcall Exit to L1");
+		}
 			break;
 		case VmxExitReason::kVmclear:
 		case VmxExitReason::kVmlaunch:

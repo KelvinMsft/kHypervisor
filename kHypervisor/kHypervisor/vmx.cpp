@@ -64,7 +64,7 @@ enum VMX_state
 VOID	LEAVE_GUEST_MODE(VCPUVMX* vm)
 {
 	vm->inRoot = RootMode; 
-	HYPERPLATFORM_LOG_DEBUG("VMM: %I64x Enter Root mode \r\n", vm);
+	HYPERPLATFORM_LOG_DEBUG("VMM: %I64x Enter Root mode", vm);
 }
 
 
@@ -72,7 +72,7 @@ VOID	LEAVE_GUEST_MODE(VCPUVMX* vm)
 VOID	ENTER_GUEST_MODE(VCPUVMX* vm)
 {
 	vm->inRoot = GuestMode; 
-	HYPERPLATFORM_LOG_DEBUG("VMM: %I64x Enter Guest mode \r\n", vm);
+	HYPERPLATFORM_LOG_DEBUG("VMM: %I64x Enter Guest mode", vm);
 } 
 
 
@@ -766,7 +766,7 @@ VOID VmxoffEmulate(
 		ExFreePool(vcpu_vmx);
 		vcpu_vmx = NULL;  
 
-
+		HYPERPLATFORM_LOG_DEBUG("VMXOFF Stopped Nested Virtualization, and Back to Normal Guest OS ");
 		VMSucceed(GetFlagReg(guest_context));
 	} while (0);
 }

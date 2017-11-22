@@ -4,7 +4,7 @@ kHypervisor is an Open Source light-weighted Nested-Virtual Machine Monitor in W
 
 # Advantages
 kHypervisor provide an light-weighted virtulized environment for debugging protected mode Guest
-- VM Entry Emulation 
+- VM Entry Emulation , with VMCS state check which is a good solution for debugging VMEntry fail, and locate the actual failure location.
 - VM Exit  Emulation 
 - Nested VM Exit Event
 - The code is simple and minize as a nested vmm.

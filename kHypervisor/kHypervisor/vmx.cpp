@@ -144,34 +144,34 @@ VOID VmxVmEntryCheckGuestReg()
 	cr4_test.all &= cr4_fixed1.all;
 	cr4_test.all |= cr4_fixed0.all;
 
-	NT_ASSERT(cr4_test.all == cr4.all);
+	HYPERPLATFORM_ASSERT(cr4_test.all == cr4.all);
 
 
 	if (VmEntryCtrl.fields.ia32e_mode_guest)
 	{
-		NT_ASSERT(cr0.fields.pg && cr4.fields.pae);
+		HYPERPLATFORM_ASSERT(cr0.fields.pg && cr4.fields.pae);
 	}
 	else
 	{
-		NT_ASSERT(!cr4.fields.pcide);
+		HYPERPLATFORM_ASSERT(!cr4.fields.pcide);
 	}
 
-	NT_ASSERT(cr0.fields.pg && cr0.fields.pe);
+	HYPERPLATFORM_ASSERT(cr0.fields.pg && cr0.fields.pe);
 
 	if (VmEntryCtrl.fields.load_debug_controls)
 	{
 		MSR_IA32_DEBUGCTL DbgCtrl = { UtilVmRead64(VmcsField::kGuestIa32Debugctl)};
-		NT_ASSERT(!DbgCtrl.fields.Reserved1 && !DbgCtrl.fields.Reserved2);
-		NT_ASSERT(!(UtilVmRead64(VmcsField::kGuestDr7) >> 32));
+		HYPERPLATFORM_ASSERT(!DbgCtrl.fields.Reserved1 && !DbgCtrl.fields.Reserved2);
+		HYPERPLATFORM_ASSERT(!(UtilVmRead64(VmcsField::kGuestDr7) >> 32));
 	}
 	 
-	NT_ASSERT(UtilpIsCanonicalFormAddress((void*)UtilVmRead64(VmcsField::kGuestSysenterEip)) &&
+	HYPERPLATFORM_ASSERT(UtilpIsCanonicalFormAddress((void*)UtilVmRead64(VmcsField::kGuestSysenterEip)) &&
 		UtilpIsCanonicalFormAddress((void*)UtilVmRead64(VmcsField::kGuestSysenterEsp)));
 
 	if (VmEntryCtrl.fields.load_ia32_perf_global_ctrl)
 	{
 		MSR_IA32_PERF_GLOBAL_CTRL PerfCtrl = { UtilVmRead(VmcsField::kGuestIa32PerfGlobalCtrl) };
-		NT_ASSERT( !PerfCtrl.fields.Reserved && !PerfCtrl.fields.Reserved2);
+		HYPERPLATFORM_ASSERT( !PerfCtrl.fields.Reserved && !PerfCtrl.fields.Reserved2);
 	}
 	
 	if (VmEntryCtrl.fields.load_ia32_efer)
@@ -179,20 +179,20 @@ VOID VmxVmEntryCheckGuestReg()
 		MSR_EFER efer = { UtilVmRead(VmcsField::kGuestIa32Efer) }; 
 		if (cr0.fields.pg)
 		{
-			NT_ASSERT(efer.fields.LMA == VmEntryCtrl.fields.ia32e_mode_guest == efer.fields.LME);
+			HYPERPLATFORM_ASSERT(efer.fields.LMA == VmEntryCtrl.fields.ia32e_mode_guest == efer.fields.LME);
 		}
 		else
 		{
-			NT_ASSERT(efer.fields.LMA == VmEntryCtrl.fields.ia32e_mode_guest);
+			HYPERPLATFORM_ASSERT(efer.fields.LMA == VmEntryCtrl.fields.ia32e_mode_guest);
 		}
 	}
 	 
 	if (VmEntryCtrl.fields.ia32e_mode_guest || !cr0.fields.pe)
 	{
-		NT_ASSERT(!rflags.fields.vm);
+		HYPERPLATFORM_ASSERT(!rflags.fields.vm);
 	}
 }
-//---------------------------------------------------------------------------------------------------------------------//
+//---------------------------------------------------------------------------------------------------------	------------//
 VOID VmxVmEntryCheckGuestSegReg()
 {
 	FlagRegister		GuestRflags = { UtilVmRead64(VmcsField::kGuestRflags) };
@@ -212,31 +212,39 @@ VOID VmxVmEntryCheckGuestSegReg()
   
 	if (IsGuestOnV8086)
 	{
-		NT_ASSERT(UtilVmRead(VmcsField::kGuestCsBase) == UtilVmRead(VmcsField::kGuestCsSelector) << 4);
-		NT_ASSERT(UtilVmRead(VmcsField::kGuestDsBase) == UtilVmRead(VmcsField::kGuestDsSelector) << 4);
-		NT_ASSERT(UtilVmRead(VmcsField::kGuestSsBase) == UtilVmRead(VmcsField::kGuestSsSelector) << 4);
-		NT_ASSERT(UtilVmRead(VmcsField::kGuestEsBase) == UtilVmRead(VmcsField::kGuestEsSelector) << 4);
-		NT_ASSERT(UtilVmRead(VmcsField::kGuestFsBase) == UtilVmRead(VmcsField::kGuestFsSelector) << 4);
-		NT_ASSERT(UtilVmRead(VmcsField::kGuestGsBase) == UtilVmRead(VmcsField::kGuestGsSelector) << 4);
-
-		NT_ASSERT(UtilVmRead(VmcsField::kGuestCsLimit) == 0xFFFF);
-		NT_ASSERT(UtilVmRead(VmcsField::kGuestDsLimit) == 0xFFFF);
-		NT_ASSERT(UtilVmRead(VmcsField::kGuestSsLimit) == 0xFFFF);
-		NT_ASSERT(UtilVmRead(VmcsField::kGuestEsLimit) == 0xFFFF);
-		NT_ASSERT(UtilVmRead(VmcsField::kGuestFsLimit) == 0xFFFF);
-		NT_ASSERT(UtilVmRead(VmcsField::kGuestGsLimit) == 0xFFFF);
-
-		NT_ASSERT(UtilVmRead(VmcsField::kGuestCsArBytes) == 0xF3);
-		NT_ASSERT(UtilVmRead(VmcsField::kGuestDsArBytes) == 0xF3);
-		NT_ASSERT(UtilVmRead(VmcsField::kGuestSsArBytes) == 0xF3);
-		NT_ASSERT(UtilVmRead(VmcsField::kGuestEsArBytes) == 0xF3);
-		NT_ASSERT(UtilVmRead(VmcsField::kGuestFsArBytes) == 0xF3);
-		NT_ASSERT(UtilVmRead(VmcsField::kGuestGsArBytes) == 0xF3);
+		HYPERPLATFORM_ASSERT(UtilVmRead(VmcsField::kGuestCsBase) == UtilVmRead(VmcsField::kGuestCsSelector) << 4);
+		HYPERPLATFORM_ASSERT(UtilVmRead(VmcsField::kGuestDsBase) == UtilVmRead(VmcsField::kGuestDsSelector) << 4);
+		HYPERPLATFORM_ASSERT(UtilVmRead(VmcsField::kGuestSsBase) == UtilVmRead(VmcsField::kGuestSsSelector) << 4);
+		HYPERPLATFORM_ASSERT(UtilVmRead(VmcsField::kGuestEsBase) == UtilVmRead(VmcsField::kGuestEsSelector) << 4);
+		HYPERPLATFORM_ASSERT(UtilVmRead(VmcsField::kGuestFsBase) == UtilVmRead(VmcsField::kGuestFsSelector) << 4);
+		HYPERPLATFORM_ASSERT(UtilVmRead(VmcsField::kGuestGsBase) == UtilVmRead(VmcsField::kGuestGsSelector) << 4);
+ 
+		HYPERPLATFORM_ASSERT(UtilVmRead(VmcsField::kGuestCsLimit) == 0xFFFF);
+		HYPERPLATFORM_ASSERT(UtilVmRead(VmcsField::kGuestDsLimit) == 0xFFFF);
+		HYPERPLATFORM_ASSERT(UtilVmRead(VmcsField::kGuestSsLimit) == 0xFFFF);
+		HYPERPLATFORM_ASSERT(UtilVmRead(VmcsField::kGuestEsLimit) == 0xFFFF);
+		HYPERPLATFORM_ASSERT(UtilVmRead(VmcsField::kGuestFsLimit) == 0xFFFF);
+		HYPERPLATFORM_ASSERT(UtilVmRead(VmcsField::kGuestGsLimit) == 0xFFFF);
+ 
+		HYPERPLATFORM_ASSERT(UtilVmRead(VmcsField::kGuestCsArBytes) == 0xF3);
+		HYPERPLATFORM_ASSERT(UtilVmRead(VmcsField::kGuestDsArBytes) == 0xF3);
+		HYPERPLATFORM_ASSERT(UtilVmRead(VmcsField::kGuestSsArBytes) == 0xF3);
+		HYPERPLATFORM_ASSERT(UtilVmRead(VmcsField::kGuestEsArBytes) == 0xF3);
+		HYPERPLATFORM_ASSERT(UtilVmRead(VmcsField::kGuestFsArBytes) == 0xF3);
+		HYPERPLATFORM_ASSERT(UtilVmRead(VmcsField::kGuestGsArBytes) == 0xF3);
 	}
 	else
 	{
 		Cr0 cr0 = { UtilVmRead(VmcsField::kGuestCr0) };
-
+		ULONG CsBase =   UtilVmRead(VmcsField::kGuestCsBase)  ;
+		ULONG DsBase =   UtilVmRead(VmcsField::kGuestDsBase)  ;
+		ULONG SsBase =   UtilVmRead(VmcsField::kGuestSsBase)  ;
+		ULONG EsBase =   UtilVmRead(VmcsField::kGuestEsBase)  ;
+		ULONG FsBase =   UtilVmRead(VmcsField::kGuestFsBase)  ;
+		ULONG GsBase =   UtilVmRead(VmcsField::kGuestGsBase)  ;
+		ULONG TrBase =   UtilVmRead(VmcsField::kGuestTrBase)  ;
+		ULONG LdtrBase =  UtilVmRead(VmcsField::kGuestLdtrBase);
+		 
 		VmxRegmentDescriptorAccessRight CsArBytes = { UtilVmRead(VmcsField::kGuestCsArBytes) };
 		VmxRegmentDescriptorAccessRight DsArBytes = { UtilVmRead(VmcsField::kGuestDsArBytes) };
 		VmxRegmentDescriptorAccessRight SsArBytes = { UtilVmRead(VmcsField::kGuestSsArBytes) };
@@ -358,37 +366,49 @@ VOID VmxVmEntryCheckGuestSegReg()
 		{
 			HYPERPLATFORM_ASSERT(CsArBytes.fields.present);
 			HYPERPLATFORM_ASSERT(!CsArBytes.fields.db && VmEntryCtrl.fields.ia32e_mode_guest && (CsArBytes.fields.l == 1));
+			HYPERPLATFORM_ASSERT(!(CsBase >> 32));
 		}
 		if (!DsArBytes.fields.unusable)
 		{
 			HYPERPLATFORM_ASSERT(DsArBytes.fields.present);	
-			HYPERPLATFORM_ASSERT(!DsArBytes.fields.reserved1);
+			HYPERPLATFORM_ASSERT(!DsArBytes.fields.reserved1);  
+			HYPERPLATFORM_ASSERT(!(DsBase >> 32));
 		}
 		if (!EsArBytes.fields.unusable)
 		{
 			HYPERPLATFORM_ASSERT(EsArBytes.fields.present); 
 			HYPERPLATFORM_ASSERT(!EsArBytes.fields.reserved1);
+			HYPERPLATFORM_ASSERT(!(EsBase >> 32));
 		}
-		if (!FsArBytes.fields.unusable)
-		{
-			HYPERPLATFORM_ASSERT(FsArBytes.fields.present);
-			HYPERPLATFORM_ASSERT(!FsArBytes.fields.reserved1);
-		}
-		if (!GsArBytes.fields.unusable)
-		{
-			HYPERPLATFORM_ASSERT(GsArBytes.fields.present); 
-			HYPERPLATFORM_ASSERT(!GsArBytes.fields.reserved1);
-		}
+
 		if (!SsArBytes.fields.unusable)
 		{
 			HYPERPLATFORM_ASSERT(SsArBytes.fields.present); 
 			HYPERPLATFORM_ASSERT(!SsArBytes.fields.reserved1);
+			HYPERPLATFORM_ASSERT(!(SsBase >> 32));
+		}
+
+		if (!FsArBytes.fields.unusable)
+		{
+			HYPERPLATFORM_ASSERT(FsArBytes.fields.present);
+			HYPERPLATFORM_ASSERT(!FsArBytes.fields.reserved1);
+			HYPERPLATFORM_ASSERT(UtilpIsCanonicalFormAddress((void*)FsBase));
+		}
+
+		if (!GsArBytes.fields.unusable)
+		{
+			HYPERPLATFORM_ASSERT(GsArBytes.fields.present); 
+			HYPERPLATFORM_ASSERT(!GsArBytes.fields.reserved1);
+			HYPERPLATFORM_ASSERT(UtilpIsCanonicalFormAddress((void*)GsBase));
 		} 
 
-		HYPERPLATFORM_LOG_DEBUG("Guest TR ArBytes: %x", TrArBytes.all);
-		// Check Tr , Tr must be usable~
-		//NT_ASSERT(TrArBytes.fields.type == 3 || TrArBytes.fields.type == 11);
-	 	//NT_ASSERT(!TrArBytes.fields.system && TrArBytes.fields.present && !TrArBytes.fields.unusable && !TrArBytes.fields.reserved2); 
+		if (!TrArBytes.fields.unusable)
+		{
+			HYPERPLATFORM_ASSERT(TrArBytes.fields.type == 3 || TrArBytes.fields.type == 11);
+			HYPERPLATFORM_ASSERT(UtilpIsCanonicalFormAddress((void*)TrBase));
+			HYPERPLATFORM_ASSERT(!TrArBytes.fields.system && TrArBytes.fields.present && !TrArBytes.fields.unusable && !TrArBytes.fields.reserved2);
+		}
+		 
 	 	//NT_ASSERT(!LdtrArBytes.fields.unusable && (LdtrArBytes.fields.type == 2) && !LdtrArBytes.fields.system && LdtrArBytes.fields.present && !LdtrArBytes.fields.reserved1 && !LdtrArBytes.fields.reserved2);
   
 	}
@@ -397,13 +417,49 @@ VOID VmxVmEntryCheckGuestSegReg()
 //---------------------------------------------------------------------------------------------------------------------//
 VOID VmxVmEntryCheckGuestDescTableReg()
 {
+	ULONG64 GdtrBase = { UtilVmRead64(VmcsField::kGuestGdtrBase) };
+	ULONG64 IdtrBase = { UtilVmRead64(VmcsField::kGuestIdtrBase) };
+	ULONG   GdtrLimit =  UtilVmRead(VmcsField::kGuestGdtrLimit);
+	ULONG   IdtrLimit =  UtilVmRead(VmcsField::kGuestIdtrLimit);
 
+	HYPERPLATFORM_ASSERT(UtilpIsCanonicalFormAddress((void*)GdtrBase) && UtilpIsCanonicalFormAddress((void*)IdtrBase));
+	HYPERPLATFORM_ASSERT(!((GdtrLimit >> 16) & 0xFFFF));
+	HYPERPLATFORM_ASSERT(!((IdtrLimit >> 16) & 0xFFFF));
 }
 
 //---------------------------------------------------------------------------------------------------------------------//
 VOID VmxVmEntryCheckGuestRipRflags()
 {
+	VmxVmEntryControls  VmEntryCtrl = { UtilVmRead64(VmcsField::kVmEntryControls) }; 
+	VmxRegmentDescriptorAccessRight CsArBytes = { UtilVmRead(VmcsField::kGuestCsArBytes) }; 
+	VmxSecondaryProcessorBasedControls VmSecondProcCtrl = { UtilVmRead64(VmcsField::kSecondaryVmExecControl) };
+	VmEntryInterruptionInformationField VmInterruptField = { UtilVmRead64(VmcsField::kVmEntryIntrInfoField) };
+	FlagRegister rflags = { UtilVmRead64(VmcsField::kGuestRflags) };
+	Cr0 cr0 = { UtilVmRead(VmcsField::kGuestCr0) };
+	
+	//Check Rip 
+	if (!VmEntryCtrl.fields.ia32e_mode_guest || !CsArBytes.fields.l)
+	{
+		HYPERPLATFORM_ASSERT(!(UtilVmRead64(VmcsField::kGuestRip) >> 32));
+	}
 
+	//Check Rflags	
+	
+	HYPERPLATFORM_ASSERT(rflags.fields.reserved1);
+	HYPERPLATFORM_ASSERT(!rflags.fields.reserved3 && !rflags.fields.reserved2 && !rflags.fields.reserved4 && !rflags.fields.reserved5);
+
+	if (VmEntryCtrl.fields.ia32e_mode_guest || !cr0.fields.pe)
+	{
+		HYPERPLATFORM_ASSERT(!rflags.fields.vm);
+	}
+
+	HYPERPLATFORM_ASSERT(!rflags.fields.reserved3 && !rflags.fields.reserved2 && !rflags.fields.reserved4 && !rflags.fields.reserved5);
+
+	if (VmInterruptField.fields.valid && 
+		(VmInterruptField.fields.interruption_type == static_cast<ULONG32>(InterruptionType::kExternalInterrupt)))
+	{ 
+		HYPERPLATFORM_ASSERT(rflags.fields.intf);
+	}
 }
 
 //---------------------------------------------------------------------------------------------------------------------//

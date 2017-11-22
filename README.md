@@ -96,9 +96,12 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
  - Fully Support CPU Feature from vCPU aspect.
  - EPT virtualization
  - APIC virtualization
+ 
+ 
+# Related Project
+ https://github.com/tandasat/HyperPlatform </br>
+ https://github.com/tandasat/ddimon</br>
+ 
 # License
 This software is released under the MIT License, see LICENSE.
-
-# Related Project
- https://github.com/tandasat/HyperPlatform
- https://github.com/tandasat/ddimon
+ 

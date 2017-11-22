@@ -63,6 +63,7 @@ enum VMX_state
 //// 
 //// Implementation
 //// 
+//---------------------------------------------------------------------------------------------------------------------//
 BOOLEAN IsGuestPaePaging()
 {
 	VmxVmEntryControls VmEntryCtrl = { UtilVmRead(VmcsField::kVmEntryControls) };
@@ -75,12 +76,14 @@ BOOLEAN IsGuestPaePaging()
 	}
 	return FALSE;
 }
+//---------------------------------------------------------------------------------------------------------------------//
 VOID VmxAssertPrint(ULONG Line, bool IsVerified)
 {
 	if (!IsVerified)
 	{
-		PrintVMCS();
+		PrintVMCS(); 
 		///NT_ASSERT(IsVerified);
+		HYPERPLATFORM_COMMON_DBG_BREAK(); 
 		HYPERPLATFORM_LOG_DEBUG("Somethings wrong ~~~ Line: %x", Line);
 	}
 }

@@ -1581,7 +1581,7 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 		VMEntryEmulate(NestedvCPU, guest_context, FALSE); 
 
 		HYPERPLATFORM_COMMON_DBG_BREAK();
-
+		VMSucceed(GetFlagReg(guest_context));
 	} while (FALSE);
 }
 

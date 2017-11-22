@@ -32,9 +32,13 @@ extern ULONG		 GetvCpuMode(GuestContext* guest_context);
 void				 SaveGuestCr8(VCPUVMX* vcpu, ULONG_PTR cr8); 
 void				 RestoreGuestCr8(VCPUVMX* vcpu);
 extern ProcessorData* GetProcessorData(GuestContext* guest_context);
+VOID				 VmxAssertPrint(ULONG Line, bool IsVerified);
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //// Marco
 ////
+
+#define HYPERPLATFORM_ASSERT(statement)   VmxAssertPrint(__LINE__ , statement); 
+	 
  
  
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -58,8 +62,18 @@ enum VMX_state
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //// 
 //// Implementation
-////
+//// 
 
+VOID VmxAssertPrint(ULONG Line, bool IsVerified)
+{
+	if (!IsVerified)
+	{
+		PrintVMCS();
+		///NT_ASSERT(IsVerified);
+		HYPERPLATFORM_LOG_DEBUG("Somethings wrong ~~~ Line: %x", Line);
+	}
+}
+	
 //---------------------------------------------------------------------------------------------------------------------//
 VOID	LEAVE_GUEST_MODE(VCPUVMX* vm)
 {
@@ -222,6 +236,7 @@ VOID VmxVmEntryCheckGuestSegReg()
 	else
 	{
 		Cr0 cr0 = { UtilVmRead(VmcsField::kGuestCr0) };
+
 		VmxRegmentDescriptorAccessRight CsArBytes = { UtilVmRead(VmcsField::kGuestCsArBytes) };
 		VmxRegmentDescriptorAccessRight DsArBytes = { UtilVmRead(VmcsField::kGuestDsArBytes) };
 		VmxRegmentDescriptorAccessRight SsArBytes = { UtilVmRead(VmcsField::kGuestSsArBytes) };
@@ -239,6 +254,7 @@ VOID VmxVmEntryCheckGuestSegReg()
 		SegmentSelector DsSelector = { UtilVmRead(VmcsField::kGuestDsSelector) };
 		SegmentSelector TrSelector = { UtilVmRead(VmcsField::kGuestTrSelector) };
 		SegmentSelector LdtrSelector = { UtilVmRead(VmcsField::kGuestLdtrSelector) };
+
 		bool VerifiedCsSelectorAr = (CsArBytes.fields.type == 9 ||
 								 	 CsArBytes.fields.type == 11 ||
 									CsArBytes.fields.type == 13 ||
@@ -247,81 +263,133 @@ VOID VmxVmEntryCheckGuestSegReg()
 		if (VmSecondProcCtrl.fields.unrestricted_guest)
 		{
 			//read/write accessed expand-up data segment
-			NT_ASSERT(VerifiedCsSelectorAr || CsArBytes.fields.type == 3); 
-
-		 
+			HYPERPLATFORM_ASSERT(VerifiedCsSelectorAr || CsArBytes.fields.type == 3);		 
 		}
 		else
 		{
 			//accessed code segment
-			NT_ASSERT(VerifiedCsSelectorAr); 
-			NT_ASSERT(VerifiedCsSelectorAr || SsArBytes.fields.dpl == SsSelector.fields.rpl);
-			NT_ASSERT(!DsArBytes.fields.unusable && (DsArBytes.fields.dpl >= DsSelector.fields.rpl) && (DsArBytes.fields.type <= 11));
-			NT_ASSERT(!EsArBytes.fields.unusable && (EsArBytes.fields.dpl >= EsSelector.fields.rpl) && (EsArBytes.fields.type <= 11));
-			NT_ASSERT(!FsArBytes.fields.unusable && (FsArBytes.fields.dpl >= FsSelector.fields.rpl) && (FsArBytes.fields.type <= 11));
-			NT_ASSERT(!GsArBytes.fields.unusable && (GsArBytes.fields.dpl >= GsSelector.fields.rpl) && (GsArBytes.fields.type <= 11));
+			HYPERPLATFORM_ASSERT(VerifiedCsSelectorAr); 
+			HYPERPLATFORM_ASSERT(VerifiedCsSelectorAr || SsArBytes.fields.dpl == SsSelector.fields.rpl);
+			if (!DsArBytes.fields.unusable)
+			{
+				HYPERPLATFORM_ASSERT((DsArBytes.fields.dpl >= DsSelector.fields.rpl) && (DsArBytes.fields.type <= 11));
+			}
+			if (!EsArBytes.fields.unusable) 
+			{ 
+				HYPERPLATFORM_ASSERT((EsArBytes.fields.dpl >= EsSelector.fields.rpl) && (EsArBytes.fields.type <= 11));
+			}
+			if (!FsArBytes.fields.unusable)
+			{
+				HYPERPLATFORM_ASSERT((FsArBytes.fields.dpl >= FsSelector.fields.rpl) && (FsArBytes.fields.type <= 11));
+			}
+			if (!GsArBytes.fields.unusable)
+			{ 
+				HYPERPLATFORM_ASSERT((GsArBytes.fields.dpl >= GsSelector.fields.rpl) && (GsArBytes.fields.type <= 11));
+			}   
 		}
 
-		// Check valid Type  
-		NT_ASSERT(!SsArBytes.fields.unusable && (SsArBytes.fields.type == 3 || SsArBytes.fields.type == 7));	 
-		NT_ASSERT(!DsArBytes.fields.unusable && DsArBytes.fields.type >= 1); 
-		NT_ASSERT(!EsArBytes.fields.unusable && EsArBytes.fields.type >= 1);
-	 	NT_ASSERT(!FsArBytes.fields.unusable && FsArBytes.fields.type >= 1);
-		NT_ASSERT(!GsArBytes.fields.unusable && GsArBytes.fields.type >= 1);
+		// Check valid Type 
+		if (!SsArBytes.fields.unusable)
+		{
+			HYPERPLATFORM_ASSERT((SsArBytes.fields.type == 3 || SsArBytes.fields.type == 7));
+		}
+		if (!DsArBytes.fields.unusable)
+		{
+			HYPERPLATFORM_ASSERT(DsArBytes.fields.type >= 1);
+		}
+		if (!EsArBytes.fields.unusable)
+		{
+			HYPERPLATFORM_ASSERT(EsArBytes.fields.type >= 1);
+		}
+		if (!FsArBytes.fields.unusable)
+		{
+			HYPERPLATFORM_ASSERT(FsArBytes.fields.type >= 1);
+		}
+		if (!GsArBytes.fields.unusable)
+		{
+			HYPERPLATFORM_ASSERT(GsArBytes.fields.type >= 1);
+		}
 
-		//Check System bit
-		NT_ASSERT(!CsArBytes.fields.unusable && CsArBytes.fields.system);
-		
+		if (!CsArBytes.fields.unusable)
+		{
+			//Check System bit
+			HYPERPLATFORM_ASSERT(CsArBytes.fields.system);
+		}
+
 		//Check DPL , other selector is checked by unrestricted guest ....
 		switch (CsArBytes.fields.type)
 		{
 			//read/write accessed expand-up data segment
 		case 3:
-			NT_ASSERT(!CsArBytes.fields.unusable && !CsArBytes.fields.dpl && VmSecondProcCtrl.fields.unrestricted_guest); 
-			NT_ASSERT(!SsArBytes.fields.dpl);
+			if (!CsArBytes.fields.unusable)
+			{
+				HYPERPLATFORM_ASSERT(!CsArBytes.fields.dpl && VmSecondProcCtrl.fields.unrestricted_guest);
+			}
+			HYPERPLATFORM_ASSERT(!SsArBytes.fields.dpl);
 			break;
 
 			//non-conforming code segment
 		case 9 :
 		case 11:
-			NT_ASSERT(!CsArBytes.fields.unusable && (CsArBytes.fields.dpl == SsArBytes.fields.dpl));
+			if (!CsArBytes.fields.unusable)
+			{
+				HYPERPLATFORM_ASSERT((CsArBytes.fields.dpl == SsArBytes.fields.dpl));
+			}
 			break;
 	
 			//conforming code segment
 		case 13:
 		case 15:
-			NT_ASSERT(!CsArBytes.fields.unusable && (CsArBytes.fields.dpl < SsArBytes.fields.dpl));
+			if (!CsArBytes.fields.unusable)
+			{
+				HYPERPLATFORM_ASSERT(CsArBytes.fields.dpl < SsArBytes.fields.dpl);
+			}
 			break; 
 		}
 
 		if (!cr0.fields.pe)
 		{
-			NT_ASSERT(!SsArBytes.fields.dpl);
+			HYPERPLATFORM_ASSERT(!SsArBytes.fields.dpl);
 		}
 		
 		//Check P bit
-		NT_ASSERT(CsArBytes.fields.present);
-		NT_ASSERT(!DsArBytes.fields.unusable && DsArBytes.fields.present);
-		NT_ASSERT(!EsArBytes.fields.unusable && EsArBytes.fields.present);
-		NT_ASSERT(!FsArBytes.fields.unusable && FsArBytes.fields.present);
-		NT_ASSERT(!GsArBytes.fields.unusable && GsArBytes.fields.present);
-		NT_ASSERT(!SsArBytes.fields.unusable && SsArBytes.fields.present);
-	
-		//Check Reserved bit
-		NT_ASSERT(!CsArBytes.fields.unusable && !CsArBytes.fields.reserved1);
-		NT_ASSERT(!DsArBytes.fields.unusable && !DsArBytes.fields.reserved1);
-		NT_ASSERT(!EsArBytes.fields.unusable && !EsArBytes.fields.reserved1);
-		NT_ASSERT(!FsArBytes.fields.unusable && !FsArBytes.fields.reserved1);
-		NT_ASSERT(!GsArBytes.fields.unusable && !GsArBytes.fields.reserved1);
-		NT_ASSERT(!SsArBytes.fields.unusable && !SsArBytes.fields.reserved1);
  
-	//	NT_ASSERT(!CsArBytes.fields.unusable && !CsArBytes.fields.db && VmEntryCtrl.fields.ia32e_mode_guest && (CsArBytes.fields.l == 1));
-	
+		if (!CsArBytes.fields.unusable)
+		{
+			HYPERPLATFORM_ASSERT(CsArBytes.fields.present);
+			HYPERPLATFORM_ASSERT(!CsArBytes.fields.db && VmEntryCtrl.fields.ia32e_mode_guest && (CsArBytes.fields.l == 1));
+		}
+		if (!DsArBytes.fields.unusable)
+		{
+			HYPERPLATFORM_ASSERT(DsArBytes.fields.present);	
+			HYPERPLATFORM_ASSERT(!DsArBytes.fields.reserved1);
+		}
+		if (!EsArBytes.fields.unusable)
+		{
+			HYPERPLATFORM_ASSERT(EsArBytes.fields.present); 
+			HYPERPLATFORM_ASSERT(!EsArBytes.fields.reserved1);
+		}
+		if (!FsArBytes.fields.unusable)
+		{
+			HYPERPLATFORM_ASSERT(FsArBytes.fields.present);
+			HYPERPLATFORM_ASSERT(!FsArBytes.fields.reserved1);
+		}
+		if (!GsArBytes.fields.unusable)
+		{
+			HYPERPLATFORM_ASSERT(GsArBytes.fields.present); 
+			HYPERPLATFORM_ASSERT(!GsArBytes.fields.reserved1);
+		}
+		if (!SsArBytes.fields.unusable)
+		{
+			HYPERPLATFORM_ASSERT(SsArBytes.fields.present); 
+			HYPERPLATFORM_ASSERT(!SsArBytes.fields.reserved1);
+		} 
+
+		HYPERPLATFORM_LOG_DEBUG("Guest TR ArBytes: %x", TrArBytes.all);
 		// Check Tr , Tr must be usable~
-	//	NT_ASSERT((TrArBytes.fields.type == 11) && VmEntryCtrl.fields.ia32e_mode_guest);
-	//	NT_ASSERT((TrArBytes.fields.type == 3 || TrArBytes.fields.type == 11) && !VmEntryCtrl.fields.ia32e_mode_guest);
-	//	NT_ASSERT(!TrArBytes.fields.system && TrArBytes.fields.present && !TrArBytes.fields.unusable && !TrArBytes.fields.reserved2); 
-	//	NT_ASSERT(!LdtrArBytes.fields.unusable && (LdtrArBytes.fields.type == 2) && !LdtrArBytes.fields.system && LdtrArBytes.fields.present && !LdtrArBytes.fields.reserved1 && !LdtrArBytes.fields.reserved2);
+		//NT_ASSERT(TrArBytes.fields.type == 3 || TrArBytes.fields.type == 11);
+	 	//NT_ASSERT(!TrArBytes.fields.system && TrArBytes.fields.present && !TrArBytes.fields.unusable && !TrArBytes.fields.reserved2); 
+	 	//NT_ASSERT(!LdtrArBytes.fields.unusable && (LdtrArBytes.fields.type == 2) && !LdtrArBytes.fields.system && LdtrArBytes.fields.present && !LdtrArBytes.fields.reserved1 && !LdtrArBytes.fields.reserved2);
   
 	}
 
@@ -640,7 +708,7 @@ NTSTATUS LoadHostStateForLevel1(
 	UtilVmWrite(VmcsField::kGuestFsArBytes,	  VmpGetSegmentAccessRight(AsmReadFS()));
 	UtilVmWrite(VmcsField::kGuestGsArBytes,	  VmpGetSegmentAccessRight(AsmReadGS()));
 	UtilVmWrite(VmcsField::kGuestLdtrArBytes, VmpGetSegmentAccessRight(AsmReadLDTR()));
-	UtilVmWrite(VmcsField::kGuestTrArBytes,	  VmpGetSegmentAccessRight(AsmReadTR())); 
+	UtilVmWrite(VmcsField::kGuestTrArBytes,	  VmpGetSegmentAccessRight(AsmReadTR()) | LONG_MODE_BUSY_TSS);
 
 	UtilVmWrite(VmcsField::kGuestIa32Debugctl, 0);
 	  

@@ -1539,7 +1539,7 @@ VOID VmlaunchEmulate(GuestContext* guest_context)
 		}
 		  
 		VMEntryEmulate(NestedvCPU, guest_context, TRUE);
-		VmEntryCheck();
+
 		HYPERPLATFORM_LOG_DEBUG_SAFE("Error VMLAUNCH error code :%x , %x ", 0, 0);
 		return;
 	} while (FALSE);
@@ -1573,7 +1573,9 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 		if (GetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
 		{
 			// Inject ...'
-			HYPERPLATFORM_LOG_DEBUG(" Vmresume: Unimplemented third level virualization VMX: %I64x  VMCS12: %I64x \r\n", GetVcpuVmx(guest_context), NestedvCPU->vmcs12_pa);
+			HYPERPLATFORM_LOG_DEBUG(" Vmresume: Unimplemented third level virualization VMX: %I64x  VMCS12: %I64x \r\n",
+				GetVcpuVmx(guest_context), NestedvCPU->vmcs12_pa);
+
 			VMfailInvalid(GetFlagReg(guest_context));
 			break;
 		}
@@ -1581,6 +1583,7 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 		VMEntryEmulate(NestedvCPU, guest_context, FALSE); 
 
 		HYPERPLATFORM_COMMON_DBG_BREAK();
+
 		VMSucceed(GetFlagReg(guest_context));
 	} while (FALSE);
 }

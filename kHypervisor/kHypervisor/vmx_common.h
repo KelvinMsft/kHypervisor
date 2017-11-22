@@ -9,6 +9,13 @@
 #include "vmcs.h"
 extern "C"
 {
+typedef enum
+{
+	Active = 0,
+	HLT,
+	ShutDown,
+	WaitForSipi
+}ActivityState;
 
 // VMX Instruction Return 
 VOID VMSucceed(FlagRegister *reg);

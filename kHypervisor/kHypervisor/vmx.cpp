@@ -63,7 +63,18 @@ enum VMX_state
 //// 
 //// Implementation
 //// 
-
+BOOLEAN IsGuestPaePaging()
+{
+	VmxVmEntryControls VmEntryCtrl = { UtilVmRead(VmcsField::kVmEntryControls) };
+	FlagRegister rflags = { UtilVmRead(VmcsField::kGuestRflags) };
+	Cr0 cr0 = { UtilVmRead(VmcsField::kGuestCr0) };
+	Cr4 cr4 = { UtilVmRead(VmcsField::kGuestCr4) }; 
+	if (cr0.fields.pg && cr4.fields.pae && !VmEntryCtrl.fields.ia32e_mode_guest)
+	{
+		return TRUE;
+	}
+	return FALSE;
+}
 VOID VmxAssertPrint(ULONG Line, bool IsVerified)
 {
 	if (!IsVerified)
@@ -245,14 +256,14 @@ VOID VmxVmEntryCheckGuestSegReg()
 		ULONG TrBase =   UtilVmRead(VmcsField::kGuestTrBase)  ;
 		ULONG LdtrBase =  UtilVmRead(VmcsField::kGuestLdtrBase);
 		 
-		VmxRegmentDescriptorAccessRight CsArBytes = { UtilVmRead(VmcsField::kGuestCsArBytes) };
-		VmxRegmentDescriptorAccessRight DsArBytes = { UtilVmRead(VmcsField::kGuestDsArBytes) };
-		VmxRegmentDescriptorAccessRight SsArBytes = { UtilVmRead(VmcsField::kGuestSsArBytes) };
-		VmxRegmentDescriptorAccessRight EsArBytes = { UtilVmRead(VmcsField::kGuestEsArBytes) };
-		VmxRegmentDescriptorAccessRight FsArBytes = { UtilVmRead(VmcsField::kGuestFsArBytes) };
-		VmxRegmentDescriptorAccessRight GsArBytes = { UtilVmRead(VmcsField::kGuestGsArBytes) }; 
-		VmxRegmentDescriptorAccessRight TrArBytes = { UtilVmRead(VmcsField::kGuestTrArBytes) };
-		VmxRegmentDescriptorAccessRight	LdtrArBytes = { UtilVmRead(VmcsField::kGuestLdtrArBytes) };
+		VmxSegmentDescriptorAccessRight CsArBytes = { UtilVmRead(VmcsField::kGuestCsArBytes) };
+		VmxSegmentDescriptorAccessRight DsArBytes = { UtilVmRead(VmcsField::kGuestDsArBytes) };
+		VmxSegmentDescriptorAccessRight SsArBytes = { UtilVmRead(VmcsField::kGuestSsArBytes) };
+		VmxSegmentDescriptorAccessRight EsArBytes = { UtilVmRead(VmcsField::kGuestEsArBytes) };
+		VmxSegmentDescriptorAccessRight FsArBytes = { UtilVmRead(VmcsField::kGuestFsArBytes) };
+		VmxSegmentDescriptorAccessRight GsArBytes = { UtilVmRead(VmcsField::kGuestGsArBytes) }; 
+		VmxSegmentDescriptorAccessRight TrArBytes = { UtilVmRead(VmcsField::kGuestTrArBytes) };
+		VmxSegmentDescriptorAccessRight	LdtrArBytes = { UtilVmRead(VmcsField::kGuestLdtrArBytes) };
 
 		SegmentSelector SsSelector = { UtilVmRead(VmcsField::kGuestSsSelector) };
 		SegmentSelector CsSelector = { UtilVmRead(VmcsField::kGuestCsSelector) };
@@ -365,7 +376,11 @@ VOID VmxVmEntryCheckGuestSegReg()
 		if (!CsArBytes.fields.unusable)
 		{
 			HYPERPLATFORM_ASSERT(CsArBytes.fields.present);
-			HYPERPLATFORM_ASSERT(!CsArBytes.fields.db && VmEntryCtrl.fields.ia32e_mode_guest && (CsArBytes.fields.l == 1));
+			if (VmEntryCtrl.fields.ia32e_mode_guest && (CsArBytes.fields.l == 1))
+			{
+				HYPERPLATFORM_ASSERT(!CsArBytes.fields.db  );
+			}
+
 			HYPERPLATFORM_ASSERT(!(CsBase >> 32));
 		}
 		if (!DsArBytes.fields.unusable)
@@ -431,7 +446,7 @@ VOID VmxVmEntryCheckGuestDescTableReg()
 VOID VmxVmEntryCheckGuestRipRflags()
 {
 	VmxVmEntryControls  VmEntryCtrl = { UtilVmRead64(VmcsField::kVmEntryControls) }; 
-	VmxRegmentDescriptorAccessRight CsArBytes = { UtilVmRead(VmcsField::kGuestCsArBytes) }; 
+	VmxSegmentDescriptorAccessRight CsArBytes = { UtilVmRead(VmcsField::kGuestCsArBytes) }; 
 	VmxSecondaryProcessorBasedControls VmSecondProcCtrl = { UtilVmRead64(VmcsField::kSecondaryVmExecControl) };
 	VmEntryInterruptionInformationField VmInterruptField = { UtilVmRead64(VmcsField::kVmEntryIntrInfoField) };
 	FlagRegister rflags = { UtilVmRead64(VmcsField::kGuestRflags) };
@@ -464,8 +479,45 @@ VOID VmxVmEntryCheckGuestRipRflags()
 
 //---------------------------------------------------------------------------------------------------------------------//
 VOID VmxVmEntryCheckGuestNonRegstate()
-{
+{ 
+	ActivityState  state = static_cast<ActivityState>(UtilVmRead64(VmcsField::kGuestActivityState));
+	VmxSegmentDescriptorAccessRight SsArBytes = { UtilVmRead(VmcsField::kGuestSsArBytes) };
+	VmEntryInterruptionInformationField IntrInfo = { UtilVmRead(VmcsField::kVmEntryIntrInfoField) };
+	VmxVmEntryControls  VmEntryCtrl = { UtilVmRead64(VmcsField::kVmEntryControls) };
+	HYPERPLATFORM_ASSERT(state >= 0 && state <=3);
+	
+	if (SsArBytes.fields.dpl)
+	{
+		HYPERPLATFORM_ASSERT(state != HLT);
+	}
 
+	if (IntrInfo.fields.valid)
+	{
+		// TODO : CHECK and disable / pending the interruption
+		switch (state)
+		{
+		case HLT:
+			break;
+		case ShutDown:
+			break;
+		case WaitForSipi:
+			break;
+		case Active: 
+		default:
+			break; 
+		}
+	}
+
+	if (VmEntryCtrl.fields.entry_to_smm)
+	{
+		HYPERPLATFORM_ASSERT(state != WaitForSipi);
+	}
+}
+VOID VmxVmEntryCheckGuestPdptes()
+{
+	if(IsGuestPaePaging())
+	{
+	}
 }
 //---------------------------------------------------------------------------------------------------------------------//
 VOID VmEntryCheck()

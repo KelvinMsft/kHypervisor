@@ -1148,7 +1148,7 @@ union VmxVmEntryControls {
 static_assert(sizeof(VmxVmExitControls) == 4, "Size check");
 
 /// See: Guest Register State
-union VmxRegmentDescriptorAccessRight {
+union VmxSegmentDescriptorAccessRight {
   unsigned int all;
   struct {
     unsigned type : 4;
@@ -1164,7 +1164,7 @@ union VmxRegmentDescriptorAccessRight {
     unsigned reserved2 : 15;
   } fields;
 };
-static_assert(sizeof(VmxRegmentDescriptorAccessRight) == 4, "Size check");
+static_assert(sizeof(VmxSegmentDescriptorAccessRight) == 4, "Size check");
 
 /// See: ARCHITECTURAL MSRS
 union Ia32FeatureControlMsr {

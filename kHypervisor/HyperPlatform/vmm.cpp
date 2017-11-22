@@ -1838,7 +1838,7 @@ extern "C" {
 
 	// Returns guest's CPL
 	/*_Use_decl_annotations_*/ static UCHAR VmmpGetGuestCpl() {
-		VmxRegmentDescriptorAccessRight ar = {
+		VmxSegmentDescriptorAccessRight ar = {
 			static_cast<unsigned int>(UtilVmRead(VmcsField::kGuestSsArBytes)) };
 		return ar.fields.dpl;
 	}

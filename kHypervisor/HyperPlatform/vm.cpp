@@ -863,7 +863,7 @@ extern "C" {
 	// Returns access right of the segment specified by the SegmentSelector for VMX
 	_Use_decl_annotations_ ULONG VmpGetSegmentAccessRight(USHORT segment_selector)
 	{
-		VmxRegmentDescriptorAccessRight access_right = {};
+		VmxSegmentDescriptorAccessRight access_right = {};
 		const SegmentSelector ss = { segment_selector };
 		if (segment_selector)
 		{

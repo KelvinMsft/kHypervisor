@@ -148,7 +148,7 @@ VOID VmxVmEntryCheckGuestReg()
 	cr0_test.all &= cr0_fixed1.all;
 	cr0_test.all |= cr0_fixed0.all;
 
-	NT_ASSERT(cr0_test.all == cr0.all);
+	HYPERPLATFORM_ASSERT(cr0_test.all == cr0.all);
 
 	Cr4 cr4 = { UtilVmRead(VmcsField::kGuestCr4) };
 	Cr4 cr4_fixed0 = { UtilReadMsr(Msr::kIa32VmxCr4Fixed0) };

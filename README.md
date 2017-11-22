@@ -1,5 +1,13 @@
 # kHypervisor
+# Introduction
 kHypervisor is an Open Source light-weighted Nested-Virtual Machine Monitor in Windows x64 platform. Supported multi-core , and which is extending from Hyper-platform :-)
+
+# Advantages
+kHypervisor provide an light-weighted virtulized environment for debugging protected mode Guest
+- VM Entry Emulation 
+- VM Exit  Emulation 
+- Nested VM Exit Event
+- The code is simple and minize as a nested vmm.
 
 # Environment
 - Visual Studio 2015 update 3 
@@ -32,6 +40,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
 2017-06-08 : Adding a support for Monitor Trap Flags from L2 and perform Nested VMExit
 
 2017-11-21 : Added VM-Entry Check Emulation , Bug Fixed
+
 # Installation
 
  - kHypervisor extended HyperPlatform which is created by Tandasat, it is a Nested-Virtual Machine Monitor, and DdiMon is one of Tandasat's product of HyperPlatform for test demo in kHypervisor.

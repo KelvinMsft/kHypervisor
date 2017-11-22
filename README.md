@@ -85,5 +85,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
  - Fully Support CPU Feature from vCPU aspect.
  - EPT virtualization
  - APIC virtualization
+# License
+This software is released under the MIT License, see LICENSE.
 
  

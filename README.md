@@ -88,4 +88,6 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
 # License
 This software is released under the MIT License, see LICENSE.
 
- 
+# Related Project
+ https://github.com/tandasat/HyperPlatform
+ https://github.com/tandasat/ddimon

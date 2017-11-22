@@ -79,8 +79,10 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
  <img src="https://cloud.githubusercontent.com/assets/22551808/21672420/6d7935e8-d35d-11e6-989c-4afb97f65047.png" width="70%" height="70%"/>
 </img></br>
  
- # Turnning Of By VMCALL
+ # Turning of L1 VMM By VMCALL
   <img src="https://user-images.githubusercontent.com/22551808/33070774-1c3ffde0-cef4-11e7-93cc-2316ef1f9aff.jpg" width="50%" height="50%"> </img>
+  
+  
 # TODO
  - Fully Support CPU Feature from vCPU aspect.
  - EPT virtualization

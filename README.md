@@ -16,6 +16,7 @@ kHypervisor provide an light-weighted virtulized environment for debugging prote
 - VMware 12 with EPT environment. 
 - Supports Multi-core processor environment
 - Test environment with Windows 7 x64 sp1
+- It onlys support restricted guest (protected - paging mode) for the present
 
 # Description
 The kHypervisor is not yet completed, and it will be rapidly update on progress, please using a windbg+vmware 12 for debugging kHypervisor.  
@@ -99,7 +100,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
  - Fully Support CPU Feature from vCPU aspect.
  - EPT virtualization
  - APIC virtualization
- 
+ - Unrestricted guest support (vbox) , such as virtual 8086 mode.
  
 # Related Project
  https://github.com/tandasat/HyperPlatform </br>

@@ -186,65 +186,65 @@ extern "C" {
 
 
 	//----------------------------------------------------------------------------------------------------------------//
-	GpRegisters* GetGpReg(GuestContext* guest_context)
+	_Use_decl_annotations_ GpRegisters* GetGpReg(GuestContext* guest_context)
 	{
 		return	guest_context->gp_regs;
 	}
 
 	//----------------------------------------------------------------------------------------------------------------//
-	FlagRegister* GetFlagReg(GuestContext* guest_context)
+	_Use_decl_annotations_ FlagRegister* GetFlagReg(GuestContext* guest_context)
 	{
 		return &guest_context->flag_reg;
 	}
 
 	//----------------------------------------------------------------------------------------------------------------//
-	KIRQL GetGuestIrql(GuestContext* guest_context)
+	_Use_decl_annotations_ KIRQL GetGuestIrql(GuestContext* guest_context)
 	{
 		return guest_context->irql;
 	}
 	//----------------------------------------------------------------------------------------------------------------//
-	ProcessorData* GetProcessorData(GuestContext* guest_context)
+	_Use_decl_annotations_ ProcessorData* GetProcessorData(GuestContext* guest_context)
 	{
 		return guest_context->stack->processor_data;
 	} 
 	//----------------------------------------------------------------------------------------------------------------//
-	ULONG_PTR GetGuestCr8(GuestContext* guest_context)
+	_Use_decl_annotations_ ULONG_PTR GetGuestCr8(GuestContext* guest_context)
 	{
 		return guest_context->cr8;
 	}
 
 	//----------------------------------------------------------------------------------------------------------------//
-	ULONG GetvCpuMode(GuestContext* guest_context)
+	_Use_decl_annotations_ ULONG GetvCpuMode(GuestContext* guest_context)
 	{
 		return guest_context->stack->processor_data->CpuMode;
 	}
 
 	//----------------------------------------------------------------------------------------------------------------//
-	VOID SetvCpuMode(GuestContext* guest_context, CPU_MODE CpuMode)
+	_Use_decl_annotations_ VOID SetvCpuMode(GuestContext* guest_context, CPU_MODE CpuMode)
 	{
 		guest_context->stack->processor_data->CpuMode = CpuMode;
 	}
 
 	//----------------------------------------------------------------------------------------------------------------//
-	VOID EnterVmxMode(GuestContext* guest_context)
+	_Use_decl_annotations_ VOID EnterVmxMode(GuestContext* guest_context)
 	{
 		SetvCpuMode(guest_context, VmxMode);
 	}
 
 	//----------------------------------------------------------------------------------------------------------------//
-	VOID LeaveVmxMode(GuestContext* guest_context)
+	_Use_decl_annotations_ VOID LeaveVmxMode(GuestContext* guest_context)
 	{
 		SetvCpuMode(guest_context, ProtectedMode);
 	}
 
 	//----------------------------------------------------------------------------------------------------------------//
-	VCPUVMX* GetVcpuVmx(GuestContext* guest_context)
+	_Use_decl_annotations_ VCPUVMX* GetVcpuVmx(GuestContext* guest_context)
 	{
 		return guest_context->stack->processor_data->vcpu_vmx;
 	}
 
 	//----------------------------------------------------------------------------------------------------------------//
-	VOID SetvCpuVmx(GuestContext* guest_context, VCPUVMX* VCPUVMX)
+	_Use_decl_annotations_ VOID SetvCpuVmx(GuestContext* guest_context, VCPUVMX* VCPUVMX)
 	{
 		guest_context->stack->processor_data->vcpu_vmx = VCPUVMX;
 	}
@@ -313,6 +313,9 @@ extern "C" {
 		switch (exit_reason.fields.reason)
 		{
 		case VmxExitReason::kExceptionOrNmi:
+			VmmpHandleException(guest_context);
+			break;
+		case VmxExitReason::kExternalInterrupt:
 			VmmpHandleException(guest_context);
 			break;
 		case VmxExitReason::kTripleFault:
@@ -807,8 +810,24 @@ extern "C" {
 			static_cast<InterruptionType>(exception.fields.interruption_type);
 
 		const auto vector = static_cast<InterruptionVector>(exception.fields.vector);
+		if (interruption_type == InterruptionType::kExternalInterrupt) {
+			HYPERPLATFORM_COMMON_DBG_BREAK();
+			PrintVMCS();
+			
+			FlagRegister reg = { UtilVmRead(VmcsField::kGuestRflags) };
+			reg.fields.intf = true;
+			UtilVmWrite64(VmcsField::kGuestRflags, reg.all);
 
-		if (interruption_type == InterruptionType::kHardwareException) {
+			HYPERPLATFORM_LOG_DEBUG("GuestRip: %p flags: %x vector: %x", UtilVmRead(VmcsField::kGuestRip), reg , vector);
+			VmmpInjectInterruption(interruption_type, vector, exception.fields.error_code_valid, 0);
+
+		}
+		else if (interruption_type == InterruptionType::kHardwareException) {
+			if (vector == InterruptionVector::kDebugException) 
+			{
+				HYPERPLATFORM_LOG_DEBUG("#Tf: %x %I64X %I64X %I64X %I64x", interruption_type, UtilVmRead(VmcsField::kGuestRip), UtilVmRead(VmcsField::kGuestRflags), UtilVmRead(VmcsField::kGuestCr0), UtilVmRead(VmcsField::kGuestCr4));
+				VmmpAdjustGuestInstructionPointer(guest_context);
+			}
 			// Hardware exception
 			if (vector == InterruptionVector::kPageFaultException) {
 

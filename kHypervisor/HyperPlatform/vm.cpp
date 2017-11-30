@@ -673,6 +673,7 @@ extern "C" {
 		vm_procctl2_requested.fields.enable_rdtscp = true;  // for Win10
 		vm_procctl2_requested.fields.enable_vpid = false;
 		vm_procctl2_requested.fields.enable_xsaves_xstors = true;  // for Win10
+		vm_procctl2_requested.fields.unrestricted_guest = true;
 		VmxSecondaryProcessorBasedControls vm_procctl2 = { VmpAdjustControlValue(
 			Msr::kIa32VmxProcBasedCtls2, vm_procctl2_requested.all) };
 
@@ -690,11 +691,12 @@ extern "C" {
 		Cr0 cr0_mask = {};
 		Cr0 cr0_shadow = { __readcr0() };
 
+
 		Cr4 cr4_mask = {};
 		Cr4 cr4_shadow = { __readcr4() };
 		// For example, when we want to hide CR4.VMXE from the guest, comment in below
-		// cr4_mask.fields.vmxe = true;
-		// cr4_shadow.fields.vmxe = false;
+		cr4_mask.fields.vmxe = true;
+		cr4_shadow.fields.vmxe = true;
 
 		// See: PDPTE Registers
 		// If PAE paging would be in use following an execution of MOV to CR0 or MOV

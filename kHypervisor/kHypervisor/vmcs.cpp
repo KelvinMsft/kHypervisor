@@ -13,7 +13,7 @@
 //-------------------------------------------------------------------------------------------------------------------------------------//
 VOID PrintAllFieldForVmcs12(const char* func, ULONG64 vmcs12)
 {
-	HYPERPLATFORM_LOG_DEBUG_SAFE("------------------------- Start Print VMCS12 by %s -----------------------------", func);
+	HYPERPLATFORM_LOG_DEBUG("------------------------- Start Print VMCS12 by %s -----------------------------", func);
 	PrintReadOnlyFieldForVmcs12(vmcs12);
 	HYPERPLATFORM_LOG_DEBUG_SAFE("------------------------- End Printed VMCS12 by %s -----------------------------", func);
 
@@ -85,37 +85,37 @@ VOID	 PrintReadOnlyFieldForVmcs12(ULONG64 vmcs12_va)
 VOID PrintHostStateField()
 {
 
-	HYPERPLATFORM_LOG_DEBUG_SAFE("###################### 16bit Host State #############################");
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostCsSelector : %X", UtilVmRead(VmcsField::kHostCsSelector));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostDsSelector : %X", UtilVmRead(VmcsField::kHostDsSelector));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostEsSelector : %X", UtilVmRead(VmcsField::kHostEsSelector));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostSsSelector : %X", UtilVmRead(VmcsField::kHostSsSelector));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostFsSelector : %X", UtilVmRead(VmcsField::kHostFsSelector));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostGsSelector : %X", UtilVmRead(VmcsField::kHostGsSelector));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostTrSelector : %X", UtilVmRead(VmcsField::kHostTrSelector));
+	HYPERPLATFORM_LOG_DEBUG("###################### 16bit Host State #############################");
+	HYPERPLATFORM_LOG_DEBUG("kHostCsSelector : %X", UtilVmRead(VmcsField::kHostCsSelector));
+	HYPERPLATFORM_LOG_DEBUG("kHostDsSelector : %X", UtilVmRead(VmcsField::kHostDsSelector));
+	HYPERPLATFORM_LOG_DEBUG("kHostEsSelector : %X", UtilVmRead(VmcsField::kHostEsSelector));
+	HYPERPLATFORM_LOG_DEBUG("kHostSsSelector : %X", UtilVmRead(VmcsField::kHostSsSelector));
+	HYPERPLATFORM_LOG_DEBUG("kHostFsSelector : %X", UtilVmRead(VmcsField::kHostFsSelector));
+	HYPERPLATFORM_LOG_DEBUG("kHostGsSelector : %X", UtilVmRead(VmcsField::kHostGsSelector));
+	HYPERPLATFORM_LOG_DEBUG("kHostTrSelector : %X", UtilVmRead(VmcsField::kHostTrSelector));
 
 	/*
 	Host 32 bit state field
 	*/
-	HYPERPLATFORM_LOG_DEBUG_SAFE("###################### 32bit Host State #############################");
+	HYPERPLATFORM_LOG_DEBUG("###################### 32bit Host State #############################");
 
-	HYPERPLATFORM_LOG_DEBUG_SAFE(" %.8X", UtilVmRead(VmcsField::kHostIa32SysenterCs));
+	HYPERPLATFORM_LOG_DEBUG(" %.8X", UtilVmRead(VmcsField::kHostIa32SysenterCs));
 
 
-	HYPERPLATFORM_LOG_DEBUG_SAFE("###################### 64bit Host State #############################");
+	HYPERPLATFORM_LOG_DEBUG("###################### 64bit Host State #############################");
 
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostCr0 %I64X", UtilVmRead64(VmcsField::kHostCr0));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostCr3 %I64X", UtilVmRead64(VmcsField::kHostCr3));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostCr4 %I64X", UtilVmRead64(VmcsField::kHostCr4));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostFsBase %I64X", UtilVmRead64(VmcsField::kHostFsBase));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostGsBase %I64X", UtilVmRead64(VmcsField::kHostGsBase));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostTrBase %I64X", UtilVmRead64(VmcsField::kHostTrBase));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostGdtrBase %I64X", UtilVmRead64(VmcsField::kHostGdtrBase));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostIdtrBase %I64X", UtilVmRead64(VmcsField::kHostIdtrBase));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostIa32SysenterEsp %I64X", UtilVmRead64(VmcsField::kHostIa32SysenterEsp));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostIa32SysenterEip %I64X", UtilVmRead64(VmcsField::kHostIa32SysenterEip));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostRsp %I64X", UtilVmRead64(VmcsField::kHostRsp));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostRip %I64X", UtilVmRead64(VmcsField::kHostRip));
+	HYPERPLATFORM_LOG_DEBUG("kHostCr0 %I64X", UtilVmRead64(VmcsField::kHostCr0));
+	HYPERPLATFORM_LOG_DEBUG("kHostCr3 %I64X", UtilVmRead64(VmcsField::kHostCr3));
+	HYPERPLATFORM_LOG_DEBUG("kHostCr4 %I64X", UtilVmRead64(VmcsField::kHostCr4));
+	HYPERPLATFORM_LOG_DEBUG("kHostFsBase %I64X", UtilVmRead64(VmcsField::kHostFsBase));
+	HYPERPLATFORM_LOG_DEBUG("kHostGsBase %I64X", UtilVmRead64(VmcsField::kHostGsBase));
+	HYPERPLATFORM_LOG_DEBUG("kHostTrBase %I64X", UtilVmRead64(VmcsField::kHostTrBase));
+	HYPERPLATFORM_LOG_DEBUG("kHostGdtrBase %I64X", UtilVmRead64(VmcsField::kHostGdtrBase));
+	HYPERPLATFORM_LOG_DEBUG("kHostIdtrBase %I64X", UtilVmRead64(VmcsField::kHostIdtrBase));
+	HYPERPLATFORM_LOG_DEBUG("kHostIa32SysenterEsp %I64X", UtilVmRead64(VmcsField::kHostIa32SysenterEsp));
+	HYPERPLATFORM_LOG_DEBUG("kHostIa32SysenterEip %I64X", UtilVmRead64(VmcsField::kHostIa32SysenterEip));
+	HYPERPLATFORM_LOG_DEBUG("kHostRsp %I64X", UtilVmRead64(VmcsField::kHostRsp));
+	HYPERPLATFORM_LOG_DEBUG("kHostRip %I64X", UtilVmRead64(VmcsField::kHostRip));
 
 }
 
@@ -123,72 +123,72 @@ VOID PrintHostStateField()
 VOID PrintControlField()
 {
 
-	HYPERPLATFORM_LOG_DEBUG_SAFE("###################### 16bit Control State #############################");
+	HYPERPLATFORM_LOG_DEBUG("###################### 16bit Control State #############################");
 
 
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostIa32Pat: %x", UtilVmRead(VmcsField::kHostIa32Pat));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostIa32PatHigh: %x", UtilVmRead(VmcsField::kHostIa32PatHigh));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostIa32Efer: %x", UtilVmRead(VmcsField::kHostIa32Efer));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostIa32EferHigh: %x", UtilVmRead(VmcsField::kHostIa32EferHigh));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostIa32PerfGlobalCtrl: %x", UtilVmRead(VmcsField::kHostIa32PerfGlobalCtrl));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kHostIa32PerfGlobalCtrlHigh: %x", UtilVmRead(VmcsField::kHostIa32PerfGlobalCtrlHigh));
+	HYPERPLATFORM_LOG_DEBUG("kHostIa32Pat: %x", UtilVmRead(VmcsField::kHostIa32Pat));
+	HYPERPLATFORM_LOG_DEBUG("kHostIa32PatHigh: %x", UtilVmRead(VmcsField::kHostIa32PatHigh));
+	HYPERPLATFORM_LOG_DEBUG("kHostIa32Efer: %x", UtilVmRead(VmcsField::kHostIa32Efer));
+	HYPERPLATFORM_LOG_DEBUG("kHostIa32EferHigh: %x", UtilVmRead(VmcsField::kHostIa32EferHigh));
+	HYPERPLATFORM_LOG_DEBUG("kHostIa32PerfGlobalCtrl: %x", UtilVmRead(VmcsField::kHostIa32PerfGlobalCtrl));
+	HYPERPLATFORM_LOG_DEBUG("kHostIa32PerfGlobalCtrlHigh: %x", UtilVmRead(VmcsField::kHostIa32PerfGlobalCtrlHigh));
 
-	HYPERPLATFORM_LOG_DEBUG_SAFE("###################### 32bit Control State #############################");
-
-
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kPinBasedVmExecControl: %x", UtilVmRead(VmcsField::kPinBasedVmExecControl));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kCpuBasedVmExecControl: %x", UtilVmRead(VmcsField::kCpuBasedVmExecControl));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kExceptionBitmap: %x", UtilVmRead(VmcsField::kExceptionBitmap));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kPageFaultErrorCodeMask: %x", UtilVmRead(VmcsField::kPageFaultErrorCodeMask));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kPageFaultErrorCodeMatch: %x", UtilVmRead(VmcsField::kPageFaultErrorCodeMatch));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kCr3TargetCount: %x", UtilVmRead(VmcsField::kCr3TargetCount));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kVmExitControls: %x", UtilVmRead(VmcsField::kVmExitControls));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kVmExitMsrStoreCount: %x", UtilVmRead(VmcsField::kVmExitMsrStoreCount));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kVmExitMsrLoadCount: %x", UtilVmRead(VmcsField::kVmExitMsrLoadCount));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kVmEntryControls: %x", UtilVmRead(VmcsField::kVmEntryControls));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kVmEntryMsrLoadCount: %x", UtilVmRead(VmcsField::kVmEntryMsrLoadCount));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kVmEntryIntrInfoField: %x", UtilVmRead(VmcsField::kVmEntryIntrInfoField));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kVmEntryExceptionErrorCode: %x", UtilVmRead(VmcsField::kVmEntryExceptionErrorCode));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kVmEntryInstructionLen: %x", UtilVmRead(VmcsField::kVmEntryInstructionLen));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kTprThreshold: %x", UtilVmRead(VmcsField::kTprThreshold));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kPleGap: %x", UtilVmRead(VmcsField::kPleGap));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kPleWindow: %x", UtilVmRead(VmcsField::kPleWindow));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kSecondaryVmExecControl: %x", UtilVmRead(VmcsField::kSecondaryVmExecControl));
+	HYPERPLATFORM_LOG_DEBUG("###################### 32bit Control State #############################");
 
 
-	HYPERPLATFORM_LOG_DEBUG_SAFE("###################### 64bit Control State #############################");
+	HYPERPLATFORM_LOG_DEBUG("kPinBasedVmExecControl: %x", UtilVmRead(VmcsField::kPinBasedVmExecControl));
+	HYPERPLATFORM_LOG_DEBUG("kCpuBasedVmExecControl: %x", UtilVmRead(VmcsField::kCpuBasedVmExecControl));
+	HYPERPLATFORM_LOG_DEBUG("kExceptionBitmap: %x", UtilVmRead(VmcsField::kExceptionBitmap));
+	HYPERPLATFORM_LOG_DEBUG("kPageFaultErrorCodeMask: %x", UtilVmRead(VmcsField::kPageFaultErrorCodeMask));
+	HYPERPLATFORM_LOG_DEBUG("kPageFaultErrorCodeMatch: %x", UtilVmRead(VmcsField::kPageFaultErrorCodeMatch));
+	HYPERPLATFORM_LOG_DEBUG("kCr3TargetCount: %x", UtilVmRead(VmcsField::kCr3TargetCount));
+	HYPERPLATFORM_LOG_DEBUG("kVmExitControls: %x", UtilVmRead(VmcsField::kVmExitControls));
+	HYPERPLATFORM_LOG_DEBUG("kVmExitMsrStoreCount: %x", UtilVmRead(VmcsField::kVmExitMsrStoreCount));
+	HYPERPLATFORM_LOG_DEBUG("kVmExitMsrLoadCount: %x", UtilVmRead(VmcsField::kVmExitMsrLoadCount));
+	HYPERPLATFORM_LOG_DEBUG("kVmEntryControls: %x", UtilVmRead(VmcsField::kVmEntryControls));
+	HYPERPLATFORM_LOG_DEBUG("kVmEntryMsrLoadCount: %x", UtilVmRead(VmcsField::kVmEntryMsrLoadCount));
+	HYPERPLATFORM_LOG_DEBUG("kVmEntryIntrInfoField: %x", UtilVmRead(VmcsField::kVmEntryIntrInfoField));
+	HYPERPLATFORM_LOG_DEBUG("kVmEntryExceptionErrorCode: %x", UtilVmRead(VmcsField::kVmEntryExceptionErrorCode));
+	HYPERPLATFORM_LOG_DEBUG("kVmEntryInstructionLen: %x", UtilVmRead(VmcsField::kVmEntryInstructionLen));
+	HYPERPLATFORM_LOG_DEBUG("kTprThreshold: %x", UtilVmRead(VmcsField::kTprThreshold));
+	HYPERPLATFORM_LOG_DEBUG("kPleGap: %x", UtilVmRead(VmcsField::kPleGap));
+	HYPERPLATFORM_LOG_DEBUG("kPleWindow: %x", UtilVmRead(VmcsField::kPleWindow));
+	HYPERPLATFORM_LOG_DEBUG("kSecondaryVmExecControl: %x", UtilVmRead(VmcsField::kSecondaryVmExecControl));
 
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kIoBitmapA: %I64X", UtilVmRead64(VmcsField::kIoBitmapA));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kIoBitmapB: %I64X", UtilVmRead64(VmcsField::kIoBitmapB));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kMsrBitmap: %I64X", UtilVmRead64(VmcsField::kMsrBitmap));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kPmlAddress: %I64X", UtilVmRead64(VmcsField::kPmlAddress));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kApicAccessAddr: %I64X", UtilVmRead64(VmcsField::kApicAccessAddr));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kVmFuncCtls: %I64X", UtilVmRead64(VmcsField::kVmFuncCtls));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kEptPointer: %I64X", UtilVmRead64(VmcsField::kEptPointer));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kEoiExitBitmap0: %I64X", UtilVmRead64(VmcsField::kEoiExitBitmap0));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kEoiExitBitmap0High: %I64X", UtilVmRead64(VmcsField::kEoiExitBitmap0High));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kEoiExitBitmap1: %I64X", UtilVmRead64(VmcsField::kEoiExitBitmap1));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kEoiExitBitmap1High: %I64X", UtilVmRead64(VmcsField::kEoiExitBitmap1High));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kEoiExitBitmap2: %I64X", UtilVmRead64(VmcsField::kEoiExitBitmap2));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kEoiExitBitmap2High: %I64X", UtilVmRead64(VmcsField::kEoiExitBitmap2High));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kEoiExitBitmap3: %I64X", UtilVmRead64(VmcsField::kEoiExitBitmap3));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kEoiExitBitmap3High: %I64X", UtilVmRead64(VmcsField::kEoiExitBitmap3High));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kEptpListAddress: %I64X", UtilVmRead64(VmcsField::kEptpListAddress));
+
+	HYPERPLATFORM_LOG_DEBUG("###################### 64bit Control State #############################");
+
+	HYPERPLATFORM_LOG_DEBUG("kIoBitmapA: %I64X", UtilVmRead64(VmcsField::kIoBitmapA));
+	HYPERPLATFORM_LOG_DEBUG("kIoBitmapB: %I64X", UtilVmRead64(VmcsField::kIoBitmapB));
+	HYPERPLATFORM_LOG_DEBUG("kMsrBitmap: %I64X", UtilVmRead64(VmcsField::kMsrBitmap));
+	HYPERPLATFORM_LOG_DEBUG("kPmlAddress: %I64X", UtilVmRead64(VmcsField::kPmlAddress));
+	HYPERPLATFORM_LOG_DEBUG("kApicAccessAddr: %I64X", UtilVmRead64(VmcsField::kApicAccessAddr));
+	HYPERPLATFORM_LOG_DEBUG("kVmFuncCtls: %I64X", UtilVmRead64(VmcsField::kVmFuncCtls));
+	HYPERPLATFORM_LOG_DEBUG("kEptPointer: %I64X", UtilVmRead64(VmcsField::kEptPointer));
+	HYPERPLATFORM_LOG_DEBUG("kEoiExitBitmap0: %I64X", UtilVmRead64(VmcsField::kEoiExitBitmap0));
+	HYPERPLATFORM_LOG_DEBUG("kEoiExitBitmap0High: %I64X", UtilVmRead64(VmcsField::kEoiExitBitmap0High));
+	HYPERPLATFORM_LOG_DEBUG("kEoiExitBitmap1: %I64X", UtilVmRead64(VmcsField::kEoiExitBitmap1));
+	HYPERPLATFORM_LOG_DEBUG("kEoiExitBitmap1High: %I64X", UtilVmRead64(VmcsField::kEoiExitBitmap1High));
+	HYPERPLATFORM_LOG_DEBUG("kEoiExitBitmap2: %I64X", UtilVmRead64(VmcsField::kEoiExitBitmap2));
+	HYPERPLATFORM_LOG_DEBUG("kEoiExitBitmap2High: %I64X", UtilVmRead64(VmcsField::kEoiExitBitmap2High));
+	HYPERPLATFORM_LOG_DEBUG("kEoiExitBitmap3: %I64X", UtilVmRead64(VmcsField::kEoiExitBitmap3));
+	HYPERPLATFORM_LOG_DEBUG("kEoiExitBitmap3High: %I64X", UtilVmRead64(VmcsField::kEoiExitBitmap3High));
+	HYPERPLATFORM_LOG_DEBUG("kEptpListAddress: %I64X", UtilVmRead64(VmcsField::kEptpListAddress));
 
 
-	HYPERPLATFORM_LOG_DEBUG_SAFE("###################### Natural Control State #############################");
+	HYPERPLATFORM_LOG_DEBUG("###################### Natural Control State #############################");
 
 	/*
 	Natural-width field
 	*/
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kCr0GuestHostMask: %I64X", UtilVmRead64(VmcsField::kCr0GuestHostMask));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kCr4GuestHostMask: %I64X", UtilVmRead64(VmcsField::kCr4GuestHostMask));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kCr0ReadShadow: %I64X", UtilVmRead64(VmcsField::kCr0ReadShadow));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kCr4ReadShadow: %I64X", UtilVmRead64(VmcsField::kCr4ReadShadow));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kCr3TargetValue0: %I64X", UtilVmRead64(VmcsField::kCr3TargetValue0));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kCr3TargetValue1: %I64X", UtilVmRead64(VmcsField::kCr3TargetValue1));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kCr3TargetValue2: %I64X", UtilVmRead64(VmcsField::kCr3TargetValue2));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kCr3TargetValue3: %I64X", UtilVmRead64(VmcsField::kCr3TargetValue3));
+	HYPERPLATFORM_LOG_DEBUG("kCr0GuestHostMask: %I64X", UtilVmRead64(VmcsField::kCr0GuestHostMask));
+	HYPERPLATFORM_LOG_DEBUG("kCr4GuestHostMask: %I64X", UtilVmRead64(VmcsField::kCr4GuestHostMask));
+	HYPERPLATFORM_LOG_DEBUG("kCr0ReadShadow: %I64X", UtilVmRead64(VmcsField::kCr0ReadShadow));
+	HYPERPLATFORM_LOG_DEBUG("kCr4ReadShadow: %I64X", UtilVmRead64(VmcsField::kCr4ReadShadow));
+	HYPERPLATFORM_LOG_DEBUG("kCr3TargetValue0: %I64X", UtilVmRead64(VmcsField::kCr3TargetValue0));
+	HYPERPLATFORM_LOG_DEBUG("kCr3TargetValue1: %I64X", UtilVmRead64(VmcsField::kCr3TargetValue1));
+	HYPERPLATFORM_LOG_DEBUG("kCr3TargetValue2: %I64X", UtilVmRead64(VmcsField::kCr3TargetValue2));
+	HYPERPLATFORM_LOG_DEBUG("kCr3TargetValue3: %I64X", UtilVmRead64(VmcsField::kCr3TargetValue3));
 }
 
 
@@ -761,7 +761,7 @@ VOID BuildGernericVMCSMap()
 			{
 				HYPERPLATFORM_LOG_DEBUG_SAFE("VMCS type %d field %d (encoding = 0x%08x) is already initialized", type, index, encoding);
 			}
-			if (is_vmcs_field_supported(VmcsField(encoding)))
+		//	if (is_vmcs_field_supported(VmcsField(encoding)))
 			{
 				// allocate 64 fields (4 byte each) per type
 				g_vmcs_map[type][index] = VMCS_DATA_OFFSET + (type * 64 + index) * 4;
@@ -1333,13 +1333,14 @@ VOID PrepareGuestStateField(ULONG_PTR guest_vmcs_va)
 	UtilVmWrite(VmcsField::kGuestRip, vmcs12_kGuestRip);
 	UtilVmWrite(VmcsField::kGuestRsp, vmcs12_kGuestRsp);
 	UtilVmWrite(VmcsField::kGuestRflags, vmcs12_kGuestRlags);
-
+	
+	HYPERPLATFORM_COMMON_DBG_BREAK();
 	if (IsGuestPaePaging())
 	{
 		VmxSecondaryProcessorBasedControls vm_second_ctrl = { UtilVmRead(VmcsField::kSecondaryVmExecControl) };
 		if (vm_second_ctrl.fields.enable_ept)
 		{
-			UtilLoadPdptes(UtilVmRead(VmcsField::kGuestCr3));
+		//	UtilLoadPdptes(UtilVmRead(VmcsField::kGuestCr3));
 		}
 	}
 

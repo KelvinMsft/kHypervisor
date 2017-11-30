@@ -1467,11 +1467,11 @@ VOID VmwriteEmulate(GuestContext* guest_context)
 
 		field = DecodeVmwriteOrVmRead(GetGpReg(guest_context), &offset, &Value, &RorM);
 
-		if (!is_vmcs_field_supported(field))
+	//	if (!is_vmcs_field_supported(field))
 		{
-			HYPERPLATFORM_LOG_DEBUG_SAFE("VMWRITE: IS NOT SUPPORT %X ! \r\n", field); 	  //#gp
-			VMfailInvalid(GetFlagReg(guest_context));
-			break;
+		//	HYPERPLATFORM_LOG_DEBUG_SAFE("VMWRITE: IS NOT SUPPORT %X ! \r\n", field); 	  //#gp
+		//	VMfailInvalid(GetFlagReg(guest_context));
+		//	break;
 		}
 
 		/*if (!g_vcpus[vcpu_index]->inRoot)

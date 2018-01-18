@@ -286,8 +286,8 @@ extern "C" {
 
 		RtlFillMemory(bitmap_read_low, 1024, 0xff);   // read        0 -     1fff
 		RtlFillMemory(bitmap_read_high, 1024, 0xff);  // read c0000000 - c0001fff
-		RtlFillMemory(bitmap_write_low, 1024, 0x0);   // write        0 -     1fff
-		RtlFillMemory(bitmap_write_high, 1024, 0x0);  // write c0000000 - c0001fff
+		RtlFillMemory(bitmap_write_low, 1024, 0xff);   // write        0 -     1fff
+		RtlFillMemory(bitmap_write_high, 1024, 0);  // write c0000000 - c0001fff
 
 
 													  // Ignore IA32_MPERF (000000e7) and IA32_APERF (000000e8)
@@ -314,13 +314,6 @@ extern "C" {
 
 		RtlClearBits(&bitmap_read_high_header, 0x101, 2);
 
-
-		RTL_BITMAP bitmap_write_low_header = {};
-		RtlInitializeBitMap(&bitmap_write_low_header,
-			reinterpret_cast<PULONG>(bitmap_write_low),
-			1024 * CHAR_BIT);
-
-		RtlSetBits(&bitmap_write_low_header, 0x3A, 1);
 
 		/*
 		RTL_BITMAP bitmap_write_high_header = {};

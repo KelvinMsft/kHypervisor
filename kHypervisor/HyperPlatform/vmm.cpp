@@ -510,10 +510,7 @@ extern "C" {
 	)
 	{
 		VmxProcessorBasedControls ctrl = GetCpuBasedVmexitCtrlForLevel1(guest_context);
-		RTL_BITMAP bitmap = { 0 };
 		PUCHAR msr_bitmap = (PUCHAR)UtilVaFromPa((ULONG64)GetMsrBitmap(guest_context));
-
-		BOOLEAN IsExit = FALSE;
 		ULONG Index = guest_context->gp_regs->cx;
 
 		if (!ctrl.fields.use_msr_bitmaps)
@@ -536,7 +533,37 @@ extern "C" {
 
 		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
 	}
+	//-----------------------------------------------------------------------------------------------------------------------//
+	_Use_decl_annotations_ static NTSTATUS VmmpHandleWrmsrForL2(
+		_In_ GuestContext *guest_context
+	)
+	{
+		VmxProcessorBasedControls ctrl = GetCpuBasedVmexitCtrlForLevel1(guest_context);
+		PUCHAR				msr_bitmap = (PUCHAR)UtilVaFromPa((ULONG64)GetMsrBitmap(guest_context));
+		ULONG					 Index = guest_context->gp_regs->cx;
 
+		if (!ctrl.fields.use_msr_bitmaps)
+		{
+			return STATUS_UNSUCCESSFUL;
+		}
+		
+		msr_bitmap += 2048;
+
+		if (Index >= 0xC0000000 && Index <= 0xC0001FFF)
+		{
+			msr_bitmap += 3072;
+			Index = Index & 0x1FFF;
+		}
+
+		ULONG TestIndex = Index / 8;
+		ULONG TestIndexBit = Index % 8;
+		if (!(msr_bitmap[TestIndex] & (1 << TestIndexBit)))
+		{
+			return STATUS_UNSUCCESSFUL;
+		}
+
+		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+	}
 	//-----------------------------------------------------------------------------------------------------------------------//
 	_Use_decl_annotations_ static NTSTATUS VmmpHandleCpuidForL2(
 		_In_ GuestContext *guest_context
@@ -719,6 +746,7 @@ extern "C" {
 			IsHandled = VmmpHandleRdmsrForL2(guest_context);
 			break;
 		case VmxExitReason::kMsrWrite:
+			IsHandled = VmmpHandleWrmsrForL2(guest_context);
 			break;
 		case VmxExitReason::kMonitorTrapFlag:
 			IsHandled = VmmpHandlerMontiorTrapFlagForL2(guest_context);

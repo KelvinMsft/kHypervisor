@@ -10,19 +10,19 @@ kHypervisor provide an light-weighted virtulized environment for debugging prote
 - The code is simple and minize as a nested vmm.
 
 # Environment
-- Visual Studio 2015 update 3 
-- Windows SDK 10
-- Windowr Driver Kit 10 
-- VMware 12 with EPT environment. 
-- Supports Multi-core processor environment
-- Test environment with Windows 7 x64 sp1 to Windows 10 x64 build 16299 RS3
-- It onlys support restricted guest (protected - paging mode) for the present
+  * Visual Studio 2015 update 3 
+  * Windows SDK 10
+  * Windowr Driver Kit 10 
+  * VMware 12 with EPT environment. 
+  * Supports Multi-core processor environment
+  * Test environment with Windows 7 x64 sp1 to Windows 10 x64 build 16299 RS3
+  * It onlys support restricted guest (protected - paging mode) for the present
 
 # Description
 The kHypervisor is not yet completed, and it will be rapidly update on progress, please using a windbg+vmware 12 for debugging kHypervisor.  
 
 # Progress
-2016-10-19 :  First commit, Supporting nested itself only, and nested software breakpoint exception from Level 2. And the nested-Vmm is able to dispatch this exception to L1 and help L1 to resume to L2.
+`2016-10-19` :  First commit, Supporting nested itself only, and nested software breakpoint exception from Level 2. And the nested-Vmm is able to dispatch this exception to L1 and help L1 to resume to L2.
 
 2016-10-21 : Fixed Ring-3 vm-exit emulation error. 
 

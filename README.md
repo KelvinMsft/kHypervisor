@@ -22,27 +22,27 @@ kHypervisor provide an light-weighted virtulized environment for debugging prote
 The kHypervisor is not yet completed, and it will be rapidly update on progress, please using a windbg+vmware 12 for debugging kHypervisor.  
 
 # Progress
-`2016-10-19` :  First commit, Supporting nested itself only, and nested software breakpoint exception from Level 2. And the nested-Vmm is able to dispatch this exception to L1 and help L1 to resume to L2.
+`2016-10-19`  First commit, Supporting nested itself only, and nested software breakpoint exception from Level 2. And the nested-Vmm is able to dispatch this exception to L1 and help L1 to resume to L2.
 
-`2016-10-21` : Fixed Ring-3 vm-exit emulation error. 
+`2016-10-21`  Fixed Ring-3 vm-exit emulation error. 
 
-`2017-01-03` : Reconstruct project, and Finding VMCS12 through VMCS02 by executing vmptrst 
+`2017-01-03`  Reconstruct project, and Finding VMCS12 through VMCS02 by executing vmptrst 
 
 `2017-01-22` : GS Kernel base MSR bug fixed when Emulation VMRESUME/VMLAUNCH 
 
-`2017-02-05` : VPID shared between VMCS0-1 and VMCS0-2, support multi-processor.
+`2017-02-05`  VPID shared between VMCS0-1 and VMCS0-2, support multi-processor.
 
-`2017-02-08 `: Emulate VMExit behaviour has been slightly Changed. in case of L2 is trapped by L0, and L0 emulate VMExit to L1, this time of VMRESUME will not be restore a Guest CR8 and Guest IRQL, it is until VMRESUME by L1. (L0 helps L1 resume to L2) 
+`2017-02-08 ` Emulate VMExit behaviour has been slightly Changed. in case of L2 is trapped by L0, and L0 emulate VMExit to L1, this time of VMRESUME will not be restore a Guest CR8 and Guest IRQL, it is until VMRESUME by L1. (L0 helps L1 resume to L2) 
 
-`2017-05-28` : Fixed Nested-CPUID problem, and add Nested-VMCALL.
+`2017-05-28`  Fixed Nested-CPUID problem, and add Nested-VMCALL.
 
-`2017-06-07` : Fixed a VMExit buggy , clear the guest eflags, and reserved bit[1] == 1 
+`2017-06-07`  Fixed a VMExit buggy , clear the guest eflags, and reserved bit[1] == 1 
 
-`2017-06-08`: Adding a support for Monitor Trap Flags from L2 and perform Nested VMExit
+`2017-06-08`  Adding a support for Monitor Trap Flags from L2 and perform Nested VMExit
 
-`2017-11-21`: Added VM-Entry Check Emulation , Bug Fixed
+`2017-11-21`  Added VM-Entry Check Emulation , Bug Fixed
 
-`2018-01-19`: Added Nest-Msr Access support , plus, a better coding style changes. Add Test in Windows x64 build 16299 RS3.Release  
+`2018-01-19`  Added Nest-Msr Access support , plus, a better coding style changes. Add Test in Windows x64 build 16299 RS3.Release  
 
 # Installation
 

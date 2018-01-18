@@ -60,7 +60,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
    
          `sc create hostvmm type= kernel binPath= C:\kHypervisor.sys`
          
-         `sc create nestedvmm type= kernel binPath= C:\Ddimon.sys`
+         `sc create nestedvmm type= kernel binPath= C:\Ddimon.sys`
          
    * start a service as following screen capture with its expected output : 
 

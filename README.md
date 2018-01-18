@@ -46,22 +46,23 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
 
 # Installation
 
- - kHypervisor extended HyperPlatform which is created by Tandasat, it is a Nested-Virtual Machine Monitor, and DdiMon is one of Tandasat's product of HyperPlatform for test demo in kHypervisor.
+ * kHypervisor extended HyperPlatform which is created by Tandasat, it is a Nested-Virtual Machine Monitor, and DdiMon is one of Tandasat's product of HyperPlatform for test demo in kHypervisor.
 
- 1. Compiled kHypervisor.sys and DdiMon.sys by kHypervisor and NestedHypervisor respectively
+   *  Compiled kHypervisor.sys and DdiMon.sys by kHypervisor and NestedHypervisor respectively
 
- 2. We supports a multi-core environment 
+   *  We supports a multi-core environment 
 
- 3. Enable Testsigning on x64:
-   > bcdedit /set testsigning on 
+   *  Enable Testsigning on x64:
    
- 4. Install DdiMon.sys and kHypervisor.sys by following command:  
+         `bcdedit /set testsigning on` 
    
-   > sc create hostvmm type= kernel binPath= C:\kHypervisor.sys 
+   * Install DdiMon.sys and kHypervisor.sys by following command:  
+   
+         `sc create hostvmm type= kernel binPath= C:\kHypervisor.sys `
   
-   > sc create nestedvmm type= kernel binPath= C:\Ddimon.sys
+         `sc create nestedvmm type= kernel binPath= C:\Ddimon.sys`
 
- 5. start a service as following screen capture with its expected output : 
+   * start a service as following screen capture with its expected output : 
 
  <img src="https://cloud.githubusercontent.com/assets/22551808/21606548/47069716-d1eb-11e6-9620-4c7262aad172.png" width="50%" height="50%"> </img>
 

@@ -28,7 +28,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
 
 `2017-01-03`  Reconstruct project, and Finding VMCS12 through VMCS02 by executing vmptrst 
 
-`2017-01-22` : GS Kernel base MSR bug fixed when Emulation VMRESUME/VMLAUNCH 
+`2017-01-22`  GS Kernel base MSR bug fixed when Emulation VMRESUME/VMLAUNCH 
 
 `2017-02-05`  VPID shared between VMCS0-1 and VMCS0-2, support multi-processor.
 

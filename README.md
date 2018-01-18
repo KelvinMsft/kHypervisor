@@ -42,6 +42,8 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
 
 2017-11-21 : Added VM-Entry Check Emulation , Bug Fixed
 
+2018-01-19 : Added Nest-Msr Access support , plus, a better coding style changes.
+
 # Installation
 
  - kHypervisor extended HyperPlatform which is created by Tandasat, it is a Nested-Virtual Machine Monitor, and DdiMon is one of Tandasat's product of HyperPlatform for test demo in kHypervisor.

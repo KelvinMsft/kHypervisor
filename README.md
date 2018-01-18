@@ -15,7 +15,7 @@ kHypervisor provide an light-weighted virtulized environment for debugging prote
 - Windowr Driver Kit 10 
 - VMware 12 with EPT environment. 
 - Supports Multi-core processor environment
-- Test environment with Windows 7 x64 sp1
+- Test environment with Windows 7 x64 sp1 to Windows 10 x64 build 16299 RS3
 - It onlys support restricted guest (protected - paging mode) for the present
 
 # Description

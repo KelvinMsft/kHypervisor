@@ -42,7 +42,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
 
 2017-11-21 : Added VM-Entry Check Emulation , Bug Fixed
 
-2018-01-19 : Added Nest-Msr Access support , plus, a better coding style changes.
+2018-01-19 : Added Nest-Msr Access support , plus, a better coding style changes. Add Test in Windows x64 build 16299 RS3.Release  
 
 # Installation
 

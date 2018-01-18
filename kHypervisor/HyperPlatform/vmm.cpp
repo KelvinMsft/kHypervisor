@@ -436,6 +436,26 @@ extern "C" {
 		return SecondaryCtrl;
 	}
 	//-----------------------------------------------------------------------------------------------------------------------//
+	_Use_decl_annotations_ PUCHAR GetMsrBitmap(
+		_In_	GuestContext* guest_context
+	)
+	{
+		ULONG_PTR vmcs12_va = 0;
+		ULONG64 msr_bitmap = 0;
+		
+		if (!guest_context)
+		{
+			return NULL;
+		}
+		vmcs12_va = GetCurrentVmcs12(guest_context);
+		if (!vmcs12_va)
+		{
+			return NULL;
+		}
+		VmRead64(VmcsField::kMsrBitmap, vmcs12_va, &msr_bitmap);
+		return (PUCHAR)msr_bitmap;
+	}
+	//-----------------------------------------------------------------------------------------------------------------------//
 	_Use_decl_annotations_ VmxProcessorBasedControls GetCpuBasedVmexitCtrlForLevel1(
 		_In_	GuestContext* guest_context
 	)
@@ -483,6 +503,38 @@ extern "C" {
 	)
 	{
 		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context); 
+	}
+	//-----------------------------------------------------------------------------------------------------------------------//
+	_Use_decl_annotations_ static NTSTATUS VmmpHandleRdmsrForL2(
+		_In_ GuestContext *guest_context
+	)
+	{
+		VmxProcessorBasedControls ctrl = GetCpuBasedVmexitCtrlForLevel1(guest_context);
+		RTL_BITMAP bitmap = { 0 };
+		PUCHAR msr_bitmap = (PUCHAR)UtilVaFromPa((ULONG64)GetMsrBitmap(guest_context));
+
+		BOOLEAN IsExit = FALSE;
+		ULONG Index = guest_context->gp_regs->cx;
+
+		if (!ctrl.fields.use_msr_bitmaps)
+		{
+			return STATUS_UNSUCCESSFUL;
+		}
+		
+		if (Index >= 0xC0000000 && Index <= 0xC0001FFF)
+		{
+			msr_bitmap += 1024;
+			Index = Index & 0x1FFF;
+		}
+		
+		ULONG TestIndex	   = Index / 8;
+		ULONG TestIndexBit = Index % 8;
+		if (!(msr_bitmap[TestIndex] & (1 << TestIndexBit)))
+		{
+			return STATUS_UNSUCCESSFUL;
+		}
+
+		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
 	}
 
 	//-----------------------------------------------------------------------------------------------------------------------//
@@ -664,6 +716,7 @@ extern "C" {
 		case VmxExitReason::kIoInstruction:
 			break;
 		case VmxExitReason::kMsrRead:
+			IsHandled = VmmpHandleRdmsrForL2(guest_context);
 			break;
 		case VmxExitReason::kMsrWrite:
 			break;
@@ -733,41 +786,43 @@ extern "C" {
 		
 		IsEmulateVMExit = FALSE;
 	 
-		//after vmxon emulation
-		if (GetvCpuMode(guest_context) == VmxMode)
-		{
+		do
+		{ 
+			//after vmxon emulation
+			if (GetvCpuMode(guest_context) != VmxMode)
+			{
+				//...
+				VmmpHandleVmExitForL1(guest_context);
+				break;
+			}
+
 			//after vmptrld emulation
 			//after vmlaunch / vmresume emulation		
 			ULONG64 vmcs_pa = 0;
 			VCPUVMX* vCPU = GetVcpuVmx(guest_context);
-
-			__vmx_vmptrst(&vmcs_pa);
 			
-			if (GetVmxMode(vCPU) == GuestMode)	 //L2 - OS
+			__vmx_vmptrst(&vmcs_pa);
+
+			if (GetVmxMode(vCPU) != GuestMode)	 //L2 - OS
 			{
-				if (vCPU->vmcs02_pa == vmcs_pa)
-				{
-					if (!NT_SUCCESS(VmmpHandleVmExitForL2(guest_context)))
-					{
-						VmmpHandleVmExitForL1(guest_context);
-					}
-				}
-				else
-				{
-					HYPERPLATFORM_LOG_DEBUG("Is there possible?? ");
-					VmmpHandleVmExitForL1(guest_context); 
-				}
-			}
-			else     //L1 - VMM
-			{		
 				//HYPERPLATFORM_LOG_DEBUG("#1 Almost impossible come here Mode: %x vmcs02_pa: %I64x vmcs_pa: %I64x ", GetVmxMode(vCPU), vCPU->vmcs02_pa, vmcs_pa);
 				VmmpHandleVmExitForL1(guest_context);
+				break;
 			}
-		}
-		else
-		{
-			VmmpHandleVmExitForL1( guest_context);
-		}
+
+			if (vCPU->vmcs02_pa != vmcs_pa)
+			{
+				HYPERPLATFORM_LOG_DEBUG("Is there possible?? ");
+				VmmpHandleVmExitForL1(guest_context);
+				break;
+			}
+
+			if (!NT_SUCCESS(VmmpHandleVmExitForL2(guest_context)))
+			{
+				VmmpHandleVmExitForL1(guest_context);
+			}
+
+		} while (FALSE);
 	}
 	//---------------------------------------------------------------------------------------------------------------------//
 

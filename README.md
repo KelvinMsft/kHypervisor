@@ -7,7 +7,7 @@ kHypervisor provide an light-weighted virtulized environment for debugging prote
 - VM Entry Emulation , with VMCS state check which is a good solution for debugging VMEntry fail, and locate the actual failure location.
 - VM Exit  Emulation 
 - Nested VM Exit Event
-- The code is simple and minize as a nested vmm.
+- The code is simple and minimize as a nested vmm.
 
 # Environment
   * Visual Studio 2015 update 3 

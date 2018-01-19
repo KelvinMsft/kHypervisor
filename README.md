@@ -73,7 +73,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
 # Expected Output
  kHypervisor can be tested by kernel/user mode with Multi-Core Processor Configuration 
  
-# Kenrel mode Test: 
+# Kenrel mode Test
  
  1. During the installion we could able to see a result, since we set a breakpoint as soon as the DdiMon's virtualization. </br>
  <img src="https://cloud.githubusercontent.com/assets/22551808/21608786/796ca796-d1f9-11e6-98c7-853933c7447b.png" width="50%" height="50%"> </img>
@@ -83,7 +83,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
   <img src="https://cloud.githubusercontent.com/assets/22551808/21608895/50274d54-d1fa-11e6-84a2-fddd41b5d2b5.png" width="50%" height="50%"> </img>
  4. After the DdiMon catch up the control flow, it will normally execute a <b>VMRESUME</b>, since he didn't know anythings, and feel it is normal trap only :) </br>
 
-# User Mode Test:  
+# User Mode Test 
   
   Any everybreakpoint in the system will be work as follow:
 

@@ -63,9 +63,13 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
          `sc create nestedvmm type= kernel binPath= C:\Ddimon.sys`
          
    * start a service as following screen capture with its expected output : 
+ 
+   `<img src="https://cloud.githubusercontent.com/assets/22551808/21606548/47069716-d1eb-11e6-9620-4c7262aad172.png" width="50%" height="50%"> </img>`
 
-  <img src="https://cloud.githubusercontent.com/assets/22551808/21606548/47069716-d1eb-11e6-9620-4c7262aad172.png" width="50%" height="50%"> </img>
-
+   <img src="https://user-images.githubusercontent.com/22551808/35140833-a7896dec-fd33-11e7-9c96-179e7cbd73fd.png" width="50%" height="50%"> </img>
+      
+   <img src="https://user-images.githubusercontent.com/22551808/35140835-a7b8d186-fd33-11e7-8c3d-583eba6bd9a0.png" width="50%" height="50%"> </img>
+      
 # Expected Output
  kHypervisor can be tested by kernel/user mode with Multi-Core Processor Configuration 
  

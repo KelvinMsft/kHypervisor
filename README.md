@@ -10,56 +10,59 @@ kHypervisor provide an light-weighted virtulized environment for debugging prote
 - The code is simple and minize as a nested vmm.
 
 # Environment
-- Visual Studio 2015 update 3 
-- Windows SDK 10
-- Windowr Driver Kit 10 
-- VMware 12 with EPT environment. 
-- Supports Multi-core processor environment
-- Test environment with Windows 7 x64 sp1
-- It onlys support restricted guest (protected - paging mode) for the present
+  * Visual Studio 2015 update 3 
+  * Windows SDK 10
+  * Windowr Driver Kit 10 
+  * VMware 12 with EPT environment. 
+  * Supports Multi-core processor environment
+  * Test environment with Windows 7 x64 sp1 to Windows 10 x64 build 16299 RS3
+  * It onlys support restricted guest (protected - paging mode) for the present
 
 # Description
 The kHypervisor is not yet completed, and it will be rapidly update on progress, please using a windbg+vmware 12 for debugging kHypervisor.  
 
 # Progress
-2016-10-19 :  First commit, Supporting nested itself only, and nested software breakpoint exception from Level 2. And the nested-Vmm is able to dispatch this exception to L1 and help L1 to resume to L2.
+`2016-10-19`  First commit, Supporting nested itself only, and nested software breakpoint exception from Level 2. And the nested-Vmm is able to dispatch this exception to L1 and help L1 to resume to L2.
 
-2016-10-21 : Fixed Ring-3 vm-exit emulation error. 
+`2016-10-21`  Fixed Ring-3 vm-exit emulation error. 
 
-2017-01-03 : Reconstruct project, and Finding VMCS12 through VMCS02 by executing vmptrst 
+`2017-01-03`  Reconstruct project, and Finding VMCS12 through VMCS02 by executing vmptrst 
 
-2017-01-22 : GS Kernel base MSR bug fixed when Emulation VMRESUME/VMLAUNCH 
+`2017-01-22`  GS Kernel base MSR bug fixed when Emulation VMRESUME/VMLAUNCH 
 
-2017-02-05 : VPID shared between VMCS0-1 and VMCS0-2, support multi-processor.
+`2017-02-05`  VPID shared between VMCS0-1 and VMCS0-2, support multi-processor.
 
-2017-02-08 : Emulate VMExit behaviour has been slightly Changed. in case of L2 is trapped by L0, and L0 emulate VMExit to L1, this time of VMRESUME will not be restore a Guest CR8 and Guest IRQL, it is until VMRESUME by L1. (L0 helps L1 resume to L2) 
+`2017-02-08 ` Emulate VMExit behaviour has been slightly Changed. in case of L2 is trapped by L0, and L0 emulate VMExit to L1, this time of VMRESUME will not be restore a Guest CR8 and Guest IRQL, it is until VMRESUME by L1. (L0 helps L1 resume to L2) 
 
-2017-05-28 : Fixed Nested-CPUID problem, and add Nested-VMCALL.
+`2017-05-28`  Fixed Nested-CPUID problem, and add Nested-VMCALL.
 
-2017-06-07 : Fixed a VMExit buggy , clear the guest eflags, and reserved bit[1] == 1 
+`2017-06-07`  Fixed a VMExit buggy , clear the guest eflags, and reserved bit[1] == 1 
 
-2017-06-08 : Adding a support for Monitor Trap Flags from L2 and perform Nested VMExit
+`2017-06-08`  Adding a support for Monitor Trap Flags from L2 and perform Nested VMExit
 
-2017-11-21 : Added VM-Entry Check Emulation , Bug Fixed
+`2017-11-21`  Added VM-Entry Check Emulation , Bug Fixed
+
+`2018-01-19`  Added Nest-Msr Access support , plus, a better coding style changes. Add Test in Windows x64 build 16299 RS3.Release  
 
 # Installation
 
- - kHypervisor extended HyperPlatform which is created by Tandasat, it is a Nested-Virtual Machine Monitor, and DdiMon is one of Tandasat's product of HyperPlatform for test demo in kHypervisor.
+ * kHypervisor extended HyperPlatform which is created by Tandasat, it is a Nested-Virtual Machine Monitor, and DdiMon is one of Tandasat's product of HyperPlatform for test demo in kHypervisor.
 
- 1. Compiled kHypervisor.sys and DdiMon.sys by kHypervisor and NestedHypervisor respectively
+   *  Compiled kHypervisor.sys and DdiMon.sys by kHypervisor and NestedHypervisor respectively
 
- 2. We supports a multi-core environment 
+   *  We supports a multi-core environment 
 
- 3. Enable Testsigning on x64:
-   > bcdedit /set testsigning on 
+   *  Enable Testsigning on x64:
    
- 4. Install DdiMon.sys and kHypervisor.sys by following command:  
+         `bcdedit /set testsigning on` 
    
-   > sc create hostvmm type= kernel binPath= C:\kHypervisor.sys 
-  
-   > sc create nestedvmm type= kernel binPath= C:\Ddimon.sys
-
- 5. start a service as following screen capture with its expected output : 
+   *  Install DdiMon.sys and kHypervisor.sys by following command:
+   
+         `sc create hostvmm type= kernel binPath= C:\kHypervisor.sys`
+         
+         `sc create nestedvmm type= kernel binPath= C:\Ddimon.sys`
+         
+   * start a service as following screen capture with its expected output : 
 
  <img src="https://cloud.githubusercontent.com/assets/22551808/21606548/47069716-d1eb-11e6-9620-4c7262aad172.png" width="50%" height="50%"> </img>
 
@@ -92,7 +95,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
  <img src="https://cloud.githubusercontent.com/assets/22551808/21672420/6d7935e8-d35d-11e6-989c-4afb97f65047.png" width="70%" height="70%"/>
 </img></br>
  
- # Turning of L1 VMM By VMCALL
+ # Turning off L1 VMM By VMCALL
   <img src="https://user-images.githubusercontent.com/22551808/33070774-1c3ffde0-cef4-11e7-93cc-2316ef1f9aff.jpg" width="50%" height="50%"> </img>
   
   

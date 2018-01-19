@@ -62,7 +62,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
          
          `sc create nestedvmm type= kernel binPath= C:\Ddimon.sys`
          
-   * start a service as following screen capture with its expected output : 
+   * start a service as following screen capture with its expected output
  
  # Windows 10 x64 build 16299 RS3 Release Testing Demo 
 

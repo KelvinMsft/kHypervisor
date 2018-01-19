@@ -75,7 +75,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
  
 # Kenrel mode Test
  
- 1. During the installion we could able to see a result, since we set a breakpoint as soon as the DdiMon's virtualization. </br>
+ ## 1. During the installion we could able to see a result, since we set a breakpoint as soon as the DdiMon's virtualization. </br>
  <img src="https://cloud.githubusercontent.com/assets/22551808/21608786/796ca796-d1f9-11e6-98c7-853933c7447b.png" width="50%" height="50%"> </img>
  2. We can see the windbg as following result, after the DdiMon execute a breakpoint, kHypervisor will first capture the breakpoint : </br>
   <img src="https://cloud.githubusercontent.com/assets/22551808/21608841/ce0d11aa-d1f9-11e6-8014-db882836c751.png" width="50%" height="50%"> </img>
@@ -109,7 +109,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
  - APIC virtualization
  - Unrestricted guest support (vbox) , such as virtual 8086 mode.
  
-# Related Project
+# Related Project(s)
  https://github.com/tandasat/HyperPlatform </br>
  https://github.com/tandasat/ddimon</br>
  

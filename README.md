@@ -64,7 +64,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
          
    * start a service as following screen capture with its expected output : 
  
- # Windows 7 / 10 Testing Demo
+ # Windows 10 x64 build 16299 RS3 Release Testing Demo
  
    <img src="https://cloud.githubusercontent.com/assets/22551808/21606548/47069716-d1eb-11e6-9620-4c7262aad172.png" width="70%" height="70%"> </img>
 

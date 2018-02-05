@@ -69,7 +69,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
  # Windows 7 Nesting EPT Test demo :
    <img src="https://user-images.githubusercontent.com/22551808/35795193-5a015202-0a93-11e8-919f-73ab471e1f8c.png" width="70%" height="70%"> </img>
    
- # Windows 10 x64 build 16299 RS3 Release Testing Demo (with Nesting EPT) :
+ # Windows 10 x64 build 16299 RS3 Test Demo (with Nesting EPT) :
 
    <img src="https://user-images.githubusercontent.com/22551808/35140833-a7896dec-fd33-11e7-9c96-179e7cbd73fd.png" width="70%" height="70%"> </img>
       

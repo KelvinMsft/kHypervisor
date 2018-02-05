@@ -65,20 +65,16 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
          `sc create nestedvmm type= kernel binPath= C:\Ddimon.sys`
          
    * start a service as following screen capture with its expected output
- 
- # Windows 10 x64 build 16299 RS3 Release Testing Demo 
-
-   <img src="https://user-images.githubusercontent.com/22551808/35140833-a7896dec-fd33-11e7-9c96-179e7cbd73fd.png" width="70%" height="70%"> </img>
-      
-   <img src="https://user-images.githubusercontent.com/22551808/35140835-a7b8d186-fd33-11e7-8c3d-583eba6bd9a0.png" width="70%" height="70%"> </img>
    
  # Windows 7 Nesting EPT Test demo :
    <img src="https://user-images.githubusercontent.com/22551808/35795193-5a015202-0a93-11e8-919f-73ab471e1f8c.png" width="70%" height="70%"> </img>
    
- # Windows 10 Nesting EPT Test demo (still not passed through the stress test) :
-   <img src="https://user-images.githubusercontent.com/22551808/35816514-df8a7f60-0ad5-11e8-8e48-577372a75872.png" width="70%" height="70%"> </img>
-   
-   <img src="https://user-images.githubusercontent.com/22551808/35816783-94e36e3a-0ad6-11e8-962f-1eda46a60f0a.png" width="70%" height="70%"> </img>
+ # Windows 10 x64 build 16299 RS3 Release Testing Demo (with Nesting EPT) :
+
+   <img src="https://user-images.githubusercontent.com/22551808/35140833-a7896dec-fd33-11e7-9c96-179e7cbd73fd.png" width="70%" height="70%"> </img>
+      
+   <img src="https://user-images.githubusercontent.com/22551808/35140835-a7b8d186-fd33-11e7-8c3d-583eba6bd9a0.png" width="70%" height="70%"> </img> 
+  
  
       
 # Expected Output

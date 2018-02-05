@@ -100,6 +100,8 @@ extern "C" {
 	DECLSPEC_NORETURN static void VmmpHandleUnexpectedExit(
 		_Inout_ GuestContext *guest_context);
 
+	static void VmmpHandleHlt(GuestContext* guest_context);
+ 
 	static void VmmpHandleMonitorTrap(_Inout_ GuestContext *guest_context);
 
 	static void VmmpHandleException(_Inout_ GuestContext *guest_context);
@@ -250,6 +252,27 @@ extern "C" {
 	}
 
 	//----------------------------------------------------------------------------------------------------------------//
+	_Use_decl_annotations_ EptData* GetCurrentEpt02Pointer(GuestContext* guest_context)
+	{
+		return guest_context->stack->processor_data->EptDat02;
+	}
+	//----------------------------------------------------------------------------------------------------------------//
+	_Use_decl_annotations_ void SaveCurrentEpt02Pointer(GuestContext* guest_context, EptData* Ept02)
+	{
+		guest_context->stack->processor_data->EptDat02 = Ept02;
+	}
+
+	//----------------------------------------------------------------------------------------------------------------//
+	_Use_decl_annotations_ EptData* GetCurrentEpt12Pointer(GuestContext* guest_context)
+	{
+		return guest_context->stack->processor_data->EptDat12;
+	}
+	//----------------------------------------------------------------------------------------------------------------//
+	_Use_decl_annotations_ void SaveCurrentEpt12Pointer(GuestContext* guest_context, EptData* Ept12)
+	{
+		guest_context->stack->processor_data->EptDat12 = Ept12;
+	}
+	//----------------------------------------------------------------------------------------------------------------//
 
 	// A high level VMX handler called from AsmVmExitHandler().
 	// Return true for vmresume, or return false for vmxoff.
@@ -292,7 +315,7 @@ extern "C" {
 		}
 
 		// Restore guest's context
-		if (guest_context.irql < DISPATCH_LEVEL && !IsEmulateVMExit)
+		if (guest_context.irql < DISPATCH_LEVEL)
 		{
 			KeLowerIrql(guest_context.irql);
 		}
@@ -312,6 +335,9 @@ extern "C" {
 
 		switch (exit_reason.fields.reason)
 		{
+		case VmxExitReason::kHlt:
+			VmmpHandleHlt(guest_context);
+			break;
 		case VmxExitReason::kExceptionOrNmi:
 			VmmpHandleException(guest_context);
 			break;
@@ -375,6 +401,7 @@ extern "C" {
 		case VmxExitReason::kVmwrite:
 		case VmxExitReason::kVmoff:
 		case VmxExitReason::kVmon:
+		case VmxExitReason::kInvept:
 			VmmpHandleVmx(guest_context);
 			break;
 		case VmxExitReason::kRdtscp:
@@ -490,8 +517,8 @@ extern "C" {
 		VmRead32(VmcsField::kExceptionBitmap, vmcs12_va, &ExceptionBitmap); 
 		if (ExceptionBitmap & (1 << exception.fields.vector))
 		{
-			HYPERPLATFORM_COMMON_DBG_BREAK(); 
-			HYPERPLATFORM_LOG_DEBUG_SAFE("Exception vector: %x", exception.fields.vector);
+			//HYPERPLATFORM_COMMON_DBG_BREAK(); 
+			HYPERPLATFORM_LOG_DEBUG("Exception vector: %x Rip: %p ", exception.fields.vector, UtilVmRead64(VmcsField::kGuestRip));
 			status =  VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
 		}
 		return status;
@@ -502,6 +529,7 @@ extern "C" {
 		_In_ GuestContext *guest_context
 	)
 	{
+		UNREFERENCED_PARAMETER(exit_reason);
 		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context); 
 	}
 	//-----------------------------------------------------------------------------------------------------------------------//
@@ -693,7 +721,8 @@ extern "C" {
 			return STATUS_UNSUCCESSFUL;
 		}
 		HYPERPLATFORM_LOG_DEBUG_SAFE("MontiorTrapFlag VMExit to L1");
-		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+		//return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+		return STATUS_UNSUCCESSFUL;;
 	}
 	 
 	//-----------------------------------------------------------------------------------------------------------------------//
@@ -709,7 +738,85 @@ extern "C" {
 		HYPERPLATFORM_LOG_DEBUG_SAFE("DescriptorTableAccess VMExit to L1"); 
 		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
 	}
-	  
+	//-----------------------------------------------------------------------------------------------------------------------//
+	_Use_decl_annotations_ static NTSTATUS VmmpHandleEptViolationForL2(
+		_In_ GuestContext *guest_context
+	)
+	{
+		/*
+		  		-------------------
+		   	  |
+		   L2 |   nGVa			
+		  		-------------------
+		  	  | 
+		  	  |   nGPa			   -----										-----
+		  		-------------------		|											|
+		      |							|		    								|
+		   L1 |   GPA			<-------	EPT1-2 PML4 -> PDPTR -> PDE -> PTE		|
+		  		-------------------		|											|  EPT0-2 PML4 -> PDPTR -> PDE ->PTE 
+		  	  |							|	EPT0-1 PML4 -> PDPTR -> PDE -> PTE		|
+		   L0 |	  HPA			<-------	<---------------------------------------										
+		  		-------------------	
+		*/
+		const EptViolationQualification exit_qualification = {
+			UtilVmRead(VmcsField::kExitQualification) };
+				
+		//Translate L2 nGPA to L1 GPA
+		EptCommonEntry *Ept12Pte = EptGetEptPtEntry(guest_context->stack->processor_data->EptDat12, UtilVmRead64(VmcsField::kGuestPhysicalAddress));
+		if (!Ept12Pte || !Ept12Pte->all)
+		{
+			HYPERPLATFORM_LOG_DEBUG("Nested Guest Translate GPA: %p to by EPTPTE Error (pte: %p)", UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept12Pte);
+			HYPERPLATFORM_COMMON_DBG_BREAK();
+			return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+		}
+
+		HYPERPLATFORM_LOG_DEBUG("Translating L2  GuestRip: %p Qualification: %I64x nGVA: %p nGPA: %p to GPA: %p", UtilVmRead64(VmcsField::kGuestRip), exit_qualification.all, UtilVmRead64(VmcsField::kGuestLinearAddress), UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept12Pte->fields.physial_address);
+
+		//Translate L1 GPA to HPA 
+		EptCommonEntry *Ept01Entry = EptGetEptPtEntry(guest_context->stack->processor_data->ept_data, UtilPaFromPfn(Ept12Pte->fields.physial_address));
+		if (!Ept01Entry || !Ept01Entry->all)
+		{
+			EptHandleEptViolation(guest_context->stack->processor_data->ept_data);
+			HYPERPLATFORM_LOG_DEBUG("case 4 l1 GPA: %p to entry2: %p", UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept01Entry);
+			HYPERPLATFORM_COMMON_DBG_BREAK(); 
+		}
+
+		Ept01Entry = EptGetEptPtEntry(guest_context->stack->processor_data->ept_data, UtilPaFromPfn(Ept12Pte->fields.physial_address));
+	
+		HYPERPLATFORM_LOG_DEBUG("Translting L1 GPA: %p to HPA: %p", UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept01Entry->fields.physial_address);
+
+		EptCommonEntry* Ept02Pte = EptGetEptPtEntry(guest_context->stack->processor_data->EptDat02, UtilVmRead64(VmcsField::kGuestPhysicalAddress));
+		if (!exit_qualification.fields.ept_readable &&
+			!exit_qualification.fields.ept_writeable &&
+			!exit_qualification.fields.ept_executable)
+		{
+			if (!Ept02Pte || !Ept02Pte->all)
+			{
+				//Constructing by nGPA to HPA , EPT0-2 we used it for normal run.
+				Ept02Pte = EptpConstructTablesEx(guest_context->stack->processor_data->EptDat02->ept_pml4, 4, 
+					UtilVmRead64(VmcsField::kGuestPhysicalAddress), nullptr, 
+					guest_context->stack->processor_data->ept_data->ept_pml4
+				);
+			
+				HYPERPLATFORM_LOG_DEBUG("We are building new mapping with EPT0-2 : %p ", Ept02Pte->all);
+				UtilVmWrite64(VmcsField::kEptPointer, guest_context->stack->processor_data->EptDat02->ept_pointer->all);
+				UtilInveptGlobal();
+				HYPERPLATFORM_LOG_DEBUG("We are using EPT0-2 Currently !!!"); 
+				return STATUS_SUCCESS;
+			} 
+		}
+		
+		return STATUS_SUCCESS;
+	}
+	//-----------------------------------------------------------------------------------------------------------------------//
+	_Use_decl_annotations_ static NTSTATUS VmmpHandleEptMisconfigForL2(
+		_In_ GuestContext *guest_context
+	)
+	{
+		HYPERPLATFORM_COMMON_DBG_BREAK();
+		HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 2, 3, 5);
+		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+	}
 	//-----------------------------------------------------------------------------------------------------------------------//
 	_Use_decl_annotations_ static NTSTATUS VmmpHandleVmExitForL2(
 		_In_ GuestContext *guest_context
@@ -747,7 +854,7 @@ extern "C" {
 			break;
 		case VmxExitReason::kMsrWrite:
 			IsHandled = VmmpHandleWrmsrForL2(guest_context);
-			break;
+				break;
 		case VmxExitReason::kMonitorTrapFlag:
 			IsHandled = VmmpHandlerMontiorTrapFlagForL2(guest_context);
 			break;
@@ -756,9 +863,10 @@ extern "C" {
 			//IsHandled = VmmpHandleDescriptorTableAccessForL2(guest_context);
 			break; 
 		case VmxExitReason::kEptViolation:
-			
+			IsHandled = VmmpHandleEptViolationForL2(guest_context);
 			break;
 		case VmxExitReason::kEptMisconfig:
+			IsHandled = VmmpHandleEptMisconfigForL2(guest_context);
 			break;
 		case VmxExitReason::kVmcall:
 		{	
@@ -790,17 +898,17 @@ extern "C" {
 	// Dispatches VM-exit to a corresponding handler
 	_Use_decl_annotations_ static void VmmpHandleVmExit(GuestContext *guest_context)
 	{
-		HYPERPLATFORM_PERFORMANCE_MEASURE_THIS_SCOPE(); 
- 
+		HYPERPLATFORM_PERFORMANCE_MEASURE_THIS_SCOPE();
+
 		if (kVmmpEnableRecordVmExit)
 		{
 			const VmExitInformation exit_reason = { static_cast<ULONG32>(UtilVmRead(VmcsField::kVmExitReason)) };
-			
+
 			// Save them for ease of trouble shooting
 			const auto processor = KeGetCurrentProcessorNumberEx(nullptr);
 			auto &index = g_vmmp_next_history_index[processor];
-			auto &history = g_vmmp_vm_exit_history[processor][index]; 
-		 
+			auto &history = g_vmmp_vm_exit_history[processor][index];
+
 			history.ip = guest_context->ip;
 			history.exit_reason = exit_reason;
 			history.exit_qualification = UtilVmRead(VmcsField::kExitQualification);
@@ -811,11 +919,11 @@ extern "C" {
 				index = 0;
 			}
 		}
-		
+
 		IsEmulateVMExit = FALSE;
-	 
+
 		do
-		{ 
+		{
 			//after vmxon emulation
 			if (GetvCpuMode(guest_context) != VmxMode)
 			{
@@ -828,7 +936,7 @@ extern "C" {
 			//after vmlaunch / vmresume emulation		
 			ULONG64 vmcs_pa = 0;
 			VCPUVMX* vCPU = GetVcpuVmx(guest_context);
-			
+
 			__vmx_vmptrst(&vmcs_pa);
 
 			if (GetVmxMode(vCPU) != GuestMode)	 //L2 - OS
@@ -874,14 +982,35 @@ extern "C" {
 			reinterpret_cast<ULONG_PTR>(guest_context), UtilVmRead(VmcsField::kVmExitReason),
 			UtilVmRead(VmcsField::kVmInstructionError));
 	}
-
+	extern ULONG_PTR EptRip;
+	_Use_decl_annotations_  void ShpSetMonitorTrapFlag(bool enable);
 	// MTF VM-exit
 	_Use_decl_annotations_ static void VmmpHandleMonitorTrap(GuestContext *guest_context)
 	{
 		UNREFERENCED_PARAMETER(guest_context);
+		
+		HYPERPLATFORM_LOG_DEBUG("Rip: %p  Rsp: %p cr3: %p gs: %p gs2: %p", UtilVmRead64(VmcsField::kGuestRip), UtilVmRead64(VmcsField::kGuestRsp), UtilVmRead64(VmcsField::kGuestCr3), UtilReadMsr(Msr::kIa32GsBase), UtilReadMsr(Msr::kIa32KernelGsBase));
+ 		
+		if (UtilVmRead64(VmcsField::kGuestRip) >= 0xfffff00000000000 && UtilVmRead64(VmcsField::kGuestCr3) == 0x187000)
+		{
+
+			HYPERPLATFORM_LOG_DEBUG("RIP: %p cr3: %p %I64x %I64x Rsp: %p Gs: %p Gs2: %p ", UtilVmRead64(VmcsField::kGuestRip), UtilVmRead64(VmcsField::kGuestCr3),
+				*(PULONG64)UtilVmRead64(VmcsField::kGuestRip), *(PULONG64)(UtilVmRead64(VmcsField::kGuestRip) + 8), UtilVmRead(VmcsField::kGuestRsp),
+				UtilReadMsr(Msr::kIa32GsBase), UtilReadMsr(Msr::kIa32KernelGsBase)
+			);
+			if(*(PULONG64)(UtilVmRead64(VmcsField::kGuestRip)) == 0x18825048b4865 || *(PULONG64)(UtilVmRead64(VmcsField::kGuestRip)) == 0xccccccccccccc3f4)
+			{
+				HYPERPLATFORM_COMMON_DBG_BREAK();
+			}
+		}
+		ShpSetMonitorTrapFlag(false);	
 	}
 
-
+	_Use_decl_annotations_ static void VmmpHandleHlt(GuestContext* guest_context)
+	{
+		//DbgPrintEx(0,0,"halt: %p Rsp: %p \r\n", guest_context->ip, UtilVmRead64(VmcsField::kGuestRsp));
+		VmmpAdjustGuestInstructionPointer(guest_context);
+	}
 	// Interrupt
 	_Use_decl_annotations_ static void VmmpHandleException(
 		GuestContext *guest_context) {
@@ -2143,8 +2272,8 @@ extern "C" {
 		case VmxExitReason::kInvept:
 		default:
 		{
-			VMSucceed(&guest_context->flag_reg);
-			HYPERPLATFORM_LOG_DEBUG_SAFE("NOT SURE VMX \r\n");
+			UtilInveptGlobal();
+			VMSucceed(&guest_context->flag_reg); 
 		}
 		break;
 		}

@@ -8,7 +8,7 @@
 #include <fltKernel.h>
 #include "..\HyperPlatform\vmm.h"
 #include "..\HyperPlatform\util.h"
-extern struct GuestContext;
+struct GuestContext;
 extern "C"
 {
 

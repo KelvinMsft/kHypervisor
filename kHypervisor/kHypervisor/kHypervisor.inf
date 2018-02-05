@@ -9,7 +9,10 @@ ClassGuid={78A1C341-4539-11d3-B88D-00C04FAD5171} ; TODO: edit ClassGuid
 Provider=%ManufacturerName%
 CatalogFile=kHypervisor.cat
 DriverVer= ; TODO: set DriverVer in stampinf property pages
- 
+
+[DestinationDirs]
+DefaultDestDir = 12
+
 ; ================= Class section =====================
 
 [ClassInstall32]
@@ -21,9 +24,9 @@ HKR,,Icon,,-5
 
 [SourceDisksNames]
 1 = %DiskName%,,,""
- 
+
 [SourceDisksFiles]
-kHypervisor.sys = 1,,
+kHypervisor.sys  = 1,,
 
 ;*****************************************
 ; Install Section
@@ -57,24 +60,6 @@ ServiceBinary  = %12%\kHypervisor.sys
 ;--- kHypervisor_Device Coinstaller installation ------
 ;
 
-[DestinationDirs]
-kHypervisor_Device_CoInstaller_CopyFiles = 11
-
-[kHypervisor_Device.NT.CoInstallers]
-AddReg=kHypervisor_Device_CoInstaller_AddReg
-CopyFiles=kHypervisor_Device_CoInstaller_CopyFiles
-
-[kHypervisor_Device_CoInstaller_AddReg]
-HKR,,CoInstallers32,0x00010000, "WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll,WdfCoInstaller"
-
-[kHypervisor_Device_CoInstaller_CopyFiles]
-WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll
- 
-
-[kHypervisor_Device.NT.Wdf]
-KmdfService =  kHypervisor, kHypervisor_wdfsect
-[kHypervisor_wdfsect]
-KmdfLibraryVersion = $KMDFVERSION$
 
 [Strings]
 SPSVCINST_ASSOCSERVICE= 0x00000002

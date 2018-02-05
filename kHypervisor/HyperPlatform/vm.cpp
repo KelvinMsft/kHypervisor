@@ -325,7 +325,6 @@ extern "C" {
 		*/
 		return msr_bitmap;
 	}
-
 	// Build IO bitmaps
 	_Use_decl_annotations_ static UCHAR *VmpBuildIoBitmaps() {
 		PAGED_CODE();
@@ -655,6 +654,8 @@ extern "C" {
 		vm_procctl_requested.fields.use_io_bitmaps = true;
 		vm_procctl_requested.fields.use_msr_bitmaps = true;
 		vm_procctl_requested.fields.activate_secondary_control = true;
+		vm_procctl_requested.fields.hlt_exiting = true;
+
 		VmxProcessorBasedControls vm_procctl = {
 			VmpAdjustControlValue((use_true_msrs) ? Msr::kIa32VmxTrueProcBasedCtls
 			: Msr::kIa32VmxProcBasedCtls,
@@ -672,7 +673,7 @@ extern "C" {
 
 		// NOTE: Comment in any of those as needed
 		const auto exception_bitmap =
-			1 << InterruptionVector::kBreakpointException |
+			// 1 << InterruptionVector::kBreakpointException |
 			// 1 << InterruptionVector::kGeneralProtectionException |
 			//  1 << InterruptionVector::kPageFaultException |
 			0;

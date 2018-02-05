@@ -387,7 +387,6 @@ _Use_decl_annotations_ static void VmmpHandleException(GuestContext *guest_conte
 		inject.fields.valid = true;
 		UtilVmWrite(VmcsField::kVmEntryIntrInfoField, inject.all);
 		UtilVmWrite(VmcsField::kVmEntryInstructionLen, 1);
-	  HYPERPLATFORM_LOG_DEBUG_SAFE("L1 GuestIp= %p, #BP ", guest_context->ip);
      }
 	else if (static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kTrapFlags)
 	{
@@ -441,10 +440,9 @@ _Use_decl_annotations_ static void VmmpHandleCpuid(
     guest_context->gp_regs->dx = cpu_info[3];
   }
   
-  HYPERPLATFORM_LOG_DEBUG_SAFE("Nested CPUID Called with id : %x sid: %x !!!!!!!!!!!!!!! \r\n", function_id, sub_function_id);
   VmmpAdjustGuestInstructionPointer(guest_context->ip);
 }
-
+	
 // RDTSC
 _Use_decl_annotations_ static void VmmpHandleRdtsc(
     GuestContext *guest_context) {
@@ -1002,10 +1000,11 @@ _Use_decl_annotations_ static void VmmpHandleEptViolation(
 
   //DbgPrint("EPT Violation Current CR3: 0x%08x Guest CR3: 0x%08x", __readcr3(), UtilVmRead64(VmcsField::kGuestCr3));
   
-  /*EptHandleEptViolation(
+	EptHandleEptViolation(
       processor_data->ept_data, 
-	  processor_data->sh_data,
-      processor_data->shared_data->shared_sh_data);*/
+	  nullptr,
+      processor_data->shared_data->shared_sh_data);
+ 
 }
 
 // EXIT_REASON_EPT_MISCONFIG

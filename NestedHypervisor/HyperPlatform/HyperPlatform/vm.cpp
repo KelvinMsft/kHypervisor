@@ -194,12 +194,11 @@ _Use_decl_annotations_ static bool VmpIsVmxAvailable() {
     HYPERPLATFORM_LOG_ERROR("VMX features are not enabled.");
     return false;
   }
-  /*
-  if (!EptIsEptAvailable()) {
-    HYPERPLATFORM_LOG_ERROR("EPT features are not fully supported.");
-    return false;
-  }
-  */
+  
+ // if (!EptIsEptAvailable()) {
+   // HYPERPLATFORM_LOG_ERROR("EPT features are not fully supported.");
+   // return false;
+  //}
 
   return true;
 }
@@ -333,12 +332,11 @@ _Use_decl_annotations_ static void VmpInitializeVm(ULONG_PTR guest_stack_pointer
   }
   RtlZeroMemory(processor_data, sizeof(ProcessorData));
 
-  /*processor_data->ept_data = EptInitialization();
+  processor_data->ept_data = EptInitialization();
   if (!processor_data->ept_data) 
   {
     goto ReturnFalse;
   }
-   */
   /*
   processor_data->sh_data = ShAllocateShadowHookData();
   if (!processor_data->sh_data) {
@@ -436,17 +434,6 @@ ReturnFalse:;
 }
 
 // See: VMM SETUP & TEAR DOWN 
-/*
-struct ProcessorData {
-	SharedProcessorData* shared_data;         ///< Shared data
-	void* vmm_stack_limit;                    ///< A head of VA for VMM stack
-	struct VmControlStructure* vmxon_region;  ///< VA of a VMXON region
-	struct VmControlStructure* vmcs_region;   ///< VA of a VMCS region
-	struct EptData* ept_data;                 ///< A pointer to EPT related data
-	struct ShadowHookData* sh_data;           ///< Per-processor shadow hook data
-};
-*/
- 
 _Use_decl_annotations_ static bool VmpEnterVmxMode(ProcessorData *processor_data) {
   // Apply FIXED bits
  
@@ -562,6 +549,7 @@ _Use_decl_annotations_ static bool VmpSetupVMCS(
   vm_procctl2_requested.fields.enable_rdtscp = true;   
   vm_procctl2_requested.fields.descriptor_table_exiting = true;  
   vm_procctl2_requested.fields.enable_xsaves_xstors = true; 
+  vm_procctl2_requested.fields.enable_ept = true;
   VmxSecondaryProcessorBasedControls vm_procctl2 = {VmpAdjustControlValue(Msr::kIa32VmxProcBasedCtls2, vm_procctl2_requested.all)};
 
   // Set up CR0 and CR4 bitmaps
@@ -618,7 +606,7 @@ _Use_decl_annotations_ static bool VmpSetupVMCS(
   error |= UtilVmWrite64(VmcsField::kIoBitmapA, 0);
   error |= UtilVmWrite64(VmcsField::kIoBitmapB, 0);	
   error |= UtilVmWrite64(VmcsField::kMsrBitmap, UtilPaFromVa(processor_data->shared_data->msr_bitmap)); 
- // error |= UtilVmWrite64(VmcsField::kEptPointer, EptGetEptPointer(processor_data->ept_data));			 
+  error |= UtilVmWrite64(VmcsField::kEptPointer, EptGetEptPointer(processor_data->ept_data));			 
 																									    
   /* 64-Bit Guest-State Fields */																	    
   error |= UtilVmWrite64(VmcsField::kVmcsLinkPointer, MAXULONG64); 				    
@@ -705,6 +693,7 @@ _Use_decl_annotations_ static bool VmpSetupVMCS(
   error |= UtilVmWrite(VmcsField::kGuestRflags, __readeflags());			 
   error |= UtilVmWrite(VmcsField::kGuestSysenterEsp, UtilReadMsr(Msr::kIa32SysenterEsp));	
   error |= UtilVmWrite(VmcsField::kGuestSysenterEip, UtilReadMsr(Msr::kIa32SysenterEip));
+
 
   /* Natural-Width Host-State Fields */ 
   error |= UtilVmWrite(VmcsField::kHostCr0, __readcr0());		//CR0
@@ -1085,11 +1074,11 @@ _Use_decl_annotations_ static void VmpFreeProcessorData(
   }
  /* if (processor_data->sh_data) {
     ShFreeShadowHookData(processor_data->sh_data);
-  }
+  }*/
   if (processor_data->ept_data) {
     EptTermination(processor_data->ept_data);
   }
-  */
+  
   // Free shared data if this is the last reference
   if (processor_data->shared_data &&
       InterlockedDecrement(&processor_data->shared_data->reference_count) ==

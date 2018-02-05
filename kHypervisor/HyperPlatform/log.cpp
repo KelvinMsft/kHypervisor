@@ -434,6 +434,7 @@ _Use_decl_annotations_ NTSTATUS LogpPrint(ULONG level,
   if (!NT_SUCCESS(status)) {
     LogpDbgBreak();
   }
+  
   return status;
 }
 
@@ -762,8 +763,8 @@ _Use_decl_annotations_ static VOID LogpBufferFlushThreadRoutine(
     NT_ASSERT(LogpIsLogFileActivated(*info));
     if (info->log_buffer_head[0]) {
       NT_ASSERT(KeGetCurrentIrql() == PASSIVE_LEVEL);
-      NT_ASSERT(!KeAreAllApcsDisabled());
-      status = LogpFlushLogBuffer(info);
+     // NT_ASSERT(!KeAreAllApcsDisabled());
+     // status = LogpFlushLogBuffer(info);
       // Do not flush the file for overall performance. Even a case of
       // bug check, we should be able to recover logs by looking at both
       // log buffers.

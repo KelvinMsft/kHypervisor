@@ -55,32 +55,7 @@ ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
 StartType      = 3               ; SERVICE_DEMAND_START
 ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
 ServiceBinary  = %12%\DdiMon.sys
-
-;
-;--- DdiMon_Device Coinstaller installation ------
-;
-
-[DestinationDirs]
-DdiMon_Device_CoInstaller_CopyFiles = 11
-
-[DdiMon_Device.NT.CoInstallers]
-AddReg=DdiMon_Device_CoInstaller_AddReg
-CopyFiles=DdiMon_Device_CoInstaller_CopyFiles
-
-[DdiMon_Device_CoInstaller_AddReg]
-HKR,,CoInstallers32,0x00010000, "WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll,WdfCoInstaller"
-
-[DdiMon_Device_CoInstaller_CopyFiles]
-WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll
-
-[SourceDisksFiles]
-WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll=1 ; make sure the number matches with SourceDisksNames
-
-[DdiMon_Device.NT.Wdf]
-KmdfService =  DdiMon, DdiMon_wdfsect
-[DdiMon_wdfsect]
-KmdfLibraryVersion = $KMDFVERSION$
-
+ 
 [Strings]
 SPSVCINST_ASSOCSERVICE= 0x00000002
 ManufacturerName="<Your manufacturer name>" ;TODO: Replace with your manufacturer name

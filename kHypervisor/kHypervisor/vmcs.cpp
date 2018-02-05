@@ -9,7 +9,7 @@
 #include "..\HyperPlatform\common.h"
 #include "..\HyperPlatform\asm.h"
 #include "..\HyperPlatform\log.h"   
-
+#include "..\HyperPlatform\ept.h"
 //-------------------------------------------------------------------------------------------------------------------------------------//
 VOID PrintAllFieldForVmcs12(const char* func, ULONG64 vmcs12)
 {
@@ -873,7 +873,6 @@ VOID PrepareHostAndControlField(ULONG_PTR vmcs12_va, ULONG_PTR vmcs02_pa, BOOLEA
 
 	//vmcs0-1 32bit control field
 	ULONG32 exit_control = (ULONG32)UtilVmRead(VmcsField::kVmExitControls);
-	ULONG32 guest_pin_base_ctls = (ULONG32)UtilVmRead(VmcsField::kPinBasedVmExecControl);
 	ULONG32 guest_primary_processor_base_ctls = (ULONG32)UtilVmRead(VmcsField::kCpuBasedVmExecControl);
 	ULONG32 guest_secondary_processor_base_ctls = (ULONG32)UtilVmRead(VmcsField::kSecondaryVmExecControl);
 
@@ -888,10 +887,6 @@ VOID PrepareHostAndControlField(ULONG_PTR vmcs12_va, ULONG_PTR vmcs02_pa, BOOLEA
 	ULONG32 vmentry_msr_load_cnt = (ULONG32)UtilVmRead(VmcsField::kVmEntryMsrLoadCount);
 
 	ULONG32 guest_exception_bitmap = (ULONG32)UtilVmRead(VmcsField::kExceptionBitmap);
-	ULONG32 guest_page_fault_mask = (ULONG32)UtilVmRead(VmcsField::kPageFaultErrorCodeMask);
-	ULONG32 guest_page_fault_error_code_match = (ULONG32)UtilVmRead(VmcsField::kPageFaultErrorCodeMatch);
-	ULONG32 guest_cr3_target_count = (ULONG32)UtilVmRead(VmcsField::kCr3TargetCount);
-
 
 	//vmcs0-1 natural-width control field
 	ULONG_PTR guest_cr0_mask = UtilVmRead64(VmcsField::kCr0GuestHostMask);
@@ -910,10 +905,10 @@ VOID PrepareHostAndControlField(ULONG_PTR vmcs12_va, ULONG_PTR vmcs02_pa, BOOLEA
 	guest_io_bitmap[0] = UtilVmRead64(VmcsField::kIoBitmapA);
 	guest_io_bitmap[1] = UtilVmRead64(VmcsField::kIoBitmapB);
 	ULONG64 guest_msr_bitmap = UtilVmRead64(VmcsField::kMsrBitmap);
-	ULONG64 guest_vmreadBitmapAddress = UtilVmRead64(VmcsField::kVmreadBitmapAddress);
-	ULONG64 guest_vmwriteBitMapAddress = UtilVmRead64(VmcsField::kVmwriteBitmapAddress);
-	ULONG64 guest_vmexceptionAddress = UtilVmRead64(VmcsField::kVirtualizationExceptionInfoAddress);
-	ULONG64 guest_virtual_apicpage = UtilVmRead64(VmcsField::kVirtualApicPageAddr);
+//	ULONG64 guest_vmreadBitmapAddress = UtilVmRead64(VmcsField::kVmreadBitmapAddress);
+//	ULONG64 guest_vmwriteBitMapAddress = UtilVmRead64(VmcsField::kVmwriteBitmapAddress);
+//	ULONG64 guest_vmexceptionAddress = UtilVmRead64(VmcsField::kVirtualizationExceptionInfoAddress);
+//	ULONG64 guest_virtual_apicpage = UtilVmRead64(VmcsField::kVirtualApicPageAddr);
 	ULONG64 guest_eoi_exit_bitmap[8] = { 0 };
     guest_eoi_exit_bitmap[0] = UtilVmRead64(VmcsField::kEoiExitBitmap0);
     guest_eoi_exit_bitmap[1] = UtilVmRead64(VmcsField::kEoiExitBitmap0High);
@@ -924,7 +919,7 @@ VOID PrepareHostAndControlField(ULONG_PTR vmcs12_va, ULONG_PTR vmcs02_pa, BOOLEA
     guest_eoi_exit_bitmap[6] = UtilVmRead64(VmcsField::kEoiExitBitmap3);
     guest_eoi_exit_bitmap[7] = UtilVmRead64(VmcsField::kEoiExitBitmap3High);
 
-	ULONG64 guest_tpr_threshold = (ULONG32)UtilVmRead(VmcsField::kTprThreshold);
+//	ULONG64 guest_tpr_threshold = (ULONG32)UtilVmRead(VmcsField::kTprThreshold);
 	ULONG64 guest_apic_access_address = UtilVmRead64(VmcsField::kApicAccessAddr);
 	ULONG64 guest_ept_pointer = UtilVmRead64(VmcsField::kEptPointer);
 	ULONG64 vmfunc_ctrls = UtilVmRead64(VmcsField::kVmFuncCtls);
@@ -1120,7 +1115,6 @@ VOID PrepareHostAndControlField(ULONG_PTR vmcs12_va, ULONG_PTR vmcs02_pa, BOOLEA
 	UtilVmWrite64(VmcsField::kCr3TargetValue1, guest_cr3_target_value[1]);
 	UtilVmWrite64(VmcsField::kCr3TargetValue2, guest_cr3_target_value[2]);
 	UtilVmWrite64(VmcsField::kCr3TargetValue3, guest_cr3_target_value[3]);
-
 	/*
 	VM control field End
 	--------------------------------------------------------------------------------------*/
@@ -1334,7 +1328,7 @@ VOID PrepareGuestStateField(ULONG_PTR guest_vmcs_va)
 	UtilVmWrite(VmcsField::kGuestRsp, vmcs12_kGuestRsp);
 	UtilVmWrite(VmcsField::kGuestRflags, vmcs12_kGuestRlags);
 	
-	HYPERPLATFORM_COMMON_DBG_BREAK();
+	//HYPERPLATFORM_COMMON_DBG_BREAK();
 	if (IsGuestPaePaging())
 	{
 		VmxSecondaryProcessorBasedControls vm_second_ctrl = { UtilVmRead(VmcsField::kSecondaryVmExecControl) };

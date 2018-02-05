@@ -15,6 +15,7 @@
 //
 // macro utilities
 //
+#define ENABLE_NESTED_EPT 1
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -78,6 +79,12 @@ struct ProcessorData {
 	LARGE_INTEGER GuestKernelGsBase;		  ///guest_gs_kernel_base  
 	VCPUVMX*		vcpu_vmx;				  //!< For nested vmx context
 	CPU_MODE		CpuMode;				  //!< For CPU Mode 
+
+#ifdef ENABLE_NESTED_EPT
+	EptData*		EptDat02;					
+	EptData*		EptDat12;
+#endif
+
 };
 
 

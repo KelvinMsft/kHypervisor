@@ -10,7 +10,7 @@
 #define HYPERPLATFORM_EPT_H_
 
 #include <fltKernel.h>
-
+#include "ia32_type.h"
 extern "C" {
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -27,7 +27,6 @@ extern "C" {
 // types
 //
 
-struct EptData;
 
 /// A structure made up of mutual fields across all EPT entry types
 union EptCommonEntry {
@@ -43,6 +42,16 @@ union EptCommonEntry {
   } fields;
 };
 static_assert(sizeof(EptCommonEntry) == 8, "Size check");
+
+
+// EPT related data stored in ProcessorSharedData
+typedef struct EptData {
+	EptPointer *ept_pointer;
+	EptCommonEntry *ept_pml4;
+
+	EptCommonEntry **preallocated_entries;  // An array of pre-allocated entries
+	volatile long preallocated_entries_count;  // # of used pre-allocated entries
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -81,6 +90,13 @@ _IRQL_requires_min_(DISPATCH_LEVEL) void EptHandleEptViolation(
 EptCommonEntry* EptGetEptPtEntry(_In_ EptData* ept_data,
                                  _In_ ULONG64 physical_address);
 
+
+EptData* EptBuildEptDataByEptp();
+
+
+EptCommonEntry *EptpConstructTablesEx(
+	EptCommonEntry *table, ULONG table_level, ULONG64 physical_address,
+	EptData *ept_data, EptCommonEntry* reserved);
 
 /// Reads and stores all MTRRs to set a correct memory type for EPT
 _IRQL_requires_max_(PASSIVE_LEVEL) void EptInitializeMtrrEntries();

@@ -11,12 +11,19 @@
 #include "..\HyperPlatform\log.h"
 #include "..\HyperPlatform\common.h"
 #include "vmx_common.h"
+#include "..\HyperPlatform\ept.h"
 extern "C"
 {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //// Prototype
 ////
+extern void			SaveCurrentEpt02Pointer(GuestContext* guest_context, EptData* Ept02);
+extern EptData*		GetCurrentEpt02Pointer(GuestContext* guest_context);
+
+
+extern void			SaveCurrentEpt12Pointer(GuestContext* guest_context, EptData* Ept12);
+extern EptData*		GetCurrentEpt12Pointer(GuestContext* guest_context);
 
 extern ULONG		 VmpGetSegmentAccessRight(USHORT segment_selector);
 extern ULONG_PTR*	 VmmpSelectRegister(_In_ ULONG index, _In_ GuestContext *guest_context);
@@ -92,7 +99,7 @@ VOID VmxAssertPrint(ULONG Line, bool IsVerified)
 VOID	LEAVE_GUEST_MODE(VCPUVMX* vm)
 {
 	vm->inRoot = RootMode; 
-	HYPERPLATFORM_LOG_DEBUG("VMM: %I64x Enter Root mode", vm);
+	HYPERPLATFORM_LOG_DEBUG("VMM: %I64x Enter Root mode Reason: %d", vm, UtilVmRead(VmcsField::kVmExitReason));
 }
 
 
@@ -589,6 +596,9 @@ NTSTATUS SaveExceptionInformationFromVmcs02(VCPUVMX* vcpu)
 	VmWrite32(VmcsField::kIdtVectoringErrorCode, vmcs12_va, UtilVmRead(VmcsField::kIdtVectoringErrorCode));
 	VmWrite32(VmcsField::kVmxInstructionInfo, vmcs12_va, UtilVmRead(VmcsField::kVmxInstructionInfo));
 
+	VmWrite64(VmcsField::kGuestLinearAddress, vmcs12_va, UtilVmRead(VmcsField::kGuestLinearAddress));
+	VmWrite64(VmcsField::kGuestPhysicalAddress, vmcs12_va, UtilVmRead(VmcsField::kGuestPhysicalAddress));
+
 }
 //---------------------------------------------------------------------------------------------------------------------//
 
@@ -933,7 +943,51 @@ NTSTATUS VMEntryEmulate(VCPUVMX* vCPU, GuestContext* guest_context , BOOLEAN IsV
 	if (IsVmLaunch)
 	{
 		VmxStatus status;
-		 
+		VmxSecondaryProcessorBasedControls ProcCtrl = { UtilVmRead64(VmcsField::kSecondaryVmExecControl) };
+		if (ProcCtrl.fields.enable_ept)
+		{
+			//1. Determine if Nested EPT Enabled.
+			//2. Build-EPT0-2 
+
+			ULONG64 _Ept12Ptr = NULL;
+			VmRead64(VmcsField::kEptPointer, vmcs12_va, &_Ept12Ptr);
+
+			EptPointer*		 Ept12Ptr = (EptPointer*)ExAllocatePoolWithTag(NonPagedPoolMustSucceed, PAGE_SIZE, 'eptp');
+			Ept12Ptr->all = _Ept12Ptr;
+
+			EptPointer*		 Ept02Ptr = (EptPointer*)ExAllocatePoolWithTag(NonPagedPoolMustSucceed, PAGE_SIZE, 'eptp');
+			EptCommonEntry* Pml4Entry = (EptCommonEntry*)ExAllocatePoolWithTag(NonPagedPoolMustSucceed, PAGE_SIZE, 'pml4');
+
+			RtlZeroMemory(Ept02Ptr, PAGE_SIZE);
+			RtlZeroMemory(Pml4Entry, PAGE_SIZE);
+
+			Pml4Entry->fields.read_access = false;
+			Pml4Entry->fields.execute_access = false;
+			Pml4Entry->fields.memory_type = 0;
+			Pml4Entry->fields.write_access = false;
+
+			Ept02Ptr->fields.memory_type = static_cast<ULONG>(memory_type::kWriteBack);
+			Ept02Ptr->fields.pml4_address = UtilPfnFromPa(UtilPaFromVa(Pml4Entry));
+			Ept02Ptr->fields.page_walk_length = 4 - 1;
+			Ept02Ptr->fields.enable_accessed_and_dirty_flags = false;
+
+
+			EptData*	Ept02Data = EptBuildEptDataByEptp();
+			Ept02Data->ept_pointer = Ept02Ptr;
+			Ept02Data->ept_pml4 = Pml4Entry;
+
+			EptData*	Ept12Data = EptBuildEptDataByEptp();
+			Ept12Data->ept_pointer = Ept12Ptr;
+			Ept12Data->ept_pml4 = (EptCommonEntry*)UtilVaFromPfn(Ept12Ptr->fields.pml4_address);
+
+			//vmcs0-2 with ept0-2
+			SaveCurrentEpt02Pointer(guest_context, Ept02Data);
+			SaveCurrentEpt12Pointer(guest_context, Ept12Data);
+
+			//HYPERPLATFORM_LOG_DEBUG("EPT02 PML4 VA: %p %p", Pml4Entry, UtilVaFromPfn(Ept02Ptr->fields.pml4_address));
+			UtilVmWrite64(VmcsField::kEptPointer, Ept02Ptr->all);
+			UtilInveptGlobal();
+		}
 		// We must be careful of this, since we jmp back to the Guest soon. 
 		// It is a exceptional case  
 		if (GetGuestIrql(guest_context) < DISPATCH_LEVEL)
@@ -950,6 +1004,13 @@ NTSTATUS VMEntryEmulate(VCPUVMX* vCPU, GuestContext* guest_context , BOOLEAN IsV
 	}
 	else
 	{
+		VmxSecondaryProcessorBasedControls ProcCtrl = { UtilVmRead64(VmcsField::kSecondaryVmExecControl) };
+
+		if (ProcCtrl.fields.enable_ept)
+		{
+			UtilVmWrite64(VmcsField::kEptPointer,  GetCurrentEpt02Pointer(guest_context)->ept_pointer->all);
+		}
+
 		RestoreGuestCr8(vCPU);
 		LoadGuestKernelGsBase(GetProcessorData(guest_context));
 	}
@@ -1583,7 +1644,8 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 
 		VMEntryEmulate(NestedvCPU, guest_context, FALSE); 
 
-		HYPERPLATFORM_COMMON_DBG_BREAK();
+
+		//HYPERPLATFORM_COMMON_DBG_BREAK();
 
 		VMSucceed(GetFlagReg(guest_context));
 	} while (FALSE);
@@ -1630,3 +1692,4 @@ VOID VmptrstEmulate(GuestContext* guest_context)
 	} while (FALSE);
 }
 }
+ 

@@ -75,7 +75,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
    Windows 7 Nesting EPT Test demo (still not passed stress test by Win10) :
    <img src="https://user-images.githubusercontent.com/22551808/35795193-5a015202-0a93-11e8-919f-73ab471e1f8c.png" width="70%" height="70%"> </img>
  
-   <img src="https://user-images.githubusercontent.com/22551808/35796632-23b572c8-0a98-11e8-94ad-66e06844853f.png" width="70%" height="70%"> </img>
+   <img src="https://user-images.githubusercontent.com/22551808/35816514-df8a7f60-0ad5-11e8-8e48-577372a75872.png" width="70%" height="70%"> </img>
 
       
 # Expected Output

@@ -44,6 +44,8 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
 
 `2018-01-19`  Added Nest-Msr Access support , plus, a better coding style changes. Add Test in Windows x64 build 16299 RS3.Release  
 
+`2018-02-05`  Added Nested EPT which is running in Windows 7 x64 build 7601 system. (still not test by Windows 10)
+
 # Installation
 
  * kHypervisor extended HyperPlatform which is created by Tandasat, it is a Nested-Virtual Machine Monitor, and DdiMon is one of Tandasat's product of HyperPlatform for test demo in kHypervisor.
@@ -69,6 +71,10 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
    <img src="https://user-images.githubusercontent.com/22551808/35140833-a7896dec-fd33-11e7-9c96-179e7cbd73fd.png" width="70%" height="70%"> </img>
       
    <img src="https://user-images.githubusercontent.com/22551808/35140835-a7b8d186-fd33-11e7-8c3d-583eba6bd9a0.png" width="70%" height="70%"> </img>
+   
+   Windows 7 Nesting EPT Test demo (still not tested by Win10) :
+   <img src="https://user-images.githubusercontent.com/22551808/35795193-5a015202-0a93-11e8-919f-73ab471e1f8c.png" width="70%" height="70%"> </img>
+ 
       
 # Expected Output
  kHypervisor can be tested by kernel/user mode with Multi-Core Processor Configuration 

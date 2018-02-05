@@ -113,7 +113,7 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
   
 # TODO
  - Fully Support CPU Feature from vCPU aspect.
- - ~~EPT virtualization ~~
+ - ~~EPT virtualization~~
  - APIC virtualization
  - Unrestricted guest support (vbox) , such as virtual 8086 mode.
  

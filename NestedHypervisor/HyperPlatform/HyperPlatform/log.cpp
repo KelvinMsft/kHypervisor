@@ -388,6 +388,7 @@ _Use_decl_annotations_ static void LogpFinalizeBufferInfo(LogBufferInfo *info) {
 _Use_decl_annotations_ NTSTATUS LogpPrint(ULONG level,
                                           const char *function_name,
                                           const char *format, ...) {
+	/*
   auto status = STATUS_SUCCESS;
 
   if (!LogpIsLogNeeded(level)) {
@@ -422,7 +423,7 @@ _Use_decl_annotations_ NTSTATUS LogpPrint(ULONG level,
   }
 
   return LogpPut(message, attribute);
-  
+  */
   return STATUS_SUCCESS;
 }
 

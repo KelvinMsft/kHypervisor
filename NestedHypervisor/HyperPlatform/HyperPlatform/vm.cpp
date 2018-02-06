@@ -195,10 +195,10 @@ _Use_decl_annotations_ static bool VmpIsVmxAvailable() {
     return false;
   }
   
- // if (!EptIsEptAvailable()) {
-   // HYPERPLATFORM_LOG_ERROR("EPT features are not fully supported.");
-   // return false;
-  //}
+  if (!EptIsEptAvailable()) {
+    HYPERPLATFORM_LOG_ERROR("EPT features are not fully supported.");
+    return false;
+  }
 
   return true;
 }
@@ -451,7 +451,7 @@ _Use_decl_annotations_ static bool VmpEnterVmxMode(ProcessorData *processor_data
   Cr4 cr4 = {__readcr4()};
   cr4.all &= cr4_fixed1.all;
   cr4.all |= cr4_fixed0.all;
-  __writecr4(cr4.all);				//寫入修正好的cr4
+  __writecr4(cr4.all);				//?入修正好的cr4
 
   // Write a VMCS revision identifier 
   const Ia32VmxBasicMsr vmx_basic_msr = {UtilReadMsr64(Msr::kIa32VmxBasic)}; 

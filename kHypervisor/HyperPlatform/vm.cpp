@@ -497,13 +497,14 @@ extern "C" {
 
 
 		Ia32VmxBasicMsr msr1 = { UtilReadMsr64(Msr::kIa32VmxBasic) };
+		Ia32VmxEptVpidCapMsr  ept_cap_msr = { UtilReadMsr64(Msr::kIa32VmxEptVpidCap) };
 		Ia32FeatureControlMsr msr2 = { UtilReadMsr64(Msr::kIa32FeatureControl) };
 		msr2.fields.lock = false;
 		msr2.fields.enable_vmxon = true;
 
 		processor_data->VmxBasicMsr.QuadPart = msr1.all;
 		processor_data->Ia32FeatureMsr.QuadPart = msr2.all;
-		processor_data->VmxEptMsr.QuadPart = 0;
+		processor_data->VmxEptMsr.QuadPart = ept_cap_msr.all;
 
 		// Set up VMCS
 		if (!VmpEnterVmxMode(processor_data)) {

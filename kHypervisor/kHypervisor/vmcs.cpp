@@ -472,12 +472,6 @@ VOID VmWrite16(VmcsField Field, ULONG_PTR base, ULONG_PTR value)
 }
 //-------------------------------------------------------------------------------------------------------------------------------------//
 
-BOOLEAN RegularCheck()
-{
-	return FALSE;
-}
-//-------------------------------------------------------------------------------------------------------------------------------------//
-
 BOOLEAN is_vmcs_field_supported(VmcsField encoding)
 {
 	switch (encoding)

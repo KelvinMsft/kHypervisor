@@ -720,9 +720,8 @@ extern "C" {
 		{
 			return STATUS_UNSUCCESSFUL;
 		}
-		HYPERPLATFORM_LOG_DEBUG_SAFE("MontiorTrapFlag VMExit to L1");
-		//return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
-		return STATUS_UNSUCCESSFUL;;
+		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+		//return STATUS_UNSUCCESSFUL;;
 	}
 	 
 	//-----------------------------------------------------------------------------------------------------------------------//
@@ -1756,21 +1755,6 @@ extern "C" {
 
 		VmmpAdjustGuestInstructionPointer(guest_context);
 	}
-	/*
-	// VMX instructions except for VMCALL
-	_Use_decl_annotations_ static void VmmpHandleVmx(GuestContext *guest_context) {
-	HYPERPLATFORM_PERFORMANCE_MEASURE_THIS_SCOPE();
-	// See "CONVENTIONS"
-	guest_context->flag_reg.fields.cf = true;  // Error without status
-	guest_context->flag_reg.fields.pf = false;
-	guest_context->flag_reg.fields.af = false;
-	guest_context->flag_reg.fields.zf = false;  // Error without status
-	guest_context->flag_reg.fields.sf = false;
-	guest_context->flag_reg.fields.of = false;
-	UtilVmWrite(VmcsField::kGuestRflags, guest_context->flag_reg.all);
-	VmmpAdjustGuestInstructionPointer(guest_context);
-	}
-	*/
 
 	// VMCALL
 	_Use_decl_annotations_ static void VmmpHandleVmCall(

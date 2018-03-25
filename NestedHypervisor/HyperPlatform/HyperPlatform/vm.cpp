@@ -152,6 +152,13 @@ _Use_decl_annotations_ NTSTATUS VmInitialization() {
     UtilForEachProcessor(VmpStopVM, nullptr);
     return status;
   } 
+
+  status = DdimonInitialization(shared_data->shared_sh_data);
+  if (!NT_SUCCESS(status))
+  {
+	  UtilForEachProcessor(VmpStopVM, nullptr);
+  }
+
    HYPERPLATFORM_COMMON_DBG_BREAK();
   return status;
 }
@@ -337,12 +344,12 @@ _Use_decl_annotations_ static void VmpInitializeVm(ULONG_PTR guest_stack_pointer
   {
     goto ReturnFalse;
   }
-  /*
+  
   processor_data->sh_data = ShAllocateShadowHookData();
   if (!processor_data->sh_data) {
     goto ReturnFalse;
   } 
-  */
+  
   const auto vmm_stack_limit = UtilAllocateContiguousMemory(KERNEL_STACK_SIZE);
    
   const auto vmcs_region =

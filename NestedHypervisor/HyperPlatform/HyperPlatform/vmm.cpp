@@ -939,11 +939,11 @@ _Use_decl_annotations_ static void VmmpHandleVmCall(
   } 
   else if (hypercall_number == HypercallNumber::kShEnablePageShadowing) 
   { 
-     /*
-		 ShEnablePageShadowing(
-			  guest_context->stack->processor_data->ept_data,
-			  guest_context->stack->processor_data->shared_data->shared_sh_data);
-		*/
+     
+	ShEnablePageShadowing(	
+		guest_context->stack->processor_data->ept_data,
+		guest_context->stack->processor_data->shared_data->shared_sh_data);
+	
 	//設置RIP/EIP
     VmmpAdjustGuestInstructionPointer(guest_context->ip);
 
@@ -951,6 +951,8 @@ _Use_decl_annotations_ static void VmmpHandleVmCall(
     guest_context->flag_reg.fields.cf = false;
     guest_context->flag_reg.fields.zf = false;
     UtilVmWrite(VmcsField::kGuestRflags, guest_context->flag_reg.all);
+
+	HYPERPLATFORM_LOG_DEBUG("kShEnablePageShadowing VMCALL SUCCESS");
 
   } 
   else if (hypercall_number == HypercallNumber::kShDisablePageShadowing) 

@@ -81,7 +81,9 @@ void EptTermination(_In_ EptData* ept_data);
 /// Handles VM-exit triggered by EPT violation
 /// @param ept_data   EptData to get an EPT pointer
 _IRQL_requires_min_(DISPATCH_LEVEL) void EptHandleEptViolation(
-    _In_ EptData* ept_data);
+    _In_ EptData* ept_data,
+	_In_opt_ EptData* ept_data02,
+	_In_ bool is_range_of_ept12);
 
 /// Returns an EPT entry corresponds to \a physical_address
 /// @param ept_data   EptData to get an EPT entry
@@ -97,6 +99,16 @@ EptData* EptBuildEptDataByEptp();
 EptCommonEntry *EptpConstructTablesEx(
 	EptCommonEntry *table, ULONG table_level, ULONG64 physical_address,
 	EptData *ept_data, EptCommonEntry* reserved);
+
+
+void  EptpInvalidateEpt(EptData* EptData01, EptCommonEntry *pml4_table);
+void  EptpValidateEpt(EptData* EptData01, EptCommonEntry *pml4_table);
+
+_Use_decl_annotations_ bool  EptpIsInRangesOfEpt(
+	ULONG_PTR PhysicalAddres, 
+	EptData* EptData01, 
+	EptCommonEntry *pml4_table
+);
 
 /// Reads and stores all MTRRs to set a correct memory type for EPT
 _IRQL_requires_max_(PASSIVE_LEVEL) void EptInitializeMtrrEntries();

@@ -806,7 +806,7 @@ extern "C" {
 					UtilVmRead64(VmcsField::kGuestPhysicalAddress), nullptr, 
 					guest_context->stack->processor_data->ept_data->ept_pml4
 				);
-			
+				
 				HYPERPLATFORM_LOG_DEBUG("We are building new mapping with EPT0-2 : %p ", Ept02Pte->all);
 				UtilVmWrite64(VmcsField::kEptPointer, guest_context->stack->processor_data->EptDat02->ept_pointer->all);
 				
@@ -1012,7 +1012,7 @@ extern "C" {
 					break;
 				}
 				//we need to know the corresponding HPA to the latest modified value  
-				EptCommonEntry* entry01 = EptGetEptPtEntry(guest_context->stack->processor_data->ept_data, entry12->fields.physial_address);
+				EptCommonEntry* entry01 = EptGetEptPtEntry(guest_context->stack->processor_data->ept_data, UtilPaFromPfn(entry12->fields.physial_address));
 				if (!entry01 || !entry01->fields.physial_address)
 				{
 					break;
@@ -1028,13 +1028,15 @@ extern "C" {
 				//update RWX
 				entry02->all = entry12->all;
 
+				HYPERPLATFORM_LOG_DEBUG("HandleMonitor Trap Flag %p", entry02->fields.physial_address);
+
 				//update newest HPA
-				entry02->fields.physial_address = entry01->fields.physial_address;
+				entry02->fields.physial_address = entry12->fields.physial_address;
 
 				//Turn back the address to be non-writable
-				EptCommonEntry* entry = EptGetEptPtEntry(guest_context->stack->processor_data->ept_data, guest_context->stack->processor_data->LastEptFaultAddr);
-				entry->fields.write_access = false;
+				entry12->fields.write_access = false;
 
+				HYPERPLATFORM_LOG_DEBUG("HandleMonitor Trap Flag %p", entry02->fields.physial_address);
 				guest_context->stack->processor_data->LastEptFaultAddr = 0;
 			}
 		} while (FALSE);
@@ -1862,8 +1864,12 @@ extern "C" {
 				guest_context->stack->processor_data->ept_data,
 				guest_context->stack->processor_data->EptDat12->ept_pml4);
 		}
-
 		EptHandleEptViolation(processor_data->ept_data, processor_data->EptDat02, is_ranges_of_ept12);
+		if (is_ranges_of_ept12)
+		{
+			ShpSetMonitorTrapFlag(true);
+			guest_context->stack->processor_data->LastEptFaultAddr = UtilVmRead64(VmcsField::kGuestPhysicalAddress);
+		}
 	}
 
 	// EXIT_REASON_EPT_MISCONFIG

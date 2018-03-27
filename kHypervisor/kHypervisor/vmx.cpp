@@ -21,7 +21,7 @@ extern "C"
 extern void			SaveCurrentEpt02Pointer(GuestContext* guest_context, EptData* Ept02);
 extern EptData*		GetCurrentEpt02Pointer(GuestContext* guest_context);
 
-
+extern EptData*		GetCurrentEpt01Pointer(GuestContext* guest_context);
 extern void			SaveCurrentEpt12Pointer(GuestContext* guest_context, EptData* Ept12);
 extern EptData*		GetCurrentEpt12Pointer(GuestContext* guest_context);
 
@@ -983,8 +983,9 @@ NTSTATUS VMEntryEmulate(VCPUVMX* vCPU, GuestContext* guest_context , BOOLEAN IsV
 			//vmcs0-2 with ept0-2
 			SaveCurrentEpt02Pointer(guest_context, Ept02Data);
 			SaveCurrentEpt12Pointer(guest_context, Ept12Data);
-
-			//HYPERPLATFORM_LOG_DEBUG("EPT02 PML4 VA: %p %p", Pml4Entry, UtilVaFromPfn(Ept02Ptr->fields.pml4_address));
+			
+			EptpInvalidateEpt(GetCurrentEpt01Pointer(guest_context), Ept12Data->ept_pml4);
+			HYPERPLATFORM_LOG_DEBUG("EPT02 PML4 VA: %p %p", Pml4Entry, UtilVaFromPfn(Ept02Ptr->fields.pml4_address));
 			UtilVmWrite64(VmcsField::kEptPointer, Ept02Ptr->all);
 			UtilInveptGlobal();
 		}
@@ -1151,11 +1152,17 @@ VOID VmxoffEmulate(
 			VMfailInvalid(GetFlagReg(guest_context));
 			break;
 		}
+		
 		ULONG GuestRip = UtilVmRead(VmcsField::kGuestRip);
 		ULONG InstLen  = UtilVmRead(VmcsField::kVmExitInstructionLen);
 		//load back vmcs01
 		__vmx_vmptrld(&vcpu_vmx->vmcs01_pa); 
 	 
+		EptpValidateEpt(GetCurrentEpt01Pointer(guest_context), GetCurrentEpt12Pointer(guest_context)->ept_pml4);
+
+		SaveCurrentEpt02Pointer(guest_context, nullptr);
+		SaveCurrentEpt12Pointer(guest_context, nullptr);
+
 		UtilVmWrite(VmcsField::kGuestRip, GuestRip + InstLen);
 	
 		SetvCpuVmx(guest_context, NULL);

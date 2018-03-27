@@ -1,0 +1,3 @@
+[submodule "DdiMon"]
+	path = DdiMon
+	url = https://github.com/tandasat/DdiMon

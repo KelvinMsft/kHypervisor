@@ -93,6 +93,14 @@ static_assert(sizeof(MtrrData) == 24, "Size check");
 // prototypes
 //
 
+struct GuestContext;
+//----------------------------------------------------------------------------------------------------------------//
+NTSTATUS VmmpSetLastFaultAddr(
+	_In_ GuestContext *guest_context,
+	_In_ ULONG_PTR	LastFaultAddr
+);
+
+
 _When_(ept_data == nullptr,
        _IRQL_requires_max_(DISPATCH_LEVEL)) static EptCommonEntry
     *EptpConstructTables(_In_ EptCommonEntry *table, _In_ ULONG table_level,
@@ -135,7 +143,7 @@ static void EptpFreeUnusedPreAllocatedEntries(
     _Pre_notnull_ __drv_freesMem(Mem) EptCommonEntry **preallocated_entries,
     _In_ long used_count);
 
-_Use_decl_annotations_ void EptHandleEptViolationEx(EptData *ept_data, ULONG_PTR guest_pa);
+_Use_decl_annotations_ void EptHandleEptViolationEx(EptData *ept_data, EptData *ept_data02, ULONG_PTR guest_pa, bool is_range_of_ept12);
 
 #if defined(ALLOC_PRAGMA)
 #pragma alloc_text(PAGE, EptIsEptAvailable)
@@ -689,12 +697,12 @@ _Use_decl_annotations_ static ULONG64 EptpAddressToPteIndex(
 
 
 // Deal with L2 EPT violation VM-exit.
-_Use_decl_annotations_ void EptHandleEptViolationEx(EptData *ept_data, ULONG_PTR guest_pa) {
+_Use_decl_annotations_ void EptHandleEptViolationEx(EptData *ept_data, EptData *ept_data02, ULONG_PTR guest_pa, bool is_range_of_ept12) {
 	
 	const EptViolationQualification exit_qualification = {
 		UtilVmRead(VmcsField::kExitQualification) };
 	ULONG_PTR fault_pa = 0;
-	
+
 	if (!guest_pa)
 	{
 		 fault_pa = UtilVmRead64(VmcsField::kGuestPhysicalAddress);
@@ -708,6 +716,9 @@ _Use_decl_annotations_ void EptHandleEptViolationEx(EptData *ept_data, ULONG_PTR
 		exit_qualification.fields.valid_guest_linear_address
 		? UtilVmRead(VmcsField::kGuestLinearAddress)
 		: 0);
+
+
+	//GuestPhysicalAddress will be the guest physical adderss of EPT1-2 Entry , we disable it write in L2 first initial
 
 	if (!exit_qualification.fields.ept_readable &&
 		!exit_qualification.fields.ept_writeable &&
@@ -726,12 +737,22 @@ _Use_decl_annotations_ void EptHandleEptViolationEx(EptData *ept_data, ULONG_PTR
 			return;
 		}
 	}
-	HYPERPLATFORM_LOG_DEBUG_SAFE("[IGNR] OTH VA = %p, PA = %016llx", fault_va,
-		fault_pa);
+	
+	if (!exit_qualification.fields.ept_writeable && is_range_of_ept12)
+	{
+		EptCommonEntry* Ept01Pte = EptGetEptPtEntry(ept_data, UtilVmRead64(VmcsField::kGuestPhysicalAddress));
+		if (Ept01Pte)
+		{  
+			Ept01Pte->fields.write_access = true;
+			HYPERPLATFORM_LOG_DEBUG("Faced non-writable address but it is readble. :%p", UtilVmRead64(VmcsField::kGuestPhysicalAddress));
+			UtilInveptGlobal();
+		}
+	}
+	 
 }
 // Deal with EPT violation VM-exit.
-_Use_decl_annotations_ void EptHandleEptViolation(EptData *ept_data) {
-	EptHandleEptViolationEx(ept_data, 0);
+_Use_decl_annotations_ void EptHandleEptViolation(EptData* ept_data, EptData* ept_data02, bool is_range_of_ept12) {
+	EptHandleEptViolationEx(ept_data, ept_data02,0, is_range_of_ept12);
 }
 
 // Returns if the physical_address is device memory (which could not have a
@@ -783,7 +804,6 @@ _Use_decl_annotations_ static EptCommonEntry *EptpGetEptPtEntry(
       if (!ept_pdpt_entry->all) {
         return nullptr;
       }
-	  HYPERPLATFORM_LOG_DEBUG("Pdpt Index: %x -> Pa: %p ", ppe_index, ept_pdpt_entry->fields.physial_address);
       return EptpGetEptPtEntry(reinterpret_cast<EptCommonEntry *>(UtilVaFromPfn(
                                    ept_pdpt_entry->fields.physial_address)),
                                table_level - 1, physical_address);
@@ -795,7 +815,6 @@ _Use_decl_annotations_ static EptCommonEntry *EptpGetEptPtEntry(
       if (!ept_pdt_entry->all) {
         return nullptr;
       }
-	  HYPERPLATFORM_LOG_DEBUG("Pdt Index: %x -> Pa: %p ", pde_index, ept_pdt_entry->fields.physial_address);
       return EptpGetEptPtEntry(reinterpret_cast<EptCommonEntry *>(UtilVaFromPfn(
                                    ept_pdt_entry->fields.physial_address)),
                                table_level - 1, physical_address);
@@ -804,7 +823,6 @@ _Use_decl_annotations_ static EptCommonEntry *EptpGetEptPtEntry(
       // table == PT
       const auto pte_index = EptpAddressToPteIndex(physical_address);
       const auto ept_pt_entry = &table[pte_index];
-	  HYPERPLATFORM_LOG_DEBUG("Pte Index: %x -> Pa: %p ", pte_index, ept_pt_entry->fields.physial_address);
       return ept_pt_entry;
     }
     default:
@@ -841,7 +859,125 @@ _Use_decl_annotations_ static void EptpFreeUnusedPreAllocatedEntries(
   }
   ExFreePoolWithTag(preallocated_entries, kHyperPlatformCommonPoolTag);
 }
+// Frees all used EPT entries by walking through whole EPT
+_Use_decl_annotations_ EptCommonEntry*  EptpCheckPhysicalAddress(ULONG_PTR PhysicalAddres, EptData* EptData01, EptCommonEntry *table, bool writable)
+{
+	const auto entry = table;
+	if (entry && entry->fields.physial_address)
+	{
+		const auto sub_table = reinterpret_cast<EptCommonEntry *>(UtilVaFromPfn(entry->fields.physial_address)); 
+		return sub_table;
+	}
+	return nullptr;
+}  
+// Frees all used EPT entries by walking through whole EPT
+_Use_decl_annotations_ EptCommonEntry*  EptpGetNextLevelTableBase(EptData* EptData01, EptCommonEntry *table)
+{
+	const auto entry = table;
+	if (entry && entry->fields.physial_address)
+	{
+		const auto sub_table = reinterpret_cast<EptCommonEntry *>(UtilVaFromPfn(entry->fields.physial_address));
+		return sub_table;
+	}
+	return nullptr;
+} 
+// Frees all used EPT entries by walking through whole EPT
+_Use_decl_annotations_ bool  EptpIsInRangesOfEpt(ULONG_PTR PhysicalAddres, EptData* EptData01, EptCommonEntry *pml4_table)
+{
+	EptCommonEntry* pdptr_table = NULL;
+	EptCommonEntry* pdt_table = NULL;
+	EptCommonEntry* pt_table = NULL;
+	bool IsMatch = false;
+	for (int i = 0; i < 512 && pml4_table; i++)			//PML4
+	{
+		ULONG_PTR pml4_entry_pa = UtilPaFromVa(&pml4_table[i]);
+		if (PhysicalAddres == pml4_entry_pa)
+		{
+			IsMatch = true;
+			return IsMatch;
+		} 
+		pdptr_table = EptpGetNextLevelTableBase(EptData01, &pml4_table[i]);
+		for (int j = 0; j < 512 && pdptr_table; j++)		//PDPTR
+		{
+			ULONG_PTR pdptr_entry_pa = UtilPaFromVa(&pdptr_table[j]);
+			if (PhysicalAddres == pdptr_entry_pa)
+			{
+				IsMatch = true;
+				return IsMatch;
+			} 
+			pdt_table = EptpGetNextLevelTableBase(EptData01, &pdptr_table[j]);
+			for (int k = 0; k < 512 && pdt_table; k++)		// PDT
+			{
+				ULONG_PTR pdt_entry_pa = UtilPaFromVa(&pdt_table[k]);
+				if (PhysicalAddres == pdt_entry_pa)
+				{
+					IsMatch = true;
+					return IsMatch;;
+				}
+			 
+				pt_table = EptpGetNextLevelTableBase(EptData01, &pdt_table[k]);
+				if (PhysicalAddres == UtilPaFromVa(pt_table))
+				{
+					IsMatch = true;
+					return IsMatch;;
+				}
+			}
+		}
+	}
+	return IsMatch;
+}
+// Frees all used EPT entries by walking through whole EPT
+_Use_decl_annotations_ EptCommonEntry*  EptpInvalidateTable2(EptData* EptData01, EptCommonEntry *table, bool writable)
+{
+	const auto entry = table;
+	if (entry && entry->fields.physial_address)
+	{
+		EptCommonEntry* sub_table = nullptr;
+		sub_table = reinterpret_cast<EptCommonEntry *>(UtilVaFromPfn(entry->fields.physial_address));
+		EptCommonEntry* entry01 = EptGetEptPtEntry(EptData01, UtilPaFromVa(table));
+		if (entry01)
+		{
+		  	entry01->fields.write_access = writable;
+		}
 
+		return sub_table;
+	}
+	return nullptr;
+}
+ 
+// Frees all used EPT entries by walking through whole EPT
+_Use_decl_annotations_ void  EptpInvalidateTable(EptData* EptData01, EptCommonEntry *pml4_table, bool writable)
+{
+	EptCommonEntry* pdptr_table = NULL;
+	EptCommonEntry* pdt_table = NULL;
+	EptCommonEntry* pt_table = NULL;
+	for (int i = 0; i < 512 && pml4_table ; i++)			//PML4
+	{
+		pdptr_table = EptpInvalidateTable2(EptData01, &pml4_table[i], writable);
+		for (int j = 0; j < 512 && pdptr_table; j++)		//PDPTR
+		{
+			pdt_table = EptpInvalidateTable2(EptData01, &pdptr_table[j], writable);
+			for (int k = 0; k < 512 && pdt_table; k++)		// PDT
+			{
+				pt_table = EptpInvalidateTable2(EptData01, &pdt_table[k], writable); 
+				for (int p = 0; p < 512 && pt_table; p++)	// PT
+				{
+					EptCommonEntry* entry01 = EptGetEptPtEntry(EptData01, UtilPaFromVa(&pt_table[p]));   
+				}
+			}
+		}
+	}
+}
+
+_Use_decl_annotations_ void  EptpValidateEpt(EptData* EptData01, EptCommonEntry *pml4_table)
+{
+	EptpInvalidateTable(EptData01, pml4_table, true);
+}
+
+_Use_decl_annotations_ void  EptpInvalidateEpt(EptData* EptData01, EptCommonEntry *pml4_table)
+{
+	EptpInvalidateTable(EptData01, pml4_table, false);
+}
 // Frees all used EPT entries by walking through whole EPT
 _Use_decl_annotations_ static void EptpDestructTables(EptCommonEntry *table,
                                                       ULONG table_level) {

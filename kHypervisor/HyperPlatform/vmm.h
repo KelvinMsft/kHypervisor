@@ -83,6 +83,7 @@ struct ProcessorData {
 #ifdef ENABLE_NESTED_EPT
 	EptData*		EptDat02;					
 	EptData*		EptDat12;
+	ULONG_PTR		LastEptFaultAddr;
 #endif
 
 };
@@ -93,6 +94,7 @@ struct ProcessorData {
 //
 // prototypes
 //
+
 ////////////////////////////////////////////////////////////////////////////////
 //
 // variables

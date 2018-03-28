@@ -946,48 +946,27 @@ NTSTATUS VMEntryEmulate(VCPUVMX* vCPU, GuestContext* guest_context , BOOLEAN IsV
 		VmxSecondaryProcessorBasedControls ProcCtrl = { UtilVmRead64(VmcsField::kSecondaryVmExecControl) };
 		if (ProcCtrl.fields.enable_ept)
 		{
-			//1. Determine if Nested EPT Enabled.
-			//2. Build-EPT0-2 
+			EptData*	Ept02Data=nullptr;
+			EptData*	Ept12Data=nullptr;	//1. Determine if Nested EPT Enabled.
+			EptData*	Ept01Data=nullptr;	//2. Build-EPT0-2  
 
 			ULONG64 _Ept12Ptr = NULL;
-			VmRead64(VmcsField::kEptPointer, vmcs12_va, &_Ept12Ptr);
+			VmRead64(VmcsField::kEptPointer, vmcs12_va, &_Ept12Ptr); 
+			Ept02Data = EptBuildEptDataByEptp(); 
+			Ept12Data = EptBuildEptDataByEptp();
+			Ept01Data = GetCurrentEpt01Pointer(guest_context);
+			if (Ept02Data && Ept12Data && Ept01Data)
+			{
+				EptpBuildNestedEpt(_Ept12Ptr, Ept12Data, Ept02Data);
+				
+				SaveCurrentEpt02Pointer(guest_context, Ept02Data);
+				SaveCurrentEpt12Pointer(guest_context, Ept12Data);
 
-			EptPointer*		 Ept12Ptr = (EptPointer*)ExAllocatePoolWithTag(NonPagedPoolMustSucceed, PAGE_SIZE, 'eptp');
-			Ept12Ptr->all = _Ept12Ptr;
+				EptpInvalidateEpt(Ept01Data, Ept12Data->ept_pml4);
 
-			EptPointer*		 Ept02Ptr = (EptPointer*)ExAllocatePoolWithTag(NonPagedPoolMustSucceed, PAGE_SIZE, 'eptp');
-			EptCommonEntry* Pml4Entry = (EptCommonEntry*)ExAllocatePoolWithTag(NonPagedPoolMustSucceed, PAGE_SIZE, 'pml4');
-
-			RtlZeroMemory(Ept02Ptr, PAGE_SIZE);
-			RtlZeroMemory(Pml4Entry, PAGE_SIZE);
-
-			Pml4Entry->fields.read_access = false;
-			Pml4Entry->fields.execute_access = false;
-			Pml4Entry->fields.memory_type = 0;
-			Pml4Entry->fields.write_access = false;
-
-			Ept02Ptr->fields.memory_type = static_cast<ULONG>(memory_type::kWriteBack);
-			Ept02Ptr->fields.pml4_address = UtilPfnFromPa(UtilPaFromVa(Pml4Entry));
-			Ept02Ptr->fields.page_walk_length = 4 - 1;
-			Ept02Ptr->fields.enable_accessed_and_dirty_flags = false;
-
-
-			EptData*	Ept02Data = EptBuildEptDataByEptp();
-			Ept02Data->ept_pointer = Ept02Ptr;
-			Ept02Data->ept_pml4 = Pml4Entry;
-
-			EptData*	Ept12Data = EptBuildEptDataByEptp();
-			Ept12Data->ept_pointer = Ept12Ptr;
-			Ept12Data->ept_pml4 = (EptCommonEntry*)UtilVaFromPfn(Ept12Ptr->fields.pml4_address);
-
-			//vmcs0-2 with ept0-2
-			SaveCurrentEpt02Pointer(guest_context, Ept02Data);
-			SaveCurrentEpt12Pointer(guest_context, Ept12Data);
-			
-			EptpInvalidateEpt(GetCurrentEpt01Pointer(guest_context), Ept12Data->ept_pml4);
-			HYPERPLATFORM_LOG_DEBUG("EPT02 PML4 VA: %p %p", Pml4Entry, UtilVaFromPfn(Ept02Ptr->fields.pml4_address));
-			UtilVmWrite64(VmcsField::kEptPointer, Ept02Ptr->all);
-			UtilInveptGlobal();
+				UtilVmWrite64(VmcsField::kEptPointer, Ept02Data->ept_pointer->all);
+				UtilInveptGlobal();
+			}
 		}
 		// We must be careful of this, since we jmp back to the Guest soon. 
 		// It is a exceptional case  
@@ -1009,9 +988,13 @@ NTSTATUS VMEntryEmulate(VCPUVMX* vCPU, GuestContext* guest_context , BOOLEAN IsV
 
 		if (ProcCtrl.fields.enable_ept)
 		{
-			UtilVmWrite64(VmcsField::kEptPointer,  GetCurrentEpt02Pointer(guest_context)->ept_pointer->all);
+			EptData* ept_data02 = GetCurrentEpt02Pointer(guest_context);
+			if (ept_data02)
+			{
+				UtilVmWrite64(VmcsField::kEptPointer, ept_data02->ept_pointer->all);
+			}
 		}
-
+		
 		RestoreGuestCr8(vCPU);
 		LoadGuestKernelGsBase(GetProcessorData(guest_context));
 	}
@@ -1158,7 +1141,15 @@ VOID VmxoffEmulate(
 		//load back vmcs01
 		__vmx_vmptrld(&vcpu_vmx->vmcs01_pa); 
 	 
-		EptpValidateEpt(GetCurrentEpt01Pointer(guest_context), GetCurrentEpt12Pointer(guest_context)->ept_pml4);
+		EptData* ept_data01 = GetCurrentEpt01Pointer(guest_context);
+		EptData* ept_data12 = GetCurrentEpt12Pointer(guest_context);  
+
+		if (ept_data01 && ept_data12)
+		{
+			EptpValidateEpt(ept_data01, ept_data12->ept_pml4);  
+			ExFreePool(ept_data12); 
+			ept_data12 = nullptr;
+		} 
 
 		SaveCurrentEpt02Pointer(guest_context, nullptr);
 		SaveCurrentEpt12Pointer(guest_context, nullptr);

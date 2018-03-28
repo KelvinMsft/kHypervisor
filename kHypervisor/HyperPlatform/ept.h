@@ -101,14 +101,27 @@ EptCommonEntry *EptpConstructTablesEx(
 	EptData *ept_data, EptCommonEntry* reserved);
 
 
-void  EptpInvalidateEpt(EptData* EptData01, EptCommonEntry *pml4_table);
-void  EptpValidateEpt(EptData* EptData01, EptCommonEntry *pml4_table);
+void  EptpInvalidateEpt(
+		EptData* EptData01, 
+		EptCommonEntry *pml4_table
+);
 
-_Use_decl_annotations_ bool  EptpIsInRangesOfEpt(
+void  EptpValidateEpt(
+		EptData* EptData01, 
+		EptCommonEntry *pml4_table
+);
+
+bool  EptpIsInRangesOfEpt(
 	ULONG_PTR PhysicalAddres, 
 	EptData* EptData01, 
 	EptCommonEntry *pml4_table
 );
+
+
+NTSTATUS  EptpBuildNestedEpt(
+	ULONG_PTR vmcs12_va,
+	EptData* ept_data12,
+	EptData* ept_data02);
 
 /// Reads and stores all MTRRs to set a correct memory type for EPT
 _IRQL_requires_max_(PASSIVE_LEVEL) void EptInitializeMtrrEntries();

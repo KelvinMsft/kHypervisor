@@ -872,53 +872,6 @@ _Use_decl_annotations_ EptCommonEntry*  EptpGetNextLevelTableBase(EptData* EptDa
 	return nullptr;
 } 
 
-_Use_decl_annotations_ bool  EptpIsInRangesOfEpt(ULONG_PTR PhysicalAddres, EptData* EptData01, EptCommonEntry *pml4_table)
-{
-	EptCommonEntry* pdptr_table = NULL;
-	EptCommonEntry* pdt_table = NULL;
-	EptCommonEntry* pt_table = NULL;
-	bool IsMatch = false;
-	for (int i = 0; i < 512 && pml4_table; i++, pml4_table++)			//PML4
-	{
-		ULONG_PTR pml4_entry_pa = UtilPaFromVa(pml4_table);
-		if (PhysicalAddres == pml4_entry_pa)
-		{
-			IsMatch = true;
-			return IsMatch;
-		} 
-		pdptr_table = EptpGetNextLevelTableBase(EptData01, pml4_table);
-		for (int j = 0; j < 512 && pdptr_table; j++, pdptr_table++)		//PDPTR
-		{
-			ULONG_PTR pdptr_entry_pa = UtilPaFromVa(pdptr_table);
-			if (PhysicalAddres == pdptr_entry_pa)
-			{
-				IsMatch = true;
-				return IsMatch;
-			} 
-			pdt_table = EptpGetNextLevelTableBase(EptData01, pdptr_table);
-			for (int k = 0; k < 512 && pdt_table; k++, pdt_table++)		// PDT
-			{
-				ULONG_PTR pdt_entry_pa = UtilPaFromVa(pdt_table);
-				if (PhysicalAddres == pdt_entry_pa)
-				{
-					IsMatch = true;
-					return IsMatch;;
-				}
-			 
-				pt_table = EptpGetNextLevelTableBase(EptData01, pdt_table);
-				for (int p = 0; p < 512 && pt_table; p++, pt_table++)
-				{
-					if (PhysicalAddres == UtilPaFromVa(pt_table))
-					{
-						IsMatch = true;
-						return IsMatch;;
-					}
-				}
-			}
-		}
-	}
-	return IsMatch;
-}
 
 _Use_decl_annotations_ ULONG64  EptpGetNextLevelTablePhysicalBase(EptData* EptData01, EptCommonEntry *table)
 {
@@ -930,6 +883,43 @@ _Use_decl_annotations_ ULONG64  EptpGetNextLevelTablePhysicalBase(EptData* EptDa
 	}
 	return 0;
 }
+_Use_decl_annotations_ bool  EptpIsInRangesOfEpt(ULONG_PTR PhysicalAddres, EptData* EptData01, EptCommonEntry *pml4_table)
+{
+	EptCommonEntry* pdptr_table = NULL;
+	EptCommonEntry* pdt_table = NULL;
+	EptCommonEntry* pt_table = NULL;
+	bool IsMatch = false;
+	for (int i = 0; i < 1 && pml4_table; i++, pml4_table++)			//PML4
+	{
+		ULONG_PTR pdptr_entry_pa = EptpGetNextLevelTablePhysicalBase(EptData01, pml4_table);
+		if (PAGE_ALIGN(PhysicalAddres) == (void*)pdptr_entry_pa)
+		{
+			IsMatch = true;
+			return IsMatch;
+		}
+		pdptr_table = (EptCommonEntry*)UtilVaFromPa(pdptr_entry_pa);
+		for (int j = 0; j < 512 && pdptr_table; j++, pdptr_table++)		//PDPTR
+		{
+			ULONG_PTR pdt_entry_pa = EptpGetNextLevelTablePhysicalBase(EptData01, pdptr_table);
+			if (PAGE_ALIGN(PhysicalAddres) == (void*)pdt_entry_pa)
+			{
+				IsMatch = true;
+				return IsMatch;
+			}
+			pdt_table = (EptCommonEntry*)UtilVaFromPa(pdt_entry_pa);
+			for (int k = 0; k < 512 && pdt_table; k++, pdt_table++)		// PDT
+			{
+				ULONG_PTR pt_table_pa = EptpGetNextLevelTablePhysicalBase(EptData01, pdt_table);
+				if (PAGE_ALIGN(PhysicalAddres) == (void*)pt_table_pa)
+				{
+					IsMatch = true;
+					return IsMatch;
+				}
+			}
+		}
+	}
+	return IsMatch;
+} 
 _Use_decl_annotations_ void  EptpSetEntryAccess(
 	EptData* ept_data, ULONG_PTR physical_address, bool readable, bool writable, bool executable)
 {
@@ -955,9 +945,7 @@ _Use_decl_annotations_ void  EptpEnumerateEpt(EptData* EptData01, EptCommonEntry
 	{
 		return;
 	}
-
-	EptpSetEntryAccess(EptData01, (ULONG64)UtilPaFromVa(pml4_table), true, false, true);
-
+	  
  	for (int i = 0; i < 512 && pml4_table; i++, pml4_table++, level4++)			//PML4
 	{
 		ULONG64 pdptr_entry_pa = (ULONG64)EptpGetNextLevelTablePhysicalBase(EptData01, pml4_table);
@@ -968,7 +956,7 @@ _Use_decl_annotations_ void  EptpEnumerateEpt(EptData* EptData01, EptCommonEntry
 		pdptr_table = (EptCommonEntry*)UtilVaFromPa(pdptr_entry_pa);
 		for (int j = 0; j < 512 && pdptr_table; j++, pdptr_table++, level3++)	//PDPTR
 		{ 
-			EptpSetEntryAccess(EptData01,(ULONG64)pdptr_entry_pa, true, false, true); 
+			EptpSetEntryAccess(EptData01,(ULONG64)pdptr_entry_pa, true, writable, true);
 			ULONG64 pdt_entry_pa = (ULONG64)EptpGetNextLevelTablePhysicalBase(EptData01, pdptr_table);
 			if (!pdt_entry_pa)
 			{
@@ -977,13 +965,13 @@ _Use_decl_annotations_ void  EptpEnumerateEpt(EptData* EptData01, EptCommonEntry
 			pdt_table = (EptCommonEntry*)UtilVaFromPa(pdt_entry_pa);
 			for (int k = 0; k < 512 && pdt_table; k++, pdt_table++, level2++)		// PDT
 			{ 
-				EptpSetEntryAccess(EptData01, (ULONG64)pdt_entry_pa, true, false, true);
+				EptpSetEntryAccess(EptData01, (ULONG64)pdt_entry_pa, true, writable, true);
 				ULONG64 pt_entry_pa = (ULONG64)EptpGetNextLevelTablePhysicalBase(EptData01, pdt_table);
 				if (!pt_entry_pa)
 				{
 					break;
 				}
-				EptpSetEntryAccess(EptData01, (ULONG64)pt_entry_pa, true, false, true); 
+				EptpSetEntryAccess(EptData01, (ULONG64)pt_entry_pa, true, writable, true);
 			}
 		}
 	}

@@ -827,7 +827,7 @@ extern "C" {
 					break;
 				}
 			}
-			HYPERPLATFORM_LOG_DEBUG_SAFE("[EPT]: %p", Ept02Pte->fields.physial_address);
+ 
 			status =  VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
 		} while (0);
 		return status;

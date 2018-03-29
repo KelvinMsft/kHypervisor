@@ -1028,7 +1028,9 @@ extern "C" {
 				break;
 			}
 
-			HYPERPLATFORM_LOG_DEBUG("L1 Acccess PTE_va= %p pa= %p, modified page= %p R= %x W= %x E= %x", 
+			//TODO: we need to get back the EPTPTE source operand AND get the PTE of EPT02, and update it access right and pages.
+
+			HYPERPLATFORM_LOG_DEBUG("L1 Acccess PTE_va= %p pa= %p,	modified page= %p	R= %x	W= %x	E= %x", 
 				entry12, guest_context->stack->processor_data->LastEptFaultAddr, entry12->fields.physial_address,
 				entry12->fields.read_access, entry12->fields.write_access, entry12->fields.execute_access);
 

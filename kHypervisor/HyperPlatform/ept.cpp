@@ -745,7 +745,7 @@ _Use_decl_annotations_ void EptHandleEptViolationEx(EptData *ept_data, EptData *
 		{  
 			EptCommonEntry* entry = (EptCommonEntry*)UtilVaFromPa(UtilVmRead64(VmcsField::kGuestPhysicalAddress));
 			Ept01Pte->fields.write_access = true;
-			HYPERPLATFORM_LOG_DEBUG("Faced non-writable address but it is readble. :%p  %p", UtilVmRead64(VmcsField::kGuestPhysicalAddress), entry->fields.physial_address);
+			HYPERPLATFORM_LOG_DEBUG_SAFE("Faced non-writable address but it is readble. :%p  %p", UtilVmRead64(VmcsField::kGuestPhysicalAddress), entry->fields.physial_address);
 			UtilInveptGlobal();
 		}
 	}
@@ -939,7 +939,7 @@ _Use_decl_annotations_ void  EptpEnumerateEpt(EptData* EptData01, EptCommonEntry
 	EptCommonEntry* pt_table = NULL;
 	ULONG level4 = 0 , level3 = 0, level2 =0, level1 = 0;
 
-	HYPERPLATFORM_LOG_DEBUG("EptpInvalidateTable start ");
+	HYPERPLATFORM_LOG_DEBUG_SAFE("EptpInvalidateTable start ");
 	  
 	if (!pml4_table)
 	{
@@ -976,7 +976,7 @@ _Use_decl_annotations_ void  EptpEnumerateEpt(EptData* EptData01, EptCommonEntry
 		}
 	}
 	 
-	HYPERPLATFORM_LOG_DEBUG("EptpInvalidateTable end %d %d %d %d", level4, level3, level2, level1);
+	HYPERPLATFORM_LOG_DEBUG_SAFE("EptpInvalidateTable end %d %d %d %d", level4, level3, level2, level1);
 }
 
 _Use_decl_annotations_ void  EptpValidateEpt(EptData* EptData01, EptCommonEntry *pml4_table)

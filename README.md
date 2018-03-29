@@ -46,9 +46,9 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
 
 `2018-02-05`  Added Nested EPT which is running in Windows 7 x64 build 7601 system. (still not test by Windows 10)
 
-`2018-03-28   Use lateste version repo of Ddimon as a being nested-target, deleted nested-vmm
+`2018-03-28`   Use lateste version repo of Ddimon as a being nested-target, deleted nested-vmm
 
-`2018-03-29   Added Nested EPT monitoring , when the PTE entry OF guest EPT is modified, L0 knows.
+`2018-03-29`   Added Nested EPT monitoring , when the PTE entry OF guest EPT is modified, L0 knows.
 
 # Installation
 

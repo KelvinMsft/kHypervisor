@@ -823,9 +823,9 @@ extern "C" {
 					//TODO: switch guest cr3. 
 					UtilInveptGlobal();
 					HYPERPLATFORM_LOG_DEBUG("We are using EPT0-2 Currently !!!");
-					status = STATUS_SUCCESS;
-					break;
 				}
+				status = STATUS_SUCCESS;
+				break;
 			}
  
 			status =  VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
@@ -1013,12 +1013,14 @@ extern "C" {
 			{
 				break;
 			}
+		
 			//before MTF , L1 change its EPT (EPT1-2) , we need to know the content now, find it by fault GPA
 			EptCommonEntry* entry12 = (EptCommonEntry*)UtilVaFromPa(guest_context->stack->processor_data->LastEptFaultAddr);
 			if (!entry12 || !entry12->fields.physial_address)
 			{
 				break;
 			}
+			
 			//we need to know the corresponding HPA to the latest modified value  
 			EptCommonEntry* entry01 = EptGetEptPtEntry(guest_context->stack->processor_data->ept_data, guest_context->stack->processor_data->LastEptFaultAddr);
 			if (!entry01 || !entry01->fields.physial_address)
@@ -1026,31 +1028,10 @@ extern "C" {
 				break;
 			}
 
-			//we need to update the EPT for L2 (EPT0-2) by the Fault PA
-			//LastEptFaultAddr is a Guest Physical Address of some EPTPTE
-			//and we need to find it out through EPT02, so that we make it  
-			//gets affect to the L2 Guest
-			EptCommonEntry* entry02 = EptGetEptPtEntry(guest_context->stack->processor_data->EptDat02, guest_context->stack->processor_data->LastEptFaultAddr);
-			if (!entry02 || !entry02->fields.physial_address)
-			{
-				break;
-			}
-			 
-			EptCommonEntry* _entry02 = (EptCommonEntry*)UtilVaFromPfn(entry02->fields.physial_address);  
-			PUCHAR _old = (PUCHAR)UtilVaFromPfn(_entry02->fields.physial_address);
+			HYPERPLATFORM_LOG_DEBUG("L1 Acccess PTE_va= %p pa= %p, modified page= %p R= %x W= %x E= %x", 
+				entry12, guest_context->stack->processor_data->LastEptFaultAddr, entry12->fields.physial_address,
+				entry12->fields.read_access, entry12->fields.write_access, entry12->fields.execute_access);
 
-			_entry02->fields.read_access = entry12->fields.read_access;
-			_entry02->fields.write_access = entry12->fields.write_access;
-			_entry02->fields.execute_access = entry12->fields.execute_access;
-			_entry02->fields.physial_address = entry12->fields.physial_address;
-	
-			PUCHAR _new = (PUCHAR)UtilVaFromPfn(_entry02->fields.physial_address);
-			if (_old != _new)
-			{
-				///	p =(PUCHAR)UtilVaFromPfn(_entry->fields.physial_address); 
-				HYPERPLATFORM_LOG_DEBUG("AFTER HandleMonitor Trap Flag %d-%d-%d %d-%d-%d %p %p %p %p new: %p", _entry02->fields.read_access, _entry02->fields.write_access, _entry02->fields.execute_access,
-					entry12->fields.read_access, entry12->fields.write_access, entry12->fields.execute_access, _entry02->fields.physial_address, entry02->fields.physial_address, entry12->fields.physial_address, _new, _old);
-			}
 			//Turn back the address to be non-writable 
 			entry01->fields.write_access = false; 
 			guest_context->stack->processor_data->LastEptFaultAddr = 0;

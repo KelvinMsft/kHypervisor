@@ -944,7 +944,7 @@ NTSTATUS VMEntryEmulate(VCPUVMX* vCPU, GuestContext* guest_context , BOOLEAN IsV
 	{
 		VmxStatus status;
 		VmxSecondaryProcessorBasedControls ProcCtrl = { UtilVmRead64(VmcsField::kSecondaryVmExecControl) };
-		if (ProcCtrl.fields.enable_ept)
+	 	if (ProcCtrl.fields.enable_ept)
 		{
 			EptData*	Ept02Data=nullptr;
 			EptData*	Ept12Data=nullptr;	//1. Determine if Nested EPT Enabled.
@@ -962,12 +962,13 @@ NTSTATUS VMEntryEmulate(VCPUVMX* vCPU, GuestContext* guest_context , BOOLEAN IsV
 				SaveCurrentEpt02Pointer(guest_context, Ept02Data);
 				SaveCurrentEpt12Pointer(guest_context, Ept12Data);
 
-				EptpInvalidateEpt(Ept01Data, Ept12Data->ept_pml4);
+				//EptpInvalidateEpt(Ept01Data, Ept12Data->ept_pml4);
 
 				UtilVmWrite64(VmcsField::kEptPointer, Ept02Data->ept_pointer->all);
 				UtilInveptGlobal();
 			}
 		}
+	
 		// We must be careful of this, since we jmp back to the Guest soon. 
 		// It is a exceptional case  
 		if (GetGuestIrql(guest_context) < DISPATCH_LEVEL)
@@ -994,7 +995,7 @@ NTSTATUS VMEntryEmulate(VCPUVMX* vCPU, GuestContext* guest_context , BOOLEAN IsV
 				UtilVmWrite64(VmcsField::kEptPointer, ept_data02->ept_pointer->all);
 			}
 		}
-		
+
 		RestoreGuestCr8(vCPU);
 		LoadGuestKernelGsBase(GetProcessorData(guest_context));
 	}

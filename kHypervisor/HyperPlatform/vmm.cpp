@@ -772,6 +772,11 @@ extern "C" {
 			const EptViolationQualification exit_qualification = {
 				UtilVmRead(VmcsField::kExitQualification) };
 
+			if (!guest_context->stack->processor_data->EptDat12 || 
+				!guest_context->stack->processor_data->EptDat02)
+			{
+				break;
+			}
 			//Translate L2 nGPA to L1 GPA
 			EptCommonEntry *Ept12Pte = EptGetEptPtEntry(guest_context->stack->processor_data->EptDat12, UtilVmRead64(VmcsField::kGuestPhysicalAddress));
 			if (!Ept12Pte || !Ept12Pte->all)
@@ -782,7 +787,7 @@ extern "C" {
 				break;
 			}
 
-			HYPERPLATFORM_LOG_DEBUG("Translating L2  GuestRip: %p Qualification: %I64x nGVA: %p nGPA: %p to GPA: %p", UtilVmRead64(VmcsField::kGuestRip), exit_qualification.all, UtilVmRead64(VmcsField::kGuestLinearAddress), UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept12Pte->fields.physial_address);
+			HYPERPLATFORM_LOG_DEBUG_SAFE("Translating L2  GuestRip: %p Qualification: %I64x nGVA: %p nGPA: %p to GPA: %p", UtilVmRead64(VmcsField::kGuestRip), exit_qualification.all, UtilVmRead64(VmcsField::kGuestLinearAddress), UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept12Pte->fields.physial_address);
 
 			//Translate L1 GPA to HPA 
 			EptCommonEntry *Ept01Entry = EptGetEptPtEntry(guest_context->stack->processor_data->ept_data, UtilPaFromPfn(Ept12Pte->fields.physial_address));
@@ -800,7 +805,7 @@ extern "C" {
 				break;
 			}
 
-			HYPERPLATFORM_LOG_DEBUG("Translting L1 GPA: %p to HPA: %p", UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept01Entry->fields.physial_address);
+			HYPERPLATFORM_LOG_DEBUG_SAFE("Translting L1 GPA: %p to HPA: %p", UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept01Entry->fields.physial_address);
 
 			EptCommonEntry* Ept02Pte = EptGetEptPtEntry(guest_context->stack->processor_data->EptDat02, UtilVmRead64(VmcsField::kGuestPhysicalAddress));
 			if (!exit_qualification.fields.ept_readable &&
@@ -822,7 +827,7 @@ extern "C" {
 
 					//TODO: switch guest cr3. 
 					UtilInveptGlobal();
-					HYPERPLATFORM_LOG_DEBUG("We are using EPT0-2 Currently !!!");
+					HYPERPLATFORM_LOG_DEBUG_SAFE("We are using EPT0-2 Currently !!!");
 				}
 				status = STATUS_SUCCESS;
 				break;

@@ -781,7 +781,7 @@ extern "C" {
 			EptCommonEntry *Ept12Pte = EptGetEptPtEntry(guest_context->stack->processor_data->EptDat12, UtilVmRead64(VmcsField::kGuestPhysicalAddress));
 			if (!Ept12Pte || !Ept12Pte->all)
 			{
-				HYPERPLATFORM_LOG_DEBUG("Nested Guest Translate GPA: %p to by EPTPTE Error (pte: %p)", UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept12Pte);
+				HYPERPLATFORM_LOG_DEBUG_SAFE("Nested Guest Translate GPA: %p to by EPTPTE Error (pte: %p)", UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept12Pte);
 				HYPERPLATFORM_COMMON_DBG_BREAK();
 				status = VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
 				break;
@@ -794,7 +794,7 @@ extern "C" {
 			if (!Ept01Entry || !Ept01Entry->all)
 			{
 				EptHandleEptViolation(guest_context->stack->processor_data->ept_data, nullptr, false);
-				HYPERPLATFORM_LOG_DEBUG("case 4 l1 GPA: %p to entry2: %p", UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept01Entry);
+				HYPERPLATFORM_LOG_DEBUG_SAFE("case 4 l1 GPA: %p to entry2: %p", UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept01Entry);
 				HYPERPLATFORM_COMMON_DBG_BREAK();
 			}
 

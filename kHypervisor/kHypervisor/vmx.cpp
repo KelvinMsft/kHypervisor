@@ -962,7 +962,7 @@ NTSTATUS VMEntryEmulate(VCPUVMX* vCPU, GuestContext* guest_context , BOOLEAN IsV
 				SaveCurrentEpt02Pointer(guest_context, Ept02Data);
 				SaveCurrentEpt12Pointer(guest_context, Ept12Data);
 
-				//EptpInvalidateEpt(Ept01Data, Ept12Data->ept_pml4);
+				EptpInvalidateEpt(Ept01Data, Ept12Data->ept_pml4);
 
 				UtilVmWrite64(VmcsField::kEptPointer, Ept02Data->ept_pointer->all);
 				UtilInveptGlobal();

@@ -525,8 +525,9 @@ _Use_decl_annotations_  EptCommonEntry *EptpConstructTablesEx(
 		}
 		else
 		{
-			ept_pml4_entry->all = reserved->all;
-			reserved = reinterpret_cast<EptCommonEntry *>(UtilVaFromPfn(reserved->fields.physial_address));
+			const auto ept01_pml4_entry = &reserved[pxe_index];
+			ept_pml4_entry->all = ept01_pml4_entry->all;
+			reserved = reinterpret_cast<EptCommonEntry *>(UtilVaFromPfn(ept01_pml4_entry->fields.physial_address));
 		}
       }
 	  
@@ -550,8 +551,9 @@ _Use_decl_annotations_  EptCommonEntry *EptpConstructTablesEx(
 		  }
 		  else
 		  {
-			  ept_pdpt_entry->all = reserved->all;
-			  reserved = reinterpret_cast<EptCommonEntry *>(UtilVaFromPfn(ept_pdpt_entry->fields.physial_address));
+			  const auto ept01_pdpt_entry = &reserved[ppe_index];
+			  ept_pdpt_entry->all = ept01_pdpt_entry->all;
+			  reserved = reinterpret_cast<EptCommonEntry *>(UtilVaFromPfn(ept01_pdpt_entry->fields.physial_address));
 		  } 
 	  } 
       return EptpConstructTablesEx(
@@ -575,8 +577,9 @@ _Use_decl_annotations_  EptCommonEntry *EptpConstructTablesEx(
 		  }
 		  else
 		  {
-			  ept_pdt_entry->all = reserved->all;
-			  reserved = reinterpret_cast<EptCommonEntry *>(UtilVaFromPfn(ept_pdt_entry->fields.physial_address));
+			  const auto ept01_pdt_entry = &reserved[pde_index];
+			  ept_pdt_entry->all = ept01_pdt_entry->all;
+			  reserved = reinterpret_cast<EptCommonEntry *>(UtilVaFromPfn(ept01_pdt_entry->fields.physial_address));
 		  }
 	  }
       return EptpConstructTablesEx(
@@ -597,7 +600,8 @@ _Use_decl_annotations_  EptCommonEntry *EptpConstructTablesEx(
 		  }
 		  else
 		  {
-			  ept_pt_entry->all = reserved->all;
+			  const auto ept01_pt_entry = &reserved[pte_index];
+			  ept_pt_entry->all = ept01_pt_entry->all;
 		  }
 	  }		
 	  return ept_pt_entry;

@@ -117,7 +117,9 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
    <img src="https://user-images.githubusercontent.com/22551808/38097002-d4d521fc-33a6-11e8-95ad-67b22f92c558.png" width="70%" height="70%"/>
 </img></br>
 
-  
+  # P.S.
+  With a highest stablility, better close nested-EPT or running nested-EPT in a unicore enivronment first. 
+ 
 # TODO
  - Fully Support CPU Feature from vCPU aspect.
  - ~~EPT virtualization~~

@@ -21,7 +21,7 @@ Environment:
 	Kernel VMM Mode
 
 --*/
-
+#pragma once
 #ifndef NESTED_HYPERPLATFORM_VMX_H_
 #define NESTED_HYPERPLATFORM_VMX_H_
 #include <fltKernel.h>

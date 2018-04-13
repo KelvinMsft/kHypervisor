@@ -27,7 +27,6 @@ extern "C" {
 	//
 	// constants and macros
 	//
-	BOOLEAN IsEmulateVMExit = FALSE;
 	// Whether VM-exit recording is enabled
 	static const long kVmmpEnableRecordVmExit = false;
 
@@ -189,35 +188,35 @@ extern "C" {
 
 
 	//----------------------------------------------------------------------------------------------------------------//
-	_Use_decl_annotations_ GpRegisters* GetGpReg(GuestContext* guest_context)
+	_Use_decl_annotations_ GpRegisters* VmmpGetGpReg(GuestContext* guest_context)
 	{
 		return	guest_context->gp_regs;
 	}
 
 	//----------------------------------------------------------------------------------------------------------------//
-	_Use_decl_annotations_ FlagRegister* GetFlagReg(GuestContext* guest_context)
+	_Use_decl_annotations_ FlagRegister* VmmpGetFlagReg(GuestContext* guest_context)
 	{
 		return &guest_context->flag_reg;
 	}
 
 	//----------------------------------------------------------------------------------------------------------------//
-	_Use_decl_annotations_ KIRQL GetGuestIrql(GuestContext* guest_context)
+	_Use_decl_annotations_ KIRQL VmmpGetGuestIrql(GuestContext* guest_context)
 	{
 		return guest_context->irql;
 	}
 	//----------------------------------------------------------------------------------------------------------------//
-	_Use_decl_annotations_ ProcessorData* GetProcessorData(GuestContext* guest_context)
+	_Use_decl_annotations_ ProcessorData* VmmpGetProcessorData(GuestContext* guest_context)
 	{
 		return guest_context->stack->processor_data;
 	} 
 	//----------------------------------------------------------------------------------------------------------------//
-	_Use_decl_annotations_ ULONG_PTR GetGuestCr8(GuestContext* guest_context)
+	_Use_decl_annotations_ ULONG_PTR VmmpGetGuestCr8(GuestContext* guest_context)
 	{
 		return guest_context->cr8;
 	}
 
 	//----------------------------------------------------------------------------------------------------------------//
-	_Use_decl_annotations_ ULONG GetvCpuMode(GuestContext* guest_context)
+	_Use_decl_annotations_ ULONG VmmpGetvCpuMode(GuestContext* guest_context)
 	{
 		return guest_context->stack->processor_data->CpuMode;
 	}
@@ -229,52 +228,52 @@ extern "C" {
 	}
 
 	//----------------------------------------------------------------------------------------------------------------//
-	_Use_decl_annotations_ VOID EnterVmxMode(GuestContext* guest_context)
+	_Use_decl_annotations_ VOID VmmpEnterVmxMode(GuestContext* guest_context)
 	{
 		SetvCpuMode(guest_context, VmxMode);
 	}
 
 	//----------------------------------------------------------------------------------------------------------------//
-	_Use_decl_annotations_ VOID LeaveVmxMode(GuestContext* guest_context)
+	_Use_decl_annotations_ VOID VmmpLeaveVmxMode(GuestContext* guest_context)
 	{
 		SetvCpuMode(guest_context, ProtectedMode);
 	}
 
 	//----------------------------------------------------------------------------------------------------------------//
-	_Use_decl_annotations_ VCPUVMX* GetVcpuVmx(GuestContext* guest_context)
+	_Use_decl_annotations_ VCPUVMX* VmmpGetVcpuVmx(GuestContext* guest_context)
 	{
 		return guest_context->stack->processor_data->vcpu_vmx;
 	}
 
 	//----------------------------------------------------------------------------------------------------------------//
-	_Use_decl_annotations_ VOID SetvCpuVmx(GuestContext* guest_context, VCPUVMX* VCPUVMX)
+	_Use_decl_annotations_ VOID VmmpSetvCpuVmx(GuestContext* guest_context, VCPUVMX* VCPUVMX)
 	{
 		guest_context->stack->processor_data->vcpu_vmx = VCPUVMX;
 	}
 
 	//----------------------------------------------------------------------------------------------------------------//
-	_Use_decl_annotations_ EptData* GetCurrentEpt02Pointer(GuestContext* guest_context)
+	_Use_decl_annotations_ EptData* VmmGetCurrentEpt02Pointer(GuestContext* guest_context)
 	{
 		return guest_context->stack->processor_data->EptDat02;
 	}
 	//----------------------------------------------------------------------------------------------------------------//
-	_Use_decl_annotations_ void SaveCurrentEpt02Pointer(GuestContext* guest_context, EptData* Ept02)
+	_Use_decl_annotations_ void VmmSaveCurrentEpt02Pointer(GuestContext* guest_context, EptData* Ept02)
 	{
 		guest_context->stack->processor_data->EptDat02 = Ept02;
 	}
 
 	//----------------------------------------------------------------------------------------------------------------//
-	_Use_decl_annotations_ EptData* GetCurrentEpt12Pointer(GuestContext* guest_context)
+	_Use_decl_annotations_ EptData* VmmGetCurrentEpt12Pointer(GuestContext* guest_context)
 	{
 		return guest_context->stack->processor_data->EptDat12;
 	}
 	//----------------------------------------------------------------------------------------------------------------//
-	_Use_decl_annotations_ void SaveCurrentEpt12Pointer(GuestContext* guest_context, EptData* Ept12)
+	_Use_decl_annotations_ VOID VmmSaveCurrentEpt12Pointer(GuestContext* guest_context, EptData* Ept12)
 	{
 		guest_context->stack->processor_data->EptDat12 = Ept12;
 	}
 	//----------------------------------------------------------------------------------------------------------------//
-	_Use_decl_annotations_ EptData* GetCurrentEpt01Pointer(GuestContext* guest_context)
+	_Use_decl_annotations_ EptData* VmmGetCurrentEpt01Pointer(GuestContext* guest_context)
 	{
 		return guest_context->stack->processor_data->ept_data;
 	}
@@ -327,7 +326,7 @@ extern "C" {
 		}
 
 		// Apply possibly updated CR8 by the handler
-		if (IsX64()) //&& !IsEmulateVMExit) {
+		if (IsX64())
 		{
 			__writecr8(guest_context.cr8);
 		}
@@ -434,7 +433,7 @@ extern "C" {
 			return 0;
 		}
 
-		VCPUVMX* vcpu_vmx = GetVcpuVmx(guest_context);
+		VCPUVMX* vcpu_vmx = VmmpGetVcpuVmx(guest_context);
 		if (!vcpu_vmx || !vcpu_vmx->vmcs12_pa)
 		{
 			return 0;
@@ -467,7 +466,7 @@ extern "C" {
 		{
 			return  SecondaryCtrl;
 		}
-		VmRead32(VmcsField::kSecondaryVmExecControl, vmcs12_va, &CpuBasedVmExitCtrl);
+		VmcsVmRead32(VmcsField::kSecondaryVmExecControl, vmcs12_va, &CpuBasedVmExitCtrl);
 		SecondaryCtrl = { CpuBasedVmExitCtrl };
 		return SecondaryCtrl;
 	}
@@ -488,7 +487,7 @@ extern "C" {
 		{
 			return NULL;
 		}
-		VmRead64(VmcsField::kMsrBitmap, vmcs12_va, &msr_bitmap);
+		VmcsVmRead64(VmcsField::kMsrBitmap, vmcs12_va, &msr_bitmap);
 		return (PUCHAR)msr_bitmap;
 	}
 	//-----------------------------------------------------------------------------------------------------------------------//
@@ -509,7 +508,7 @@ extern "C" {
 		{
 			return  ctrl;
 		}
-		VmRead32(VmcsField::kCpuBasedVmExecControl, vmcs12_va, &CpuBasedVmExitCtrl);
+		VmcsVmRead32(VmcsField::kCpuBasedVmExecControl, vmcs12_va, &CpuBasedVmExitCtrl);
 		ctrl = { CpuBasedVmExitCtrl };
 		return ctrl;
 	}
@@ -523,12 +522,12 @@ extern "C" {
 		ULONG32    ExceptionBitmap = 0; 
 		ULONG_PTR  vmcs12_va = GetCurrentVmcs12(guest_context);
 
-		VmRead32(VmcsField::kExceptionBitmap, vmcs12_va, &ExceptionBitmap); 
+		VmcsVmRead32(VmcsField::kExceptionBitmap, vmcs12_va, &ExceptionBitmap); 
 		if (ExceptionBitmap & (1 << exception.fields.vector))
 		{
 			//HYPERPLATFORM_COMMON_DBG_BREAK(); 
 			HYPERPLATFORM_LOG_DEBUG("Exception vector: %x Rip: %p ", exception.fields.vector, UtilVmRead64(VmcsField::kGuestRip));
-			status =  VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+			status =  VmxVMExitEmulate(VmmpGetVcpuVmx(guest_context), guest_context);
 		}
 		return status;
 	}
@@ -539,7 +538,7 @@ extern "C" {
 	)
 	{
 		UNREFERENCED_PARAMETER(exit_reason);
-		return VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context); 
+		return VmxVMExitEmulate(VmmpGetVcpuVmx(guest_context), guest_context); 
 	}
 	//-----------------------------------------------------------------------------------------------------------------------//
 	_Use_decl_annotations_ static NTSTATUS VmmpHandleRdmsrForL2(
@@ -568,7 +567,7 @@ extern "C" {
 			return STATUS_UNSUCCESSFUL;
 		}
 
-		return VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+		return VmxVMExitEmulate(VmmpGetVcpuVmx(guest_context), guest_context);
 	}
 	//-----------------------------------------------------------------------------------------------------------------------//
 	_Use_decl_annotations_ static NTSTATUS VmmpHandleWrmsrForL2(
@@ -599,14 +598,14 @@ extern "C" {
 			return STATUS_UNSUCCESSFUL;
 		}
 
-		return VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+		return VmxVMExitEmulate(VmmpGetVcpuVmx(guest_context), guest_context);
 	}
 	//-----------------------------------------------------------------------------------------------------------------------//
 	_Use_decl_annotations_ static NTSTATUS VmmpHandleCpuidForL2(
 		_In_ GuestContext *guest_context
 	)
 	{  
-		return VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+		return VmxVMExitEmulate(VmmpGetVcpuVmx(guest_context), guest_context);
 	}
 	//-----------------------------------------------------------------------------------------------------------------------//
 	_Use_decl_annotations_ static NTSTATUS VmmpHandlerRdtscForL2(
@@ -620,7 +619,7 @@ extern "C" {
 		}
 
 		HYPERPLATFORM_LOG_DEBUG_SAFE("Rdtsc VMExit to L1");
-		return VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+		return VmxVMExitEmulate(VmmpGetVcpuVmx(guest_context), guest_context);
 	} 
 	//-----------------------------------------------------------------------------------------------------------------------//
 	_Use_decl_annotations_ static NTSTATUS VmmpHandlerCrAccessForL2(
@@ -702,7 +701,7 @@ extern "C" {
 			return STATUS_UNSUCCESSFUL;
 		}
 
-		return VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+		return VmxVMExitEmulate(VmmpGetVcpuVmx(guest_context), guest_context);
 	}
 
 	//-----------------------------------------------------------------------------------------------------------------------//
@@ -716,7 +715,7 @@ extern "C" {
 			return STATUS_UNSUCCESSFUL;
 		} 
 		HYPERPLATFORM_LOG_DEBUG_SAFE("DrAccess VMExit to L1");
-		return VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+		return VmxVMExitEmulate(VmmpGetVcpuVmx(guest_context), guest_context);
 	}
 
 	//-----------------------------------------------------------------------------------------------------------------------//
@@ -729,7 +728,7 @@ extern "C" {
 		{
 			return STATUS_UNSUCCESSFUL;
 		}
-		return VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+		return VmxVMExitEmulate(VmmpGetVcpuVmx(guest_context), guest_context);
 		//return STATUS_UNSUCCESSFUL;;
 	}
 	 
@@ -744,7 +743,7 @@ extern "C" {
 			return STATUS_UNSUCCESSFUL;
 		}
 		HYPERPLATFORM_LOG_DEBUG_SAFE("DescriptorTableAccess VMExit to L1"); 
-		return VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+		return VmxVMExitEmulate(VmmpGetVcpuVmx(guest_context), guest_context);
 	}
 	//-----------------------------------------------------------------------------------------------------------------------//
 	_Use_decl_annotations_ static NTSTATUS VmmpHandleEptViolationForL2(
@@ -783,7 +782,7 @@ extern "C" {
 			{
 				HYPERPLATFORM_LOG_DEBUG_SAFE("Nested Guest Translate GPA: %p to by EPTPTE Error (pte: %p)", UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept12Pte);
 				HYPERPLATFORM_COMMON_DBG_BREAK();
-				status = VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+				status = VmxVMExitEmulate(VmmpGetVcpuVmx(guest_context), guest_context);
 				break;
 			}
 
@@ -833,7 +832,7 @@ extern "C" {
 				break;
 			}
  
-			status =  VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+			status =  VmxVMExitEmulate(VmmpGetVcpuVmx(guest_context), guest_context);
 		} while (0);
 		return status;
 	}
@@ -844,7 +843,7 @@ extern "C" {
 	{
 		HYPERPLATFORM_COMMON_DBG_BREAK();
 		HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 2, 3, 5);
-		return VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+		return VmxVMExitEmulate(VmmpGetVcpuVmx(guest_context), guest_context);
 	}
 	//-----------------------------------------------------------------------------------------------------------------------//
 	_Use_decl_annotations_ static NTSTATUS VmmpHandleVmExitForL2(
@@ -949,12 +948,10 @@ extern "C" {
 			}
 		}
 
-		IsEmulateVMExit = FALSE;
-
 		do
 		{
 			//after vmxon emulation
-			if (GetvCpuMode(guest_context) != VmxMode)
+			if (VmmpGetvCpuMode(guest_context) != VmxMode)
 			{
 				//...
 				VmmpHandleVmExitForL1(guest_context);
@@ -964,7 +961,7 @@ extern "C" {
 			//after vmptrld emulation
 			//after vmlaunch / vmresume emulation		
 			ULONG64 vmcs_pa = 0;
-			VCPUVMX* vCPU = GetVcpuVmx(guest_context);
+			VCPUVMX* vCPU = VmmpGetVcpuVmx(guest_context);
 
 			__vmx_vmptrst(&vmcs_pa);
 

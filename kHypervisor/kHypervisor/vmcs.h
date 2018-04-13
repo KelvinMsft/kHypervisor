@@ -1,6 +1,25 @@
-// Copyright (c) 2016-2017, KelvinChan. All rights reserved.
-// Use of this source code is governed by a MIT-style license that can be
-// found in the LICENSE file.
+/*++
+
+Copyright (c) 2016 KelvinChan. All rights reserved.
+Use of this source code is governed by a MIT-style license that can be
+found in the LICENSE file.
+
+Module Name:
+
+
+Abstract:
+
+	VMCS utilies
+
+Author:
+	
+	Kelvin Chan
+
+Environment:
+
+	Kernel VMM Mode
+
+--*/
 #include <fltKernel.h>
 #include "..\HyperPlatform\asm.h"
 
@@ -11,8 +30,8 @@ extern "C"
 //
 // macro utilities
 //
-#define PrintVMCS(){ PrintAllField(__func__);}
-#define PrintVMCS12(vmcs12){ PrintAllFieldForVmcs12(__func__, vmcs12);}
+#define PrintVMCS(){ VmcsPrintAllField(__func__);}
+#define PrintVMCS12(vmcs12){ VmcsPrintAllFieldForVmcs12(__func__, vmcs12);}
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -42,90 +61,108 @@ extern "C"
 //
 // prototype
 //
-VOID    BuildGernericVMCSMap();
+VOID   
+BuildGernericVMCSMap();
 
-BOOLEAN RegularCheck();
+BOOLEAN 
+RegularCheck();
 
-BOOLEAN is_vmcs_field_supported(
-	VmcsField encoding
+BOOLEAN 
+is_vmcs_field_supported(
+	_In_ VmcsField encoding
 );
  
-VOID  VmRead64(
-	VmcsField Field, 
-	ULONG_PTR base, 
-	PULONG64 destination
+VOID  
+VmcsVmRead64(
+	_In_ VmcsField Field,
+	_In_ ULONG_PTR base,
+	_In_ PULONG64 destination
 );
 
-VOID  VmRead32(
-	VmcsField Field, 
-	ULONG_PTR base, 
-	PULONG32 destination
+VOID  
+VmcsVmRead32(
+	_In_ VmcsField Field,
+	_In_ ULONG_PTR base,
+	_In_ PULONG32 destination
 );
 
-VOID  VmRead16(
-	VmcsField Field, 
-	ULONG_PTR base, 
-	PUSHORT  destination
+VOID 
+VmcsVmRead16(
+	_In_ VmcsField Field,
+	_In_ ULONG_PTR base,
+	_In_ PUSHORT  destination
 );
 
-VOID  VmWrite64(
-	VmcsField Field, 
-	ULONG_PTR base, 
-	ULONG_PTR value
+VOID  
+VmcsVmWrite64(
+	_In_ VmcsField Field,
+	_In_ ULONG_PTR base,
+	_In_ ULONG_PTR value
 );
 
-VOID  VmWrite32(
-	VmcsField Field, 
-	ULONG_PTR base, 
-	ULONG_PTR value
+VOID  
+VmcsVmWrite32(
+	_In_ VmcsField Field,
+	_In_ ULONG_PTR base,
+	_In_ ULONG_PTR value
 );
 
-VOID  VmWrite16(
-	VmcsField Field, 
-	ULONG_PTR base,
-	ULONG_PTR value
+VOID  
+VmcsVmWrite16(
+	_In_ VmcsField Field,
+	_In_ ULONG_PTR base,
+	_In_ ULONG_PTR value
 );
 
-VmcsField DecodeVmwriteOrVmRead(
-	GpRegisters* guest_context,
-	ULONG_PTR* Offset,
-	ULONG_PTR* Value,
-	BOOLEAN* RorM,
-	ULONG_PTR* RegIndex = NULL,
-	ULONG_PTR* MemAddr = NULL
+VmcsField 
+VmcsDecodeVmwriteOrVmRead(
+	_In_ GpRegisters* guest_context,
+	_In_ ULONG_PTR* Offset,
+	_In_ ULONG_PTR* Value,
+	_In_ BOOLEAN* RorM,
+	_In_ ULONG_PTR* RegIndex = NULL,
+	_In_ ULONG_PTR* MemAddr = NULL
 );
 
-ULONG64 GetControlValue(
-	Msr msr, 
-	ULONG32* highpart, 
-	ULONG32* lowpart
+
+VOID 
+VmcsPrepareHostAndControlField(
+	_In_ ULONG_PTR vmcs12_va, 
+	_In_ ULONG_PTR vmcs02_va,
+	_In_ BOOLEAN isLaunch
 );
 
-VOID PrepareHostAndControlField(
-	ULONG_PTR vmcs12_va, 
-	ULONG_PTR vmcs02_va, 
-	BOOLEAN isLaunch
+VOID 
+VmcsPrepareGuestStateField(
+	_In_ ULONG_PTR guest_vmcs_va
 );
 
-VOID PrepareGuestStateField(
-	ULONG_PTR guest_vmcs_va
-);
+VOID 
+VmcsPrintControlField();
 
-VOID PrintControlField();
-VOID PrintHostStateField();
-VOID PrintGuestStateField();
-VOID PrintReadOnlyField();
-VOID PrintAllField(
-	const char* func
+VOID 
+VmcsPrintHostStateField();
+
+VOID 
+VmcsPrintGuestStateField();
+
+VOID
+VmcsPrintReadOnlyField();
+
+VOID
+VmcsPrintAllField(
+	_In_ const char* func
 ); 
 
-VOID PrintReadOnlyFieldForVmcs12(
-	ULONG64 vmcs12_va
+VOID 
+VmcsPrintReadOnlyFieldForVmcs12(
+	_In_ ULONG64 vmcs12_va
 );
 
-VOID PrintAllFieldForVmcs12(
-	const char* func, 
-	ULONG64 vmcs12
+VOID 
+VmcsPrintAllFieldForVmcs12(
+	_In_ const char* func,
+	_In_ ULONG64 vmcs12
 );
 
 }

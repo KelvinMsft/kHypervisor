@@ -36,33 +36,29 @@ extern "C"
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //// Prototype
 ////
-extern void			SaveCurrentEpt02Pointer(GuestContext* guest_context, EptData* Ept02);
-extern EptData*		GetCurrentEpt02Pointer(GuestContext* guest_context);
 
-extern EptData*		GetCurrentEpt01Pointer(GuestContext* guest_context);
-extern void			SaveCurrentEpt12Pointer(GuestContext* guest_context, EptData* Ept12);
-extern EptData*		GetCurrentEpt12Pointer(GuestContext* guest_context);
+VOID			
+SaveGuestCr8(
+	VCPUVMX* vcpu, 
+	ULONG_PTR cr8
+);
 
-extern ULONG		 VmpGetSegmentAccessRight(USHORT segment_selector);
-extern ULONG_PTR*	 VmmpSelectRegister(_In_ ULONG index, _In_ GuestContext *guest_context);
-extern GpRegisters*  GetGpReg(GuestContext* guest_context);
-extern FlagRegister* GetFlagReg(GuestContext* guest_context);
-extern KIRQL		 GetGuestIrql(GuestContext* guest_context);
-extern ULONG_PTR	 GetGuestCr8(GuestContext* guest_context);
-extern VCPUVMX*	 	 GetVcpuVmx(_In_ GuestContext* guest_context);
-extern VOID			 SetvCpuVmx(GuestContext* guest_context, VCPUVMX* VCPUVMX);
-extern VOID			 EnterVmxMode(GuestContext* guest_context);
-extern VOID			 LeaveVmxMode(GuestContext* guest_context);
-extern ULONG		 GetvCpuMode(GuestContext* guest_context); 
-void				 SaveGuestCr8(VCPUVMX* vcpu, ULONG_PTR cr8); 
-void				 RestoreGuestCr8(VCPUVMX* vcpu);
-extern ProcessorData* GetProcessorData(GuestContext* guest_context);
-VOID				 VmxAssertPrint(ULONG Line, bool IsVerified);
+VOID			
+RestoreGuestCr8(
+	VCPUVMX* vcpu
+);
+
+VOID			
+VmxAssertPrint(
+	ULONG Line, 
+	bool IsVerified
+);
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //// Marco
 ////
 
-#define HYPERPLATFORM_ASSERT(statement)   VmxAssertPrint(__LINE__ , statement); 
+#define HYPERPLATFORM_ASSERT(statement)   \
+			VmxAssertPrint(__LINE__ , statement); 
 	 
  
  
@@ -304,11 +300,11 @@ Return Value:
 		return;
 	}
 
-	vmx = GetVcpuVmx(guest_context);
+	vmx = VmmpGetVcpuVmx(guest_context);
 	__vmx_vmptrst(&vmcs_pa);
 
 	HYPERPLATFORM_LOG_DEBUG_SAFE("CurrentVmcs: %I64X vm: %I64x vmcs02: %I64X vmcs01: %I64x vmcs12: %I64x root mode: %I64x \r\n",
-		vmcs_pa, vmx, vmx->vmcs02_pa, vmx->vmcs01_pa, vmx->vmcs12_pa, vmx->inRoot, GetvCpuMode(guest_context));
+		vmcs_pa, vmx, vmx->vmcs02_pa, vmx->vmcs01_pa, vmx->vmcs12_pa, vmx->inRoot, VmmpGetvCpuMode(guest_context));
 }
 //------------------------------------------------------------------------------------------------//
 VOID VmxVmEntryCheckGuestReg()
@@ -840,18 +836,18 @@ Parameters:
 
 	ULONG_PTR vmexit_qualification = UtilVmRead(VmcsField::kExitQualification);
 
-	VmWrite32(VmcsField::kVmExitIntrInfo, vmcs12_va, exception.all);
-	VmWrite32(VmcsField::kVmExitReason, vmcs12_va, exit_reason.all);
-	VmWrite32(VmcsField::kExitQualification, vmcs12_va, vmexit_qualification);
-	VmWrite32(VmcsField::kVmExitInstructionLen, vmcs12_va, UtilVmRead(VmcsField::kVmExitInstructionLen));
-	VmWrite32(VmcsField::kVmInstructionError, vmcs12_va, UtilVmRead(VmcsField::kVmInstructionError));
-	VmWrite32(VmcsField::kVmExitIntrErrorCode, vmcs12_va, UtilVmRead(VmcsField::kVmExitIntrErrorCode));
-	VmWrite32(VmcsField::kIdtVectoringInfoField, vmcs12_va, UtilVmRead(VmcsField::kIdtVectoringInfoField));
-	VmWrite32(VmcsField::kIdtVectoringErrorCode, vmcs12_va, UtilVmRead(VmcsField::kIdtVectoringErrorCode));
-	VmWrite32(VmcsField::kVmxInstructionInfo, vmcs12_va, UtilVmRead(VmcsField::kVmxInstructionInfo));
+	VmcsVmWrite32(VmcsField::kVmExitIntrInfo, vmcs12_va, exception.all);
+	VmcsVmWrite32(VmcsField::kVmExitReason, vmcs12_va, exit_reason.all);
+	VmcsVmWrite32(VmcsField::kExitQualification, vmcs12_va, vmexit_qualification);
+	VmcsVmWrite32(VmcsField::kVmExitInstructionLen, vmcs12_va, UtilVmRead(VmcsField::kVmExitInstructionLen));
+	VmcsVmWrite32(VmcsField::kVmInstructionError, vmcs12_va, UtilVmRead(VmcsField::kVmInstructionError));
+	VmcsVmWrite32(VmcsField::kVmExitIntrErrorCode, vmcs12_va, UtilVmRead(VmcsField::kVmExitIntrErrorCode));
+	VmcsVmWrite32(VmcsField::kIdtVectoringInfoField, vmcs12_va, UtilVmRead(VmcsField::kIdtVectoringInfoField));
+	VmcsVmWrite32(VmcsField::kIdtVectoringErrorCode, vmcs12_va, UtilVmRead(VmcsField::kIdtVectoringErrorCode));
+	VmcsVmWrite32(VmcsField::kVmxInstructionInfo, vmcs12_va, UtilVmRead(VmcsField::kVmxInstructionInfo));
 
-	VmWrite64(VmcsField::kGuestLinearAddress, vmcs12_va, UtilVmRead(VmcsField::kGuestLinearAddress));
-	VmWrite64(VmcsField::kGuestPhysicalAddress, vmcs12_va, UtilVmRead(VmcsField::kGuestPhysicalAddress));
+	VmcsVmWrite64(VmcsField::kGuestLinearAddress, vmcs12_va, UtilVmRead(VmcsField::kGuestLinearAddress));
+	VmcsVmWrite64(VmcsField::kGuestPhysicalAddress, vmcs12_va, UtilVmRead(VmcsField::kGuestPhysicalAddress));
 
 }
 //------------------------------------------------------------------------------------------------//
@@ -890,69 +886,69 @@ Parameters:
 		return STATUS_UNSUCCESSFUL;
 	}
 
-	VmWrite64(VmcsField::kGuestRip, vmcs12_va, UtilVmRead(VmcsField::kGuestRip));
-	VmWrite64(VmcsField::kGuestRsp, vmcs12_va, UtilVmRead(VmcsField::kGuestRsp));
-	VmWrite64(VmcsField::kGuestCr3, vmcs12_va, UtilVmRead(VmcsField::kGuestCr3));
-	VmWrite64(VmcsField::kGuestCr0, vmcs12_va, UtilVmRead(VmcsField::kGuestCr0));
-	VmWrite64(VmcsField::kGuestCr4, vmcs12_va, UtilVmRead(VmcsField::kGuestCr4));
-	VmWrite64(VmcsField::kGuestDr7, vmcs12_va, UtilVmRead(VmcsField::kGuestDr7));
-	VmWrite64(VmcsField::kGuestRflags, vmcs12_va, UtilVmRead(VmcsField::kGuestRflags));
+	VmcsVmWrite64(VmcsField::kGuestRip, vmcs12_va, UtilVmRead(VmcsField::kGuestRip));
+	VmcsVmWrite64(VmcsField::kGuestRsp, vmcs12_va, UtilVmRead(VmcsField::kGuestRsp));
+	VmcsVmWrite64(VmcsField::kGuestCr3, vmcs12_va, UtilVmRead(VmcsField::kGuestCr3));
+	VmcsVmWrite64(VmcsField::kGuestCr0, vmcs12_va, UtilVmRead(VmcsField::kGuestCr0));
+	VmcsVmWrite64(VmcsField::kGuestCr4, vmcs12_va, UtilVmRead(VmcsField::kGuestCr4));
+	VmcsVmWrite64(VmcsField::kGuestDr7, vmcs12_va, UtilVmRead(VmcsField::kGuestDr7));
+	VmcsVmWrite64(VmcsField::kGuestRflags, vmcs12_va, UtilVmRead(VmcsField::kGuestRflags));
 
-	VmWrite16(VmcsField::kGuestEsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestEsSelector));
-	VmWrite16(VmcsField::kGuestCsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestCsSelector));
-	VmWrite16(VmcsField::kGuestSsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestSsSelector));
-	VmWrite16(VmcsField::kGuestDsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestDsSelector));
-	VmWrite16(VmcsField::kGuestFsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestFsSelector));
-	VmWrite16(VmcsField::kGuestGsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestGsSelector));
-	VmWrite16(VmcsField::kGuestLdtrSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestLdtrSelector));
-	VmWrite16(VmcsField::kGuestTrSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestTrSelector));
+	VmcsVmWrite16(VmcsField::kGuestEsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestEsSelector));
+	VmcsVmWrite16(VmcsField::kGuestCsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestCsSelector));
+	VmcsVmWrite16(VmcsField::kGuestSsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestSsSelector));
+	VmcsVmWrite16(VmcsField::kGuestDsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestDsSelector));
+	VmcsVmWrite16(VmcsField::kGuestFsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestFsSelector));
+	VmcsVmWrite16(VmcsField::kGuestGsSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestGsSelector));
+	VmcsVmWrite16(VmcsField::kGuestLdtrSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestLdtrSelector));
+	VmcsVmWrite16(VmcsField::kGuestTrSelector, vmcs12_va, UtilVmRead(VmcsField::kGuestTrSelector));
 
-	VmWrite32(VmcsField::kGuestEsLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestEsLimit));
-	VmWrite32(VmcsField::kGuestCsLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestCsLimit));
-	VmWrite32(VmcsField::kGuestSsLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestSsLimit));
-	VmWrite32(VmcsField::kGuestDsLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestDsLimit));
-	VmWrite32(VmcsField::kGuestFsLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestFsLimit));
-	VmWrite32(VmcsField::kGuestGsLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestGsLimit));
-	VmWrite32(VmcsField::kGuestLdtrLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestLdtrLimit));
-	VmWrite32(VmcsField::kGuestTrLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestTrLimit));
-	VmWrite32(VmcsField::kGuestGdtrLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestGdtrLimit));
-	VmWrite32(VmcsField::kGuestIdtrLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestIdtrLimit));
+	VmcsVmWrite32(VmcsField::kGuestEsLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestEsLimit));
+	VmcsVmWrite32(VmcsField::kGuestCsLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestCsLimit));
+	VmcsVmWrite32(VmcsField::kGuestSsLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestSsLimit));
+	VmcsVmWrite32(VmcsField::kGuestDsLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestDsLimit));
+	VmcsVmWrite32(VmcsField::kGuestFsLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestFsLimit));
+	VmcsVmWrite32(VmcsField::kGuestGsLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestGsLimit));
+	VmcsVmWrite32(VmcsField::kGuestLdtrLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestLdtrLimit));
+	VmcsVmWrite32(VmcsField::kGuestTrLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestTrLimit));
+	VmcsVmWrite32(VmcsField::kGuestGdtrLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestGdtrLimit));
+	VmcsVmWrite32(VmcsField::kGuestIdtrLimit, vmcs12_va, UtilVmRead(VmcsField::kGuestIdtrLimit));
 
-	VmWrite32(VmcsField::kGuestEsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestEsArBytes));
-	VmWrite32(VmcsField::kGuestCsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestCsArBytes));
-	VmWrite32(VmcsField::kGuestSsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestSsArBytes));
-	VmWrite32(VmcsField::kGuestDsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestDsArBytes));
-	VmWrite32(VmcsField::kGuestFsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestFsArBytes));
-	VmWrite32(VmcsField::kGuestGsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestGsArBytes));
-	VmWrite32(VmcsField::kGuestLdtrArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestLdtrArBytes));
+	VmcsVmWrite32(VmcsField::kGuestEsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestEsArBytes));
+	VmcsVmWrite32(VmcsField::kGuestCsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestCsArBytes));
+	VmcsVmWrite32(VmcsField::kGuestSsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestSsArBytes));
+	VmcsVmWrite32(VmcsField::kGuestDsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestDsArBytes));
+	VmcsVmWrite32(VmcsField::kGuestFsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestFsArBytes));
+	VmcsVmWrite32(VmcsField::kGuestGsArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestGsArBytes));
+	VmcsVmWrite32(VmcsField::kGuestLdtrArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestLdtrArBytes));
 
-	VmWrite32(VmcsField::kGuestTrArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestTrArBytes));
+	VmcsVmWrite32(VmcsField::kGuestTrArBytes, vmcs12_va, UtilVmRead(VmcsField::kGuestTrArBytes));
 
-	VmWrite32(VmcsField::kGuestInterruptibilityInfo, vmcs12_va, UtilVmRead(VmcsField::kGuestInterruptibilityInfo));
-	VmWrite32(VmcsField::kGuestActivityState, vmcs12_va, UtilVmRead(VmcsField::kGuestActivityState));
-	VmWrite32(VmcsField::kGuestSysenterCs, vmcs12_va, UtilVmRead(VmcsField::kGuestSysenterCs));
+	VmcsVmWrite32(VmcsField::kGuestInterruptibilityInfo, vmcs12_va, UtilVmRead(VmcsField::kGuestInterruptibilityInfo));
+	VmcsVmWrite32(VmcsField::kGuestActivityState, vmcs12_va, UtilVmRead(VmcsField::kGuestActivityState));
+	VmcsVmWrite32(VmcsField::kGuestSysenterCs, vmcs12_va, UtilVmRead(VmcsField::kGuestSysenterCs));
 
-	VmWrite64(VmcsField::kGuestSysenterEsp, vmcs12_va, UtilVmRead(VmcsField::kGuestSysenterEsp));
-	VmWrite64(VmcsField::kGuestSysenterEip, vmcs12_va, UtilVmRead(VmcsField::kGuestSysenterEip));
-	VmWrite64(VmcsField::kGuestPendingDbgExceptions, vmcs12_va, UtilVmRead(VmcsField::kGuestPendingDbgExceptions));
-	VmWrite64(VmcsField::kGuestEsBase, vmcs12_va, UtilVmRead(VmcsField::kGuestEsBase));
-	VmWrite64(VmcsField::kGuestCsBase, vmcs12_va, UtilVmRead(VmcsField::kGuestCsBase));
-	VmWrite64(VmcsField::kGuestSsBase, vmcs12_va, UtilVmRead(VmcsField::kGuestSsBase));
-	VmWrite64(VmcsField::kGuestDsBase, vmcs12_va, UtilVmRead(VmcsField::kGuestDsBase));
-	VmWrite64(VmcsField::kGuestFsBase, vmcs12_va, UtilVmRead(VmcsField::kGuestFsBase));
-	VmWrite64(VmcsField::kGuestGsBase, vmcs12_va, UtilVmRead(VmcsField::kGuestGsBase));
-	VmWrite64(VmcsField::kGuestLdtrBase, vmcs12_va, UtilVmRead(VmcsField::kGuestLdtrBase));
-	VmWrite64(VmcsField::kGuestTrBase, vmcs12_va, UtilVmRead(VmcsField::kGuestTrBase));
-	VmWrite64(VmcsField::kGuestGdtrBase, vmcs12_va, UtilVmRead(VmcsField::kGuestGdtrBase));
-	VmWrite64(VmcsField::kGuestIdtrBase, vmcs12_va, UtilVmRead(VmcsField::kGuestIdtrBase));
+	VmcsVmWrite64(VmcsField::kGuestSysenterEsp, vmcs12_va, UtilVmRead(VmcsField::kGuestSysenterEsp));
+	VmcsVmWrite64(VmcsField::kGuestSysenterEip, vmcs12_va, UtilVmRead(VmcsField::kGuestSysenterEip));
+	VmcsVmWrite64(VmcsField::kGuestPendingDbgExceptions, vmcs12_va, UtilVmRead(VmcsField::kGuestPendingDbgExceptions));
+	VmcsVmWrite64(VmcsField::kGuestEsBase, vmcs12_va, UtilVmRead(VmcsField::kGuestEsBase));
+	VmcsVmWrite64(VmcsField::kGuestCsBase, vmcs12_va, UtilVmRead(VmcsField::kGuestCsBase));
+	VmcsVmWrite64(VmcsField::kGuestSsBase, vmcs12_va, UtilVmRead(VmcsField::kGuestSsBase));
+	VmcsVmWrite64(VmcsField::kGuestDsBase, vmcs12_va, UtilVmRead(VmcsField::kGuestDsBase));
+	VmcsVmWrite64(VmcsField::kGuestFsBase, vmcs12_va, UtilVmRead(VmcsField::kGuestFsBase));
+	VmcsVmWrite64(VmcsField::kGuestGsBase, vmcs12_va, UtilVmRead(VmcsField::kGuestGsBase));
+	VmcsVmWrite64(VmcsField::kGuestLdtrBase, vmcs12_va, UtilVmRead(VmcsField::kGuestLdtrBase));
+	VmcsVmWrite64(VmcsField::kGuestTrBase, vmcs12_va, UtilVmRead(VmcsField::kGuestTrBase));
+	VmcsVmWrite64(VmcsField::kGuestGdtrBase, vmcs12_va, UtilVmRead(VmcsField::kGuestGdtrBase));
+	VmcsVmWrite64(VmcsField::kGuestIdtrBase, vmcs12_va, UtilVmRead(VmcsField::kGuestIdtrBase));
 	
-	VmWrite64(VmcsField::kGuestIa32Efer, vmcs12_va, UtilVmRead(VmcsField::kGuestIa32Efer));
+	VmcsVmWrite64(VmcsField::kGuestIa32Efer, vmcs12_va, UtilVmRead(VmcsField::kGuestIa32Efer));
 
 	/*
-	VmWrite64(VmcsField::kGuestPdptr0, vmcs12_va, UtilVmRead(VmcsField::kGuestPdptr0));
-	VmWrite64(VmcsField::kGuestPdptr1, vmcs12_va, UtilVmRead(VmcsField::kGuestPdptr1));
-	VmWrite64(VmcsField::kGuestPdptr2, vmcs12_va, UtilVmRead(VmcsField::kGuestPdptr2));
-	VmWrite64(VmcsField::kGuestPdptr3, vmcs12_va, UtilVmRead(VmcsField::kGuestPdptr3));
+	VmcsVmWrite64(VmcsField::kGuestPdptr0, vmcs12_va, UtilVmRead(VmcsField::kGuestPdptr0));
+	VmcsVmWrite64(VmcsField::kGuestPdptr1, vmcs12_va, UtilVmRead(VmcsField::kGuestPdptr1));
+	VmcsVmWrite64(VmcsField::kGuestPdptr2, vmcs12_va, UtilVmRead(VmcsField::kGuestPdptr2));
+	VmcsVmWrite64(VmcsField::kGuestPdptr3, vmcs12_va, UtilVmRead(VmcsField::kGuestPdptr3));
 	*/
 }
 
@@ -1023,28 +1019,28 @@ Parameters:
 		HYPERPLATFORM_LOG_DEBUG_SAFE("Error vmptrld error code :%x , %x", status, error);
 	}
  
-	VmRead64(VmcsField::kHostRip, Vmcs12_va, &VMCS12_HOST_RIP);
-	VmRead64(VmcsField::kHostRsp, Vmcs12_va, &VMCS12_HOST_STACK);
-	VmRead64(VmcsField::kHostCr0, Vmcs12_va, &VMCS12_HOST_CR0);
-	VmRead64(VmcsField::kHostCr3, Vmcs12_va, &VMCS12_HOST_CR3);
-	VmRead64(VmcsField::kHostCr4, Vmcs12_va, &VMCS12_HOST_CR4);
+	VmcsVmRead64(VmcsField::kHostRip, Vmcs12_va, &VMCS12_HOST_RIP);
+	VmcsVmRead64(VmcsField::kHostRsp, Vmcs12_va, &VMCS12_HOST_STACK);
+	VmcsVmRead64(VmcsField::kHostCr0, Vmcs12_va, &VMCS12_HOST_CR0);
+	VmcsVmRead64(VmcsField::kHostCr3, Vmcs12_va, &VMCS12_HOST_CR3);
+	VmcsVmRead64(VmcsField::kHostCr4, Vmcs12_va, &VMCS12_HOST_CR4);
 	 
-	VmRead64(VmcsField::kHostCsSelector, Vmcs12_va, &VMCS12_HOST_CS);
-	VmRead64(VmcsField::kHostSsSelector, Vmcs12_va, &VMCS12_HOST_SS);
-	VmRead64(VmcsField::kHostDsSelector, Vmcs12_va, &VMCS12_HOST_DS);
-	VmRead64(VmcsField::kHostEsSelector, Vmcs12_va, &VMCS12_HOST_ES);
-	VmRead64(VmcsField::kHostFsSelector, Vmcs12_va, &VMCS12_HOST_FS);
-	VmRead64(VmcsField::kHostGsSelector, Vmcs12_va, &VMCS12_HOST_GS);
-	VmRead64(VmcsField::kHostTrSelector, Vmcs12_va, &VMCS12_HOST_TR);
+	VmcsVmRead64(VmcsField::kHostCsSelector, Vmcs12_va, &VMCS12_HOST_CS);
+	VmcsVmRead64(VmcsField::kHostSsSelector, Vmcs12_va, &VMCS12_HOST_SS);
+	VmcsVmRead64(VmcsField::kHostDsSelector, Vmcs12_va, &VMCS12_HOST_DS);
+	VmcsVmRead64(VmcsField::kHostEsSelector, Vmcs12_va, &VMCS12_HOST_ES);
+	VmcsVmRead64(VmcsField::kHostFsSelector, Vmcs12_va, &VMCS12_HOST_FS);
+	VmcsVmRead64(VmcsField::kHostGsSelector, Vmcs12_va, &VMCS12_HOST_GS);
+	VmcsVmRead64(VmcsField::kHostTrSelector, Vmcs12_va, &VMCS12_HOST_TR);
 	 
-	VmRead32(VmcsField::kHostIa32SysenterCs, Vmcs12_va, &VMCS12_HOST_SYSENTER_CS);
-	VmRead64(VmcsField::kHostIa32SysenterEip, Vmcs12_va, &VMCS12_HOST_SYSENTER_RSP);
-	VmRead64(VmcsField::kHostIa32SysenterEsp, Vmcs12_va, &VMCS12_HOST_SYSENTER_RIP);
+	VmcsVmRead32(VmcsField::kHostIa32SysenterCs, Vmcs12_va, &VMCS12_HOST_SYSENTER_CS);
+	VmcsVmRead64(VmcsField::kHostIa32SysenterEip, Vmcs12_va, &VMCS12_HOST_SYSENTER_RSP);
+	VmcsVmRead64(VmcsField::kHostIa32SysenterEsp, Vmcs12_va, &VMCS12_HOST_SYSENTER_RIP);
 
 
-	VmRead64(VmcsField::kHostFsBase, Vmcs12_va, &VMCS12_HOST_FS_BASE);
-	VmRead64(VmcsField::kHostGsBase, Vmcs12_va, &VMCS12_HOST_GS_BASE);
-	VmRead64(VmcsField::kHostTrBase, Vmcs12_va, &VMCS12_HOST_TR_BASE);
+	VmcsVmRead64(VmcsField::kHostFsBase, Vmcs12_va, &VMCS12_HOST_FS_BASE);
+	VmcsVmRead64(VmcsField::kHostGsBase, Vmcs12_va, &VMCS12_HOST_GS_BASE);
+	VmcsVmRead64(VmcsField::kHostTrBase, Vmcs12_va, &VMCS12_HOST_TR_BASE);
 
 	//Disable Interrupt Flags
 	FlagRegister rflags = { VMCS12_HOST_RFLAGs };
@@ -1102,8 +1098,8 @@ Parameters:
 	UtilVmWrite(VmcsField::kGuestIa32Debugctl, 0);
 	  
 	//Clean VMCS1-2 Injecting event since it shouldn't be injected 
-	VmWrite32(VmcsField::kVmEntryIntrInfoField, Vmcs12_va, 0);
-	VmWrite32(VmcsField::kVmEntryExceptionErrorCode, Vmcs12_va, 0); 
+	VmcsVmWrite32(VmcsField::kVmEntryIntrInfoField, Vmcs12_va, 0);
+	VmcsVmWrite32(VmcsField::kVmEntryExceptionErrorCode, Vmcs12_va, 0); 
 	UtilVmWrite(VmcsField::kVmEntryIntrInfoField, 0);
 	UtilVmWrite(VmcsField::kVmEntryExceptionErrorCode, 0);
 
@@ -1172,12 +1168,12 @@ Return Value:
 		}
 
 		LEAVE_GUEST_MODE(vCPU);
-		SaveGuestKernelGsBase(GetProcessorData(guest_context));
-		LoadHostKernelGsBase(GetProcessorData(guest_context));
+		SaveGuestKernelGsBase(VmmpGetProcessorData(guest_context));
+		LoadHostKernelGsBase(VmmpGetProcessorData(guest_context));
 
 		SaveGuestFieldFromVmcs02(vCPU);
 		SaveExceptionInformationFromVmcs02(vCPU);
-		SaveGuestCr8(vCPU, GetGuestCr8(guest_context));
+		SaveGuestCr8(vCPU, VmmpGetGuestCr8(guest_context));
 		LoadHostStateForLevel1(vCPU);
 
 		status = STATUS_SUCCESS;
@@ -1255,11 +1251,11 @@ Return Value:
 	vmcs02_ptr->revision_identifier = vmx_basic_msr.fields.revision_identifier;
 	 
 	//Prepare VMCS01 Host / Control Field
-	PrepareHostAndControlField(vmcs12_va,  vCPU->vmcs02_pa, IsVmLaunch);
+	VmcsPrepareHostAndControlField(vmcs12_va,  vCPU->vmcs02_pa, IsVmLaunch);
 
-	PrepareGuestStateField(vmcs12_va); 
+	VmcsPrepareGuestStateField(vmcs12_va); 
 	 
-	SaveHostKernelGsBase(GetProcessorData(guest_context));
+	SaveHostKernelGsBase(VmmpGetProcessorData(guest_context));
 
 	VmEntryCheck();
 
@@ -1274,16 +1270,16 @@ Return Value:
 			EptData*	Ept01Data=nullptr;	//2. Build-EPT0-2  
 
 			ULONG64 _Ept12Ptr = NULL;
-			VmRead64(VmcsField::kEptPointer, vmcs12_va, &_Ept12Ptr); 
+			VmcsVmRead64(VmcsField::kEptPointer, vmcs12_va, &_Ept12Ptr); 
 			Ept02Data = EptBuildEptDataByEptp(); 
 			Ept12Data = EptBuildEptDataByEptp();
-			Ept01Data = GetCurrentEpt01Pointer(guest_context);
+			Ept01Data = VmmGetCurrentEpt01Pointer(guest_context);
 			if (Ept02Data && Ept12Data && Ept01Data)
 			{
 				EptpBuildNestedEpt(_Ept12Ptr, Ept12Data, Ept02Data);
 				
-				SaveCurrentEpt02Pointer(guest_context, Ept02Data);
-				SaveCurrentEpt12Pointer(guest_context, Ept12Data);
+				VmmSaveCurrentEpt02Pointer(guest_context, Ept02Data);
+				VmmSaveCurrentEpt12Pointer(guest_context, Ept12Data);
 
 				EptpInvalidateEpt(Ept01Data, Ept12Data->ept_pml4);
 
@@ -1294,9 +1290,9 @@ Return Value:
 	
 		// We must be careful of this, since we jmp back to the Guest soon. 
 		// It is a exceptional case  
-		if (GetGuestIrql(guest_context) < DISPATCH_LEVEL)
+		if (VmmpGetGuestIrql(guest_context) < DISPATCH_LEVEL)
 		{
-			KeLowerIrql(GetGuestIrql(guest_context));
+			KeLowerIrql(VmmpGetGuestIrql(guest_context));
 		}
 
 		if (VmxStatus::kOk != (status = static_cast<VmxStatus>(__vmx_vmlaunch())))
@@ -1311,14 +1307,14 @@ Return Value:
 		VmxSecondaryProcessorBasedControls ProcCtrl = { UtilVmRead64(VmcsField::kSecondaryVmExecControl) };
 		if (ProcCtrl.fields.enable_ept)
 		{
-			EptData* ept_data02 = GetCurrentEpt02Pointer(guest_context);
+			EptData* ept_data02 = VmmGetCurrentEpt02Pointer(guest_context);
 			if (ept_data02)
 			{
 				UtilVmWrite64(VmcsField::kEptPointer, ept_data02->ept_pointer->all);
 			}
 		}
 		RestoreGuestCr8(vCPU);
-		LoadGuestKernelGsBase(GetProcessorData(guest_context));
+		LoadGuestKernelGsBase(VmmpGetProcessorData(guest_context));
 	}
 
 	return STATUS_SUCCESS;
@@ -1359,10 +1355,10 @@ Return Value:
 		StackPointer		=  { UtilVmRead64(VmcsField::kGuestRsp) };   
 		guest_address		= DecodeVmclearOrVmptrldOrVmptrstOrVmxon(guest_context);
 		  
-		if (GetvCpuMode(guest_context) == VmxMode)
+		if (VmmpGetvCpuMode(guest_context) == VmxMode)
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("Current vCPU already in VMX mode !"));
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		} 
 
@@ -1388,14 +1384,14 @@ Return Value:
 		if (!CheckPageAlgined(vmxon_region_pa))
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXON: not page aligned physical address %I64X !"), vmxon_region_pa);
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 		//if IA32_VMX_BASIC[48] == 1 it is not support 64bit addressing, so address[32] to address[63] supposed = 0
 		if (!CheckPhysicalAddress(vmxon_region_pa))
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXON: invalid physical address %I64X !"), vmxon_region_pa);
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 		 
@@ -1413,8 +1409,8 @@ Return Value:
 		nested_vmx->InitialCpuNumber = KeGetCurrentProcessorNumberEx(&number);
 
 		// vcpu etner vmx-root mode now
-		EnterVmxMode(guest_context);  
-		SetvCpuVmx(guest_context, nested_vmx);
+		VmmpEnterVmxMode(guest_context);  
+		VmmpSetvCpuVmx(guest_context, nested_vmx);
 
 		HYPERPLATFORM_LOG_DEBUG("VMXON: Guest Instruction Pointer %I64X Guest Stack Pointer: %I64X  Guest VMXON_Region: %I64X stored at %I64x physical address\r\n",
 			InstructionPointer, StackPointer, vmxon_region_pa, guest_address);
@@ -1424,7 +1420,7 @@ Return Value:
 		  
 		BuildGernericVMCSMap();
 
-		VMSucceed(GetFlagReg(guest_context));
+		VMSucceed(VmmpGetFlagReg(guest_context));
 
 	} while (FALSE);
 
@@ -1456,28 +1452,28 @@ Return Value:
 		VCPUVMX* vcpu_vmx = NULL; 
 
 		HYPERPLATFORM_COMMON_DBG_BREAK();
-		if (GetvCpuMode(guest_context) != VmxMode)
+		if (VmmpGetvCpuMode(guest_context) != VmxMode)
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("Current vCPU already in VMX mode ! \r\n"));
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 
-		vcpu_vmx = GetVcpuVmx(guest_context);
+		vcpu_vmx = VmmpGetVcpuVmx(guest_context);
 		if (!vcpu_vmx)
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("Don't have Nested vCPU ! \r\n"));
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			HYPERPLATFORM_COMMON_DBG_BREAK();
 			break;
 		}
 
 		// if VCPU not run in VMX mode 
-		if (VmxGetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
+		if (VmxGetVmxMode(VmmpGetVcpuVmx(guest_context)) != RootMode)
 		{
 			// Inject ...'
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("Vmxoff: Unimplemented third level virualization \r\n"));
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 		
@@ -1486,8 +1482,8 @@ Return Value:
 		//load back vmcs01
 		__vmx_vmptrld(&vcpu_vmx->vmcs01_pa); 
 	 
-		EptData* ept_data01 = GetCurrentEpt01Pointer(guest_context);
-		EptData* ept_data12 = GetCurrentEpt12Pointer(guest_context);  
+		EptData* ept_data01 = VmmGetCurrentEpt01Pointer(guest_context);
+		EptData* ept_data12 = VmmGetCurrentEpt12Pointer(guest_context);  
 
 		if (ept_data01 && ept_data12)
 		{
@@ -1496,20 +1492,20 @@ Return Value:
 			ept_data12 = nullptr;
 		} 
 
-		SaveCurrentEpt02Pointer(guest_context, nullptr);
-		SaveCurrentEpt12Pointer(guest_context, nullptr);
+		VmmSaveCurrentEpt02Pointer(guest_context, nullptr);
+		VmmSaveCurrentEpt12Pointer(guest_context, nullptr);
 
 		UtilVmWrite(VmcsField::kGuestRip, GuestRip + InstLen);
 	
-		SetvCpuVmx(guest_context, NULL);
+		VmmpSetvCpuVmx(guest_context, NULL);
 
-		LeaveVmxMode(guest_context);
+		VmmpLeaveVmxMode(guest_context);
 
 		ExFreePool(vcpu_vmx);
 		vcpu_vmx = NULL;  
 
 		HYPERPLATFORM_LOG_DEBUG("VMXOFF Stopped Nested Virtualization, and Back to Normal Guest OS ");
-		VMSucceed(GetFlagReg(guest_context));
+		VMSucceed(VmmpGetFlagReg(guest_context));
 	} while (0);
 }
 //------------------------------------------------------------------------------------------------//
@@ -1551,7 +1547,7 @@ Return Value:
 		if (!guest_address || !UtilpIsCanonicalFormAddress((void*)guest_address))
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMCLEAR: guest_address NULL ! \r\n"));
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 		 
@@ -1563,22 +1559,22 @@ Return Value:
 			break;
 		} 
 		 
-		if (GetvCpuMode(guest_context) != VmxMode)
+		if (VmmpGetvCpuMode(guest_context) != VmxMode)
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMCLEAR: Current vCPU already in VMX mode ! \r\n"));
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 		 
-		if (VmxGetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
+		if (VmxGetVmxMode(VmmpGetVcpuVmx(guest_context)) != RootMode)
 		{
 			// Inject ...'
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMCLEAR : Unimplemented third level virualization \r\n"));
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 
-		nested_vmx = GetVcpuVmx(guest_context);
+		nested_vmx = VmmpGetVcpuVmx(guest_context);
 		if (!nested_vmx)
 		{
 			DumpVcpu(guest_context);
@@ -1592,7 +1588,7 @@ Return Value:
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXCLEAR: not page aligned physical address %I64X ! \r\n"),
 				vmcs_region_pa);
 
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 
@@ -1602,7 +1598,7 @@ Return Value:
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXCLEAR: invalid physical address %I64X ! \r\n"),
 				vmcs_region_pa);
 
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 		//if vmcs != vmregion 
@@ -1611,7 +1607,7 @@ Return Value:
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMXCLEAR: VMCS region %I64X same as VMXON region %I64X ! \r\n"),
 				vmcs_region_pa, nested_vmx->vmxon_region);
 
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 	
@@ -1632,7 +1628,7 @@ Return Value:
 		HYPERPLATFORM_LOG_DEBUG_SAFE("VMCLEAR: VCPU No.: %i Current VMCS : %I64X VMXON Region : %I64X  ",
 			nested_vmx->InitialCpuNumber, nested_vmx->vmcs02_pa, nested_vmx->vmxon_region);
 
-		VMSucceed(GetFlagReg(guest_context));
+		VMSucceed(VmmpGetFlagReg(guest_context));
 
 	} while (FALSE);
 }
@@ -1676,7 +1672,7 @@ Return Value:
 		if (!guest_address || !UtilpIsCanonicalFormAddress((void*)guest_address))
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMCLEAR: guest_address NULL ! \r\n"));
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 
@@ -1684,23 +1680,23 @@ Return Value:
 		if (!vmcs12_region_pa)
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMCLEAR: vmcs_region_pa NULL ! \r\n"));
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 
-		if (GetvCpuMode(guest_context) != VmxMode)
+		if (VmmpGetvCpuMode(guest_context) != VmxMode)
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("Current vCPU already in VMX mode ! \r\n"));
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
  
 		// if VCPU not run in VMX mode 
-		if (VmxGetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
+		if (VmxGetVmxMode(VmmpGetVcpuVmx(guest_context)) != RootMode)
 		{
 			// Inject ...'
-			HYPERPLATFORM_LOG_DEBUG_SAFE("VMPTRLD Unimplemented third level virualization %I64x \r\n", GetVcpuVmx(guest_context));
-			VMfailInvalid(GetFlagReg(guest_context)); 
+			HYPERPLATFORM_LOG_DEBUG_SAFE("VMPTRLD Unimplemented third level virualization %I64x \r\n", VmmpGetVcpuVmx(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context)); 
 			break;
 		}
 		
@@ -1710,7 +1706,7 @@ Return Value:
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMPTRLD: not page aligned physical address %I64X ! \r\n"),
 				vmcs12_region_pa);
 
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 
@@ -1720,17 +1716,17 @@ Return Value:
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMPTRLD: invalid physical address %I64X ! \r\n"),
 				vmcs12_region_pa);
 
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 
-		nested_vmx = GetVcpuVmx(guest_context);
+		nested_vmx = VmmpGetVcpuVmx(guest_context);
 		if (nested_vmx && (vmcs12_region_pa == nested_vmx->vmxon_region))
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMPTRLD: VMCS region %I64X same as VMXON region %I64X ! \r\n"),
 				vmcs12_region_pa, nested_vmx->vmxon_region);
 
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
  
@@ -1740,7 +1736,7 @@ Return Value:
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMPTRLD: vmcs02_region_va NULL ! \r\n"),
 				vmcs12_region_pa, nested_vmx->vmxon_region);
 
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 
@@ -1757,7 +1753,7 @@ Return Value:
 		HYPERPLATFORM_LOG_DEBUG_SAFE("[VMPTRLD] VMCS01 PA: %I64X VA: %I64X \r\n", nested_vmx->vmcs01_pa, UtilVaFromPa(nested_vmx->vmcs01_pa));
 		HYPERPLATFORM_LOG_DEBUG_SAFE("[VMPTRLD] Current Cpu: %x in Cpu Group : %x  Number: %x \r\n", nested_vmx->InitialCpuNumber, procnumber.Group, procnumber.Number);
 
-		VMSucceed(GetFlagReg(guest_context));
+		VMSucceed(VmmpGetFlagReg(guest_context));
 
 	} while (FALSE);
 }
@@ -1794,14 +1790,14 @@ Return Value:
 		ULONG_PTR		  regIndex;
 		ULONG_PTR		  memAddress;
 		PROCESSOR_NUMBER  procnumber = { 0 };
-		VCPUVMX*		  NestedvCPU = GetVcpuVmx(guest_context);
+		VCPUVMX*		  NestedvCPU = VmmpGetVcpuVmx(guest_context);
 		ULONG64			  vmcs12_pa = NestedvCPU->vmcs12_pa;
 		ULONG64			  vmcs12_va = (ULONG64)UtilVaFromPa(vmcs12_pa);
 		
-		if (GetvCpuMode(guest_context) != VmxMode)
+		if (VmmpGetvCpuMode(guest_context) != VmxMode)
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("Current vCPU already in VMX mode ! \r\n"));
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 
@@ -1813,27 +1809,27 @@ Return Value:
 		}
 
 		// if VCPU not run in VMX mode 
-		if (VmxGetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
+		if (VmxGetVmxMode(VmmpGetVcpuVmx(guest_context)) != RootMode)
 		{
 			// Inject ...'
-			HYPERPLATFORM_LOG_DEBUG(" Vmread: Unimplemented third level virualization VMX: %I64x  VMCS12: %I64x \r\n", GetVcpuVmx(guest_context), vmcs12_pa);
-			VMfailInvalid(GetFlagReg(guest_context));
+			HYPERPLATFORM_LOG_DEBUG(" Vmread: Unimplemented third level virualization VMX: %I64x  VMCS12: %I64x \r\n", VmmpGetVcpuVmx(guest_context), vmcs12_pa);
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 
-		field = DecodeVmwriteOrVmRead(GetGpReg(guest_context), &offset, &value, &RorM, &regIndex, &memAddress);
+		field = VmcsDecodeVmwriteOrVmRead(VmmpGetGpReg(guest_context), &offset, &value, &RorM, &regIndex, &memAddress);
 
 		if (!is_vmcs_field_supported(field))
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE("VMREAD: Virtual VT-x is not supported this feature [field: %I64X] \r\n", field); 	  //#gp
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 
 		if ((ULONG64)vmcs12_va == 0xFFFFFFFFFFFFFFFF)
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMREAD: 0xFFFFFFFFFFFFFFFF		 ! \r\n")); 	  //#gp
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 
@@ -1844,18 +1840,18 @@ Return Value:
 			auto reg = VmmpSelectRegister((ULONG)regIndex, guest_context);
 			if (operand_size == VMCS_FIELD_WIDTH_16BIT)
 			{
-				VmRead16(field, vmcs12_va, (PUSHORT)reg);
+				VmcsVmRead16(field, vmcs12_va, (PUSHORT)reg);
 				HYPERPLATFORM_LOG_DEBUG_SAFE("VMREAD16: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PUSHORT)reg);
 
 			}
 			if (operand_size == VMCS_FIELD_WIDTH_32BIT)
 			{
-				VmRead32(field, vmcs12_va, (PULONG32)reg);
+				VmcsVmRead32(field, vmcs12_va, (PULONG32)reg);
 				HYPERPLATFORM_LOG_DEBUG_SAFE("VMREAD32: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PULONG32)reg);
 			}
 			if (operand_size == VMCS_FIELD_WIDTH_64BIT || operand_size == VMCS_FIELD_WIDTH_NATURAL_WIDTH)
 			{
-				VmRead64(field, vmcs12_va, (PULONG64)reg);
+				VmcsVmRead64(field, vmcs12_va, (PULONG64)reg);
 				HYPERPLATFORM_LOG_DEBUG_SAFE("VMREAD64: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PULONG64)reg);
 			}
 
@@ -1864,22 +1860,22 @@ Return Value:
 		{
 			if (operand_size == VMCS_FIELD_WIDTH_16BIT)
 			{
-				VmRead16(field, vmcs12_va, (PUSHORT)memAddress);
+				VmcsVmRead16(field, vmcs12_va, (PUSHORT)memAddress);
 				//HYPERPLATFORM_LOG_DEBUG_SAFE("VMREAD16: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PUSHORT)memAddress);
 			}
 			if (operand_size == VMCS_FIELD_WIDTH_32BIT)
 			{
-				VmRead32(field, vmcs12_va, (PULONG32)memAddress);
+				VmcsVmRead32(field, vmcs12_va, (PULONG32)memAddress);
 				//HYPERPLATFORM_LOG_DEBUG_SAFE("VMREAD32: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PULONG32)memAddress);
 			}
 			if (operand_size == VMCS_FIELD_WIDTH_64BIT || operand_size == VMCS_FIELD_WIDTH_NATURAL_WIDTH)
 			{
-				VmRead64(field, vmcs12_va, (PULONG64)memAddress);
+				VmcsVmRead64(field, vmcs12_va, (PULONG64)memAddress);
 				//HYPERPLATFORM_LOG_DEBUG_SAFE("VMREAD64: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, *(PULONG64)memAddress);
 			}
 		}
 
-		VMSucceed(GetFlagReg(guest_context));
+		VMSucceed(VmmpGetFlagReg(guest_context));
 
 	} while (FALSE);
 }
@@ -1913,22 +1909,22 @@ Return Value:
 		ULONG_PTR			Value;
 		BOOLEAN				RorM;
 		PROCESSOR_NUMBER    procnumber = { 0 };
-		VCPUVMX*			NestedvCPU = GetVcpuVmx(guest_context);
+		VCPUVMX*			NestedvCPU = VmmpGetVcpuVmx(guest_context);
 		ULONG64				vmcs12_pa = (ULONG64)NestedvCPU->vmcs12_pa;
 		ULONG64				vmcs12_va = (ULONG64)UtilVaFromPa(vmcs12_pa);
 
-		if (GetvCpuMode(guest_context) != VmxMode)
+		if (VmmpGetvCpuMode(guest_context) != VmxMode)
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE((" Vmwrite: Current vCPU already in VMX mode ! \r\n"));
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 		// if VCPU not run in VMX mode 
-		if (VmxGetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
+		if (VmxGetVmxMode(VmmpGetVcpuVmx(guest_context)) != RootMode)
 		{
 			// Inject ...'
-			HYPERPLATFORM_LOG_DEBUG(" Vmwrite: Unimplemented third level virualization VMX: %I64x  VMCS12: %I64x \r\n", GetVcpuVmx(guest_context), vmcs12_pa);
-			VMfailInvalid(GetFlagReg(guest_context));
+			HYPERPLATFORM_LOG_DEBUG(" Vmwrite: Unimplemented third level virualization VMX: %I64x  VMCS12: %I64x \r\n", VmmpGetVcpuVmx(guest_context), vmcs12_pa);
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 		
@@ -1942,12 +1938,12 @@ Return Value:
 	
 		///TODO: If in VMX non-root operation, should be VM Exit
 
-		field = DecodeVmwriteOrVmRead(GetGpReg(guest_context), &offset, &Value, &RorM);
+		field = VmcsDecodeVmwriteOrVmRead(VmmpGetGpReg(guest_context), &offset, &Value, &RorM);
 
 		if (!is_vmcs_field_supported(field))
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE("VMWRITE: IS NOT SUPPORT %X ! \r\n", field); 	  //#gp
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 
@@ -1960,23 +1956,23 @@ Return Value:
 		auto operand_size = VMCS_FIELD_WIDTH((int)field);
 		if (operand_size == VMCS_FIELD_WIDTH_16BIT)
 		{
-			VmWrite16(field, vmcs12_va, Value);
+			VmcsVmWrite16(field, vmcs12_va, Value);
 			//HYPERPLATFORM_LOG_DEBUG_SAFE("VMWRITE: field: %I64X base: %I64X Offset: %I64X Value: %I64X  \r\n", field, vmcs12_va, offset, (USHORT)Value);
 		}
 
 		if (operand_size == VMCS_FIELD_WIDTH_32BIT)
 		{
-			VmWrite32(field, vmcs12_va, Value);
+			VmcsVmWrite32(field, vmcs12_va, Value);
 			//HYPERPLATFORM_LOG_DEBUG_SAFE("VMWRITE: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, (ULONG32)Value);
 		}
 		if (operand_size == VMCS_FIELD_WIDTH_64BIT || operand_size == VMCS_FIELD_WIDTH_NATURAL_WIDTH)
 		{
-			VmWrite64(field, vmcs12_va, Value);
+			VmcsVmWrite64(field, vmcs12_va, Value);
 			//HYPERPLATFORM_LOG_DEBUG_SAFE("VMWRITE: field: %I64X base: %I64X Offset: %I64X Value: %I64X\r\n", field, vmcs12_va, offset, (ULONG64)Value);
 		}
 
 
-		VMSucceed(GetFlagReg(guest_context));
+		VMSucceed(VmmpGetFlagReg(guest_context));
 	} while (FALSE);
 }
 
@@ -2003,16 +1999,16 @@ Return Value:
 {
 
 	PROCESSOR_NUMBER  procnumber = { 0 };
-	VCPUVMX*		  NestedvCPU = GetVcpuVmx(guest_context);
+	VCPUVMX*		  NestedvCPU = VmmpGetVcpuVmx(guest_context);
 	VmxStatus		  status;
 	do { 
 		HYPERPLATFORM_COMMON_DBG_BREAK();
 		HYPERPLATFORM_LOG_DEBUG_SAFE("-----start vmlaunch---- \r\n");
 
-		if (GetvCpuMode(guest_context) != VmxMode)
+		if (VmmpGetvCpuMode(guest_context) != VmxMode)
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("Current vCPU already in VMX mode ! \r\n"));
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 
@@ -2024,11 +2020,11 @@ Return Value:
 		}
 
 		// if VCPU not run in VMX mode 
-		if (VmxGetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
+		if (VmxGetVmxMode(VmmpGetVcpuVmx(guest_context)) != RootMode)
 		{
 			// Inject ...'
-			HYPERPLATFORM_LOG_DEBUG(" Vmlaunch: Unimplemented third level virualization VMX: %I64x  VMCS12: %I64x \r\n", GetVcpuVmx(guest_context), NestedvCPU->vmcs12_pa);
-			VMfailInvalid(GetFlagReg(guest_context));
+			HYPERPLATFORM_LOG_DEBUG(" Vmlaunch: Unimplemented third level virualization VMX: %I64x  VMCS12: %I64x \r\n", VmmpGetVcpuVmx(guest_context), NestedvCPU->vmcs12_pa);
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 		  
@@ -2063,13 +2059,13 @@ Return Value:
 	{
 		VmxStatus			  status;
 		PROCESSOR_NUMBER  procnumber = { 0 };
-		VCPUVMX*		  NestedvCPU	 = GetVcpuVmx(guest_context);
+		VCPUVMX*		  NestedvCPU	 = VmmpGetVcpuVmx(guest_context);
 		//	HYPERPLATFORM_LOG_DEBUG_SAFE("----Start Emulate VMRESUME---");
 
-		if (GetvCpuMode(guest_context) != VmxMode)
+		if (VmmpGetvCpuMode(guest_context) != VmxMode)
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("Current vCPU already in VMX mode ! \r\n"));
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 
@@ -2081,13 +2077,13 @@ Return Value:
 		}
 
 		// if VCPU not run in VMX mode 
-		if (VmxGetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
+		if (VmxGetVmxMode(VmmpGetVcpuVmx(guest_context)) != RootMode)
 		{
 			// Inject ...'
 			HYPERPLATFORM_LOG_DEBUG(" Vmresume: Unimplemented third level virualization VMX: %I64x  VMCS12: %I64x \r\n",
-				GetVcpuVmx(guest_context), NestedvCPU->vmcs12_pa);
+				VmmpGetVcpuVmx(guest_context), NestedvCPU->vmcs12_pa);
 
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 
@@ -2096,7 +2092,7 @@ Return Value:
 
 		//HYPERPLATFORM_COMMON_DBG_BREAK();
 
-		VMSucceed(GetFlagReg(guest_context));
+		VMSucceed(VmmpGetFlagReg(guest_context));
 	} while (FALSE);
 }
 
@@ -2131,30 +2127,30 @@ Return Value:
 		if (!vmcs12_region_pa)
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("vmcs12_region_pa null ! \r\n"));
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 
 		ULONG64	vmcs12_region_va = (ULONG64)UtilVaFromPa(vmcs12_region_pa);  
-		if (GetvCpuMode(guest_context) != VmxMode)
+		if (VmmpGetvCpuMode(guest_context) != VmxMode)
 		{
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("Current vCPU already in VMX mode ! \r\n"));
-			VMfailInvalid(GetFlagReg(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 
 		// if VCPU not run in VMX mode 
-		if (VmxGetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
+		if (VmxGetVmxMode(VmmpGetVcpuVmx(guest_context)) != RootMode)
 		{
 			// Inject ...'
-			HYPERPLATFORM_LOG_DEBUG_SAFE("Vmptrst: Unimplemented third level virualization  %I64x \r\n", GetVcpuVmx(guest_context));
-			VMfailInvalid(GetFlagReg(guest_context));
+			HYPERPLATFORM_LOG_DEBUG_SAFE("Vmptrst: Unimplemented third level virualization  %I64x \r\n", VmmpGetVcpuVmx(guest_context));
+			VMfailInvalid(VmmpGetFlagReg(guest_context));
 			break;
 		}
 
-		*(PULONG64)vmcs12_region_va = GetVcpuVmx(guest_context)->vmcs12_pa; 
+		*(PULONG64)vmcs12_region_va = VmmpGetVcpuVmx(guest_context)->vmcs12_pa; 
 
-		VMSucceed(GetFlagReg(guest_context));
+		VMSucceed(VmmpGetFlagReg(guest_context));
 	} while (FALSE);
 }
 //------------------------------------------------------------------------------------------------//

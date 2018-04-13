@@ -1,66 +1,106 @@
-// Copyright (c) 2016-2017, KelvinChan. All rights reserved.
-// Copyright (c) 2016-2017, KelvinChan. All rights reserved.
-// Use of this source code is governed by a MIT-style license that can be
-// found in the LICENSE file.
+/*++
+
+Copyright (c) 2016 KelvinChan. All rights reserved.
+Use of this source code is governed by a MIT-style license that can be
+found in the LICENSE file.
+
+Module Name:
+
+	vmx.h
+
+Abstract:
+
+	VMX Instruction Emulation
+
+Author:
+	
+	Kelvin Chan
+
+Environment:
+
+	Kernel VMM Mode
+
+--*/
 
 #ifndef NESTED_HYPERPLATFORM_VMX_H_
 #define NESTED_HYPERPLATFORM_VMX_H_
 #include <fltKernel.h>
 #include "..\HyperPlatform\vmm.h"
 #include "..\HyperPlatform\util.h"
+
 struct GuestContext;
+
+enum VMX_state
+{
+	VMCS_STATE_CLEAR = 0,
+	VMCS_STATE_LAUNCHED
+};
+
 extern "C"
 {
 
-VOID VmxonEmulate(
-	GuestContext* guest_context
+VOID 
+VmxVmxonEmulate(
+	_In_ GuestContext* guest_context
 );
 
-VOID VmxoffEmulate(
-	GuestContext* guest_context
+VOID 
+VmxVmxoffEmulate(
+	_In_ GuestContext* guest_context
 );
 
-VOID VmclearEmulate(
-	GuestContext* guest_context
+VOID 
+VmxVmclearEmulate(
+	_In_ GuestContext* guest_context
 );
 
-VOID VmptrldEmulate(
-	GuestContext* guest_context
+VOID 
+VmxVmptrldEmulate(
+	_In_ GuestContext* guest_context
 );
 
-VOID VmreadEmulate(
-	GuestContext* guest_context
+VOID 
+VmxVmreadEmulate(
+	_In_ GuestContext* guest_context
 );
 
-VOID VmwriteEmulate(
-	GuestContext* guest_context
+VOID 
+VmxVmwriteEmulate(
+	_In_ GuestContext* guest_context
 );
 
-VOID VmlaunchEmulate(
-	GuestContext* guest_context
+VOID 
+VmxVmlaunchEmulate(
+	_In_ GuestContext* guest_context
 );
 
-VOID VmresumeEmulate(
-	GuestContext* guest_context
+VOID 
+VmxVmresumeEmulate(
+	_In_ GuestContext* guest_context
 );
 
-VOID VmptrstEmulate(
-	GuestContext* guest_context
+VOID 
+VmxVmptrstEmulate(
+	_In_ GuestContext* guest_context
 );
 
-VOID LEAVE_GUEST_MODE(
-	VCPUVMX* vcpu
+VOID 
+LEAVE_GUEST_MODE(
+	_In_ VCPUVMX* vcpu
 );
-VOID ENTER_GUEST_MODE(
-	VCPUVMX* vcpu
+VOID 
+ENTER_GUEST_MODE(
+	_In_ VCPUVMX* vcpu
 );
-VMX_MODE GetVmxMode(
-	VCPUVMX* vcpu
+VMX_MODE
+VmxGetVmxMode(
+	_In_ VCPUVMX* vcpu
 );  
 
-NTSTATUS VMExitEmulate(
-	VCPUVMX* vCPU,
-	GuestContext* guest_context
+NTSTATUS 
+VmxVMExitEmulate(
+	_In_ VCPUVMX* vCPU,
+	_In_ GuestContext* guest_context
 );
 
 }

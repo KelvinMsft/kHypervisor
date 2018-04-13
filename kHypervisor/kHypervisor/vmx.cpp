@@ -1,8 +1,26 @@
-// Copyright (c) 2016-2017, KelvinChan. All rights reserved.
-// Use of this source code is governed by a MIT-style license that can be
-// found in the LICENSE file.#include <fltKernel.h>
+/*++
 
+Copyright (c) 2016 KelvinChan. All rights reserved.
+Use of this source code is governed by a MIT-style license that can be
+found in the LICENSE file.
 
+Module Name:
+
+	vmx.cpp
+
+Abstract:
+
+	Intel VT-x , VMX Instruction and behavior Emulation
+
+Author:
+	
+	Kelvin Chan
+
+Environment:
+
+	Kernel VMM Mode
+
+--*/
 #include <intrin.h>
 #include "..\HyperPlatform\util.h"
 #include "vmcs.h"
@@ -60,18 +78,30 @@ extern BOOLEAN		 IsEmulateVMExit;
 //// 
 //// Type
 ////
-enum VMX_state
-{
-	VMCS_STATE_CLEAR = 0,
-	VMCS_STATE_LAUNCHED
-};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //// 
 //// Implementation
 //// 
-//---------------------------------------------------------------------------------------------------------------------//
-BOOLEAN IsGuestPaePaging()
+
+//------------------------------------------------------------------------------------------------//
+BOOLEAN 
+VmxIsGuestPaePaging()
+/*++
+
+Desscription:
+	
+	Validating guest PAE mode.
+
+Paremeters:
+
+	Guest Context
+
+Return Value:
+
+	NO
+
+--*/
 {
 	VmxVmEntryControls VmEntryCtrl = { UtilVmRead(VmcsField::kVmEntryControls) };
 	FlagRegister rflags = { UtilVmRead(VmcsField::kGuestRflags) };
@@ -83,8 +113,27 @@ BOOLEAN IsGuestPaePaging()
 	}
 	return FALSE;
 }
-//---------------------------------------------------------------------------------------------------------------------//
-VOID VmxAssertPrint(ULONG Line, bool IsVerified)
+//------------------------------------------------------------------------------------------------//
+VOID 
+VmxAssertPrint(
+	_In_	ULONG Line, 
+	_In_	bool IsVerified
+)
+/*++
+
+Desscription:
+	
+	Test assert. debug use.
+
+Paremeters:
+
+	Guest Context
+
+Return Value:
+
+	NO
+
+--*/
 {
 	if (!IsVerified)
 	{
@@ -95,38 +144,157 @@ VOID VmxAssertPrint(ULONG Line, bool IsVerified)
 	}
 }
 	
-//---------------------------------------------------------------------------------------------------------------------//
-VOID	LEAVE_GUEST_MODE(VCPUVMX* vm)
+//------------------------------------------------------------------------------------------------//
+VOID	
+LEAVE_GUEST_MODE(
+	_In_	VCPUVMX* vm
+)
+/*++
+
+Desscription:
+	
+	Virtual process enter the Root Mode.
+
+Paremeters:
+
+	Guest Context
+
+Return Value:
+
+	NO
+
+--*/
 {
 	vm->inRoot = RootMode; 
 	HYPERPLATFORM_LOG_DEBUG("VMM: %I64x Enter Root mode Reason: %d", vm, UtilVmRead(VmcsField::kVmExitReason));
 }
 
 
-//---------------------------------------------------------------------------------------------------------------------//
-VOID	ENTER_GUEST_MODE(VCPUVMX* vm)
+//------------------------------------------------------------------------------------------------//
+VOID	
+ENTER_GUEST_MODE(
+	_In_	VCPUVMX* vm
+)
+/*++
+
+Desscription:
+	
+	Virtual process enter the Guest Mode.
+
+Paremeters:
+
+	Guest Context
+
+Return Value:
+
+	NO
+
+--*/
 {
 	vm->inRoot = GuestMode; 
 	HYPERPLATFORM_LOG_DEBUG("VMM: %I64x Enter Guest mode", vm);
 } 
 
 
-//---------------------------------------------------------------------------------------------------------------------//
-VMX_MODE GetVmxMode(VCPUVMX* vm)
-{ 
-	if (vm) 
+//------------------------------------------------------------------------------------------------//
+VMX_MODE 
+VmxGetVmxMode(
+	_In_ VCPUVMX* vmx
+)
+/*++
+
+Desscription:
+	
+	Get VMX Mode of the corresponding virtual processor
+
+Paremeters:
+
+	Guest Context
+
+Return Value:
+
+	Emulated-Root or Emulated-Guest Mode
+
+--*/
+{
+	if (vmx) 
 	{
-		return vm->inRoot;
+		return vmx->inRoot;
 	}
 	else
 	{
 		return VMX_MODE::RootMode;
 	}
 }
- 
-//---------------------------------------------------------------------------------------------------------------------//
-void DumpVcpu(GuestContext* guest_context)
+//------------------------------------------------------------------------------------------------//
+VOID 
+SaveGuestCr8(
+	_In_	VCPUVMX* vcpu, 
+	_In_	ULONG_PTR cr8
+)
+/*++
+
+Desscription:
+	NO
+
+Paremeters:
+
+	Guest Context
+
+Return Value:
+
+	NO
+
+--*/
 {
+	vcpu->guest_cr8 = cr8;
+}
+
+
+//------------------------------------------------------------------------------------------------//
+VOID
+RestoreGuestCr8(
+	_In_	VCPUVMX* vcpu
+)
+/*++
+
+Desscription:
+	NO
+
+Paremeters:
+
+	Guest Context
+
+Return Value:
+
+	NO
+
+--*/
+{
+	__writecr8(vcpu->guest_cr8);
+}
+ 
+//------------------------------------------------------------------------------------------------//
+VOID 
+DumpVcpu(
+	_In_	GuestContext* guest_context
+)
+{
+/*++
+
+Desscription:
+
+	Dumping the virtual process context.
+
+Paremeters:
+
+	Guest Context
+
+Return Value:
+
+	NO
+
+--*/
 	ULONG64 vmcs12_va = 0;
 	ULONG64 vmcs_pa;
 	VCPUVMX* vmx = NULL; 
@@ -142,8 +310,23 @@ void DumpVcpu(GuestContext* guest_context)
 	HYPERPLATFORM_LOG_DEBUG_SAFE("CurrentVmcs: %I64X vm: %I64x vmcs02: %I64X vmcs01: %I64x vmcs12: %I64x root mode: %I64x \r\n",
 		vmcs_pa, vmx, vmx->vmcs02_pa, vmx->vmcs01_pa, vmx->vmcs12_pa, vmx->inRoot, GetvCpuMode(guest_context));
 }
-//-------------------------------------------------------------------------------------------------------------------------------------//
+//------------------------------------------------------------------------------------------------//
 VOID VmxVmEntryCheckGuestReg()
+/*++
+
+Desscription:
+
+	Validating VMCS0-2's guest register state for vmentry to L2 during emulation of the VMEntry
+
+Paremeters:
+
+	Guest Context
+
+Return Value:
+
+	NO
+
+--*/
 {
 	VmxVmEntryControls VmEntryCtrl = { UtilVmRead(VmcsField::kVmEntryControls) };
 	FlagRegister rflags = { UtilVmRead(VmcsField::kGuestRflags) };
@@ -214,7 +397,23 @@ VOID VmxVmEntryCheckGuestReg()
 	}
 }
 //---------------------------------------------------------------------------------------------------------	------------//
-VOID VmxVmEntryCheckGuestSegReg()
+VOID 
+VmxVmEntryCheckGuestSegReg()
+/*++
+
+Desscription:
+
+	Validating VMCS0-2's Segment Register for vmentry to L2 during emulation of the VMEntry
+
+Paremeters:
+
+	Guest Context
+
+Return Value:
+
+	NO
+
+--*/
 {
 	FlagRegister		GuestRflags = { UtilVmRead64(VmcsField::kGuestRflags) };
 	VmxVmEntryControls  VmEntryCtrl = { UtilVmRead64(VmcsField::kVmEntryControls) };
@@ -439,21 +638,55 @@ VOID VmxVmEntryCheckGuestSegReg()
 	}
 
 }
-//---------------------------------------------------------------------------------------------------------------------//
-VOID VmxVmEntryCheckGuestDescTableReg()
+
+//------------------------------------------------------------------------------------------------//
+
+VOID 
+VmxVmEntryCheckGuestDescTableReg()
+/*++
+
+Desscription:
+
+	Validating VMCS0-2 Descriptor Table register for vmentry to L2 during emulation of the VMEntry
+
+Paremeters:
+
+	Guest Context
+
+Return Value:
+
+	NO
+
+--*/
 {
 	ULONG64 GdtrBase = { UtilVmRead64(VmcsField::kGuestGdtrBase) };
 	ULONG64 IdtrBase = { UtilVmRead64(VmcsField::kGuestIdtrBase) };
 	ULONG   GdtrLimit =  UtilVmRead(VmcsField::kGuestGdtrLimit);
 	ULONG   IdtrLimit =  UtilVmRead(VmcsField::kGuestIdtrLimit);
 
-	HYPERPLATFORM_ASSERT(UtilpIsCanonicalFormAddress((void*)GdtrBase) && UtilpIsCanonicalFormAddress((void*)IdtrBase));
+	HYPERPLATFORM_ASSERT(UtilpIsCanonicalFormAddress((void*)GdtrBase)
+						&& UtilpIsCanonicalFormAddress((void*)IdtrBase));
 	HYPERPLATFORM_ASSERT(!((GdtrLimit >> 16) & 0xFFFF));
 	HYPERPLATFORM_ASSERT(!((IdtrLimit >> 16) & 0xFFFF));
 }
 
-//---------------------------------------------------------------------------------------------------------------------//
-VOID VmxVmEntryCheckGuestRipRflags()
+//------------------------------------------------------------------------------------------------//
+VOID 
+VmxVmEntryCheckGuestRipRflags()
+/*++
+Desscription:
+
+	Validating VMCS0-2 rip and rflags register for vmentry to L2 during emulation of the VMEntry
+
+Paremeters:
+
+	Guest Context
+
+Return Value:
+
+	NO
+
+--*/
 {
 	VmxVmEntryControls  VmEntryCtrl = { UtilVmRead64(VmcsField::kVmEntryControls) }; 
 	VmxSegmentDescriptorAccessRight CsArBytes = { UtilVmRead(VmcsField::kGuestCsArBytes) }; 
@@ -487,8 +720,25 @@ VOID VmxVmEntryCheckGuestRipRflags()
 	}
 }
 
-//---------------------------------------------------------------------------------------------------------------------//
-VOID VmxVmEntryCheckGuestNonRegstate()
+//------------------------------------------------------------------------------------------------//
+VOID 
+VmxVmEntryCheckGuestNonRegstate()
+
+/*++
+
+Desscription:
+
+	Validating VMCS0-2 non-register for vmentry to L2 during emulation of the VMEntry
+
+Paremeters:
+
+	Guest Context
+
+Return Value:
+
+	NO
+
+--*/
 { 
 	ActivityState  state = static_cast<ActivityState>(UtilVmRead64(VmcsField::kGuestActivityState));
 	VmxSegmentDescriptorAccessRight SsArBytes = { UtilVmRead(VmcsField::kGuestSsArBytes) };
@@ -523,16 +773,18 @@ VOID VmxVmEntryCheckGuestNonRegstate()
 		HYPERPLATFORM_ASSERT(state != WaitForSipi);
 	}
 }
-//---------------------------------------------------------------------------------------------------------------------//
-VOID VmxVmEntryCheckGuestPdptes()
+//------------------------------------------------------------------------------------------------//
+VOID 
+VmxVmEntryCheckGuestPdptes()
 {
-	if(IsGuestPaePaging())
+	if(VmxIsGuestPaePaging())
 	{
 	}
 }
-//---------------------------------------------------------------------------------------------------------------------//
+//------------------------------------------------------------------------------------------------//
 VOID VmEntryCheck()
 {
+
 	VmxVmEntryCheckGuestReg();
 	VmxVmEntryCheckGuestSegReg();
 	VmxVmEntryCheckGuestDescTableReg();
@@ -540,25 +792,27 @@ VOID VmEntryCheck()
 	VmxVmEntryCheckGuestNonRegstate();
 }
 
-//----------------------------------------------------------------------------------------------------------------------//
-/*
+//------------------------------------------------------------------------------------------------//
+NTSTATUS SaveExceptionInformationFromVmcs02(VCPUVMX* vcpu)
+/*++
+
 Descritpion:
 
-1. Call before emulate a VMExit, Read All VMExit related-Information
-From VMCS0-2, And backup it into VMCS1-2, the purpose is for
-emulate VMExit,
+	1. Call before emulate a VMExit, Read All VMExit related-Information
+	From VMCS0-2, And backup it into VMCS1-2, the purpose is for
+	emulate VMExit,
 
-2. Actually the Emulation of VMExit is that we RESUME the L0 to L1,
-so when L1 make any VMREAD/WRITE,  will trap by us, we return a
-VMCS1-2 to its.
+	2. Actually the Emulation of VMExit is that we RESUME the L0 to L1,
+	so when L1 make any VMREAD/WRITE,  will trap by us, we return a
+	VMCS1-2 to its.
 
 Parameters:
 
-1. VMExit Reason
-2. Physical Address for VMCS1-2
+	1. VMExit Reason
 
-*/
-NTSTATUS SaveExceptionInformationFromVmcs02(VCPUVMX* vcpu)
+	2. Physical Address for VMCS1-2
+
+--*/
 {
 	ULONG_PTR vmcs12_va = 0;
 	//all nested vm-exit should record 
@@ -600,20 +854,22 @@ NTSTATUS SaveExceptionInformationFromVmcs02(VCPUVMX* vcpu)
 	VmWrite64(VmcsField::kGuestPhysicalAddress, vmcs12_va, UtilVmRead(VmcsField::kGuestPhysicalAddress));
 
 }
-//---------------------------------------------------------------------------------------------------------------------//
+//------------------------------------------------------------------------------------------------//
+NTSTATUS SaveGuestFieldFromVmcs02(VCPUVMX* vcpu)	
+/*++
 
-/*
 Descritpion:
-1.  Call before emulate a VMExit, Read All Guest Field From VMCS0-2,
-And backup into VMCS1-2, the purpose is for emulated VMExit, but
-actually we RESUME the VM to L1, when L1 make any VMREAD/WRITE,
-we return a VMCS1-2 to its.
+
+	Call before emulate a VMExit, Read All Guest Field From VMCS0-2,
+	And backup into VMCS1-2, the purpose is for emulated VMExit, but
+	actually we RESUME the VM to L1, when L1 make any VMREAD/WRITE,
+	we return a VMCS1-2 to its.
 
 Parameters:
-1.	Physical Address for VMCS1-2
 
-*/
-NTSTATUS SaveGuestFieldFromVmcs02(VCPUVMX* vcpu)
+	Physical Address for VMCS1-2
+
+--*/
 {
 	ULONG_PTR vmcs12_va = 0;
 	//all nested vm-exit should record 
@@ -700,10 +956,21 @@ NTSTATUS SaveGuestFieldFromVmcs02(VCPUVMX* vcpu)
 	*/
 }
 
-//---------------------------------------------------------------------------------------------------------------------//
+//------------------------------------------------------------------------------------------------//
 NTSTATUS LoadHostStateForLevel1(
 	_In_ VCPUVMX* vcpu
 )
+/*++
+
+Descritpion:
+
+	Load VMCS1-2 into VMCS0-1
+
+Parameters:
+
+	VCPUVMX
+
+--*/
 { 
 	ULONG_PTR Vmcs01_pa = 0;
 	ULONG_PTR Vmcs12_va = 0;
@@ -845,65 +1112,121 @@ NTSTATUS LoadHostStateForLevel1(
 
 
  
-//-----------------------------------------------------------------------------------------------------------
-/*
-	We need to emulate the exception if and only if the vCPU mode is Guest Mode ,
-	and only the exception is somethings we want to redirect to L1 for handle it.
-	GetVmxMode:
+//------------------------------------------------------------------------------------------------//
+NTSTATUS 
+VmxVMExitEmulate(
+	_In_ VCPUVMX* vCPU,
+	_In_ GuestContext* guest_context
+)
+/*++
+
+Description:
+
+		Emulating the VMExit behavior from L2 to L1
+
+		We need to emulate the exception if and only if the vCPU mode is Guest Mode ,
+		and only the exception is somethings we want to redirect to L1 VMM to handle it.
+	
+		VCPU Mode as follow:
+		
+		Root Mode:
+			- if the Guest's vCPU is root mode , that means he dun expected the action will be trap.
+			so that action should not give its VMExit handler, otherwise.
+		
+		Guest Mode:
+			- If the Guest's vCPU is in guest mode, that means he expected the action will be trapped
+			And handle by its VMExit handler
+		
+		After this function, VCPU mode should be changed to ROOT Mode , since every other step should be 
+		worded as root mode , and We turn it back to Guest whenever L1's VMM want to do this through 
+		VMlaunch or VMResume instruction.
+	
+		We desginated the L1 wants to handle any breakpoint exception but the others.
+		So that we only nested it for testing purpose.
+
+
+Parameters:
+		
+		vCPU - corresponding structure to current Virtual processor
+
+		guest_context - guest context
+
+Return Value:
+		
+		If the vmexit's context passed, return STATUS_SUCEESS. Otherwise, return STATUS_UNSUCCESSFUL
+--*/
+{
+	NTSTATUS status = STATUS_UNSUCCESSFUL;
+	do
 	{
-	Root Mode:
-	- if the Guest's vCPU is root mode , that means he dun expected the action will be trap.
-	so that action should not give its VMExit handler, otherwise.
-	Guest Mode:
-	- If the Guest's vCPU is in guest mode, that means he expected the action will be trapped
-	And handle by its VMExit handler
-	}
+		if (!vCPU)
+		{
+			break;
+		}
 
-	We desginated the L1 wants to handle any breakpoint exception but the others.
-	So that we only nested it for testing purpose.
-*/
-NTSTATUS VMExitEmulate(VCPUVMX* vCPU , GuestContext* guest_context)
-{ 
-	if (!vCPU)
-	{
-		return STATUS_UNSUCCESSFUL;
-	}
+		// Since VMXON, but VMPTRLD 
+		if (!vCPU->vmcs02_pa || !vCPU->vmcs12_pa || vCPU->vmcs12_pa == ~0x0 || vCPU->vmcs02_pa == ~0x0)
+		{
+			//HYPERPLATFORM_LOG_DEBUG_SAFE("cannot find vmcs \r\n");
+			break;
+		}
 
-	// Since VMXON, but VMPTRLD 
-	if (!vCPU->vmcs02_pa || !vCPU->vmcs12_pa || vCPU->vmcs12_pa == ~0x0 || vCPU->vmcs02_pa == ~0x0)
-	{
-		//HYPERPLATFORM_LOG_DEBUG_SAFE("cannot find vmcs \r\n");
-		return STATUS_UNSUCCESSFUL; 
-	}
+		LEAVE_GUEST_MODE(vCPU);
+		SaveGuestKernelGsBase(GetProcessorData(guest_context));
+		LoadHostKernelGsBase(GetProcessorData(guest_context));
 
-	LEAVE_GUEST_MODE(vCPU); 
-	SaveGuestKernelGsBase(GetProcessorData(guest_context)); 
-	LoadHostKernelGsBase(GetProcessorData(guest_context));
+		SaveGuestFieldFromVmcs02(vCPU);
+		SaveExceptionInformationFromVmcs02(vCPU);
+		SaveGuestCr8(vCPU, GetGuestCr8(guest_context));
+		LoadHostStateForLevel1(vCPU);
 
-	SaveGuestFieldFromVmcs02(vCPU);
-	SaveExceptionInformationFromVmcs02(vCPU);
-	SaveGuestCr8(vCPU, GetGuestCr8(guest_context)); 
-	LoadHostStateForLevel1(vCPU);
-
-
-	return STATUS_SUCCESS;
+		status = STATUS_SUCCESS;
+	} while (FALSE);
+	return status;
 } 
 //--------------------------------------------------------------------------------------//
+NTSTATUS 
+VMEntryEmulate(
+	_In_ VCPUVMX* vCPU, 
+	_In_ GuestContext* guest_context , 
+	_In_ BOOLEAN IsVmLaunch
+)
+/*++
 
-/*
-*		After L1 handles any VM Exit and should be executes VMRESUME for back L2
-*		But this time trapped by VMCS01 and We can't get any VM-Exit information
-*       from it. So we need to read from VMCS12 and return from here immediately.
-*		We saved the vmcs02 GuestRip into VMCS12 our VMExit Handler because when
-*		L1 was executing VMRESUME(We injected VMExit to it), and it is running on
-*		VMCS01, we can't and shouldn't change it.
-*		See: VmmVmExitHandler
-*/
+Description:
+		
+		Emulating VMEntry behavior from L1 to L2.
 
-//--------------------------------------------------------------------------------------//
+		After L1 handles any VM Exit and should be executes VMRESUME for back L2
+		But this time trapped by VMCS01 and We can't get any VM-Exit information
+        from it. So we need to read from VMCS12 and return from here immediately.
+		We saved the vmcs02 GuestRip into VMCS12 our VMExit Handler because when
+		L1 was executing VMRESUME(We injected VMExit to it), and it is running on
+		VMCS01, we can't and shouldn't change it.
 
-NTSTATUS VMEntryEmulate(VCPUVMX* vCPU, GuestContext* guest_context , BOOLEAN IsVmLaunch)
+		See: VmmVmExitHandler
+
+		N.B. if the VMEntry is not passed, the control transfer to debugger or BSOD. 
+
+Parameters:
+		
+		vCPU - corresponding structure to current Virtual processor
+
+		guest_context - guest context
+
+		IsVmLaunch - Indicate the Virtual-VMentry either come from VMLAUNCH or VMRESUME 
+
+Return Value:
+		
+		If the vmentry's context passed, return STATUS_SUCEESS. Otherwise, return STATUS_UNSUCCESSFUL
+
+--*/
 {
+	ULONG_PTR    vmcs02_va = 0;
+	ULONG_PTR    vmcs12_va = 0;
+	Ia32VmxBasicMsr vmx_basic_msr = { 0 };
+	VmControlStructure* vmcs02_ptr = NULL;
+
 	if (!vCPU)
 	{
 		return STATUS_UNSUCCESSFUL;
@@ -916,10 +1239,10 @@ NTSTATUS VMEntryEmulate(VCPUVMX* vCPU, GuestContext* guest_context , BOOLEAN IsV
 		return STATUS_UNSUCCESSFUL;
 	}
 	 
-	auto    vmcs02_va = (ULONG64)UtilVaFromPa(vCPU->vmcs02_pa);
-	auto    vmcs12_va = (ULONG64)UtilVaFromPa(vCPU->vmcs12_pa);
+	vmcs02_va = (ULONG_PTR)UtilVaFromPa(vCPU->vmcs02_pa);
+	vmcs12_va = (ULONG_PTR)UtilVaFromPa(vCPU->vmcs12_pa);
 
-	if (!vmcs02_va || !vmcs02_va)
+	if (!vmcs02_va || !vmcs12_va)
 	{
 		return STATUS_UNSUCCESSFUL;
 	}
@@ -927,9 +1250,9 @@ NTSTATUS VMEntryEmulate(VCPUVMX* vCPU, GuestContext* guest_context , BOOLEAN IsV
 	ENTER_GUEST_MODE(vCPU);
 
 	// Write a VMCS revision identifier
-	const Ia32VmxBasicMsr vmx_basic_msr = { UtilReadMsr64(Msr::kIa32VmxBasic) };
-	VmControlStructure* ptr = (VmControlStructure*)vmcs02_va;
-	ptr->revision_identifier = vmx_basic_msr.fields.revision_identifier;
+	vmx_basic_msr = { UtilReadMsr64(Msr::kIa32VmxBasic) };
+	vmcs02_ptr = (VmControlStructure*)vmcs02_va;
+	vmcs02_ptr->revision_identifier = vmx_basic_msr.fields.revision_identifier;
 	 
 	//Prepare VMCS01 Host / Control Field
 	PrepareHostAndControlField(vmcs12_va,  vCPU->vmcs02_pa, IsVmLaunch);
@@ -986,7 +1309,6 @@ NTSTATUS VMEntryEmulate(VCPUVMX* vCPU, GuestContext* guest_context , BOOLEAN IsV
 	else
 	{
 		VmxSecondaryProcessorBasedControls ProcCtrl = { UtilVmRead64(VmcsField::kSecondaryVmExecControl) };
-
 		if (ProcCtrl.fields.enable_ept)
 		{
 			EptData* ept_data02 = GetCurrentEpt02Pointer(guest_context);
@@ -995,7 +1317,6 @@ NTSTATUS VMEntryEmulate(VCPUVMX* vCPU, GuestContext* guest_context , BOOLEAN IsV
 				UtilVmWrite64(VmcsField::kEptPointer, ept_data02->ept_pointer->all);
 			}
 		}
-
 		RestoreGuestCr8(vCPU);
 		LoadGuestKernelGsBase(GetProcessorData(guest_context));
 	}
@@ -1003,19 +1324,26 @@ NTSTATUS VMEntryEmulate(VCPUVMX* vCPU, GuestContext* guest_context , BOOLEAN IsV
 	return STATUS_SUCCESS;
 }
 
-//---------------------------------------------------------------------------------------------------------------------//
-void SaveGuestCr8(VCPUVMX* vcpu, ULONG_PTR cr8)
-{
-	vcpu->guest_cr8 = cr8; 
-}
-//---------------------------------------------------------------------------------------------------------------------//
-void RestoreGuestCr8(VCPUVMX* vcpu)
-{
-	__writecr8(vcpu->guest_cr8); 
-}
  
-//---------------------------------------------------------------------------------------------------------------------//
-VOID VmxonEmulate(GuestContext* guest_context)
+//------------------------------------------------------------------------------------------------//
+VOID VmxVmxonEmulate(
+	_In_ GuestContext* guest_context
+)
+/*++
+Desscription:
+
+	Emulating Vmxon instruction, Allocating the data structure of Virtual Processors, 
+	and initial the virtual prcoessors as VMX-root mode.
+
+Paremeters:
+
+	Guest Context
+
+Return Value:
+
+	NO
+
+--*/
 {
 	do
 	{
@@ -1102,10 +1430,26 @@ VOID VmxonEmulate(GuestContext* guest_context)
 
 
 }
-//---------------------------------------------------------------------------------------------------------------//
-VOID VmxoffEmulate(
+//------------------------------------------------------------------------------------------------//
+VOID 
+VmxVmxoffEmulate(
 	_In_ GuestContext* guest_context
 )
+/*++
+Desscription:
+
+	Emulating Vmxoff instruction , releasing the data structure of Virtual Processors, 
+	and initial the virtual prcoessors as VMX-root mode.
+
+Paremeters:
+
+	Guest Context
+
+Return Value:
+
+	NO
+
+--*/
 {
 	do
 	{
@@ -1129,7 +1473,7 @@ VOID VmxoffEmulate(
 		}
 
 		// if VCPU not run in VMX mode 
-		if (GetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
+		if (VmxGetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
 		{
 			// Inject ...'
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("Vmxoff: Unimplemented third level virualization \r\n"));
@@ -1168,9 +1512,27 @@ VOID VmxoffEmulate(
 		VMSucceed(GetFlagReg(guest_context));
 	} while (0);
 }
-//---------------------------------------------------------------------------------------------------------------------//
-VOID VmclearEmulate(
-	_In_ GuestContext* guest_context)
+//------------------------------------------------------------------------------------------------//
+VOID 
+VmxVmclearEmulate(
+	_In_ GuestContext* guest_context
+)
+/*++
+Desscription:
+
+	Emulating VMClear instruction, We basically clear the VMCS0-2 which is transparent
+	to the L1's VMM, because we need to load this VMCS into the real processors. So we 
+	need to make an effect on them.
+
+Paremeters:
+
+	Guest Context
+
+Return Value:
+
+	NO
+
+--*/
 {
 	do
 	{ 
@@ -1208,7 +1570,7 @@ VOID VmclearEmulate(
 			break;
 		}
 		 
-		if (GetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
+		if (VmxGetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
 		{
 			// Inject ...'
 			HYPERPLATFORM_LOG_DEBUG_SAFE(("VMCLEAR : Unimplemented third level virualization \r\n"));
@@ -1275,8 +1637,26 @@ VOID VmclearEmulate(
 	} while (FALSE);
 }
 
-//---------------------------------------------------------------------------------------------------------------------//
-VOID VmptrldEmulate(GuestContext* guest_context)
+//------------------------------------------------------------------------------------------------//
+VOID
+VmxVmptrldEmulate(
+	_In_	GuestContext* guest_context
+)
+/*++
+Desscription:
+
+	Emulating VMPTRLD instruction , We basically initial the corresponding EPT 
+	to the virtual processor with VMCS1-2 
+
+Paremeters:
+
+	Guest Context
+
+Return Value:
+
+	NO
+
+--*/
 {
 	do
 	{
@@ -1316,7 +1696,7 @@ VOID VmptrldEmulate(GuestContext* guest_context)
 		}
  
 		// if VCPU not run in VMX mode 
-		if (GetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
+		if (VmxGetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
 		{
 			// Inject ...'
 			HYPERPLATFORM_LOG_DEBUG_SAFE("VMPTRLD Unimplemented third level virualization %I64x \r\n", GetVcpuVmx(guest_context));
@@ -1382,10 +1762,28 @@ VOID VmptrldEmulate(GuestContext* guest_context)
 	} while (FALSE);
 }
 
-//---------------------------------------------------------------------------------------------------------------------//
-VOID VmreadEmulate(GuestContext* guest_context)
-{
+//------------------------------------------------------------------------------------------------//
+VOID 
+VmxVmreadEmulate(
+	_In_	GuestContext* guest_context
+)
+/*++
+Desscription:
 
+	Emulating VMRead instruction , we are passing through the contents of paremeter, to the 
+	VMCS1-2, L1's VMM doesn't realize the effect is not making on the VMCS0-2, however, that is 
+	not really loaded into physical processor. But it is used to be a material for producing the VMCS0-2
+
+Paremeters:
+
+	Guest Context
+
+Return Value:
+
+	NO
+
+--*/
+{
 	do
 	{
 
@@ -1415,7 +1813,7 @@ VOID VmreadEmulate(GuestContext* guest_context)
 		}
 
 		// if VCPU not run in VMX mode 
-		if (GetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
+		if (VmxGetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
 		{
 			// Inject ...'
 			HYPERPLATFORM_LOG_DEBUG(" Vmread: Unimplemented third level virualization VMX: %I64x  VMCS12: %I64x \r\n", GetVcpuVmx(guest_context), vmcs12_pa);
@@ -1486,10 +1884,28 @@ VOID VmreadEmulate(GuestContext* guest_context)
 	} while (FALSE);
 }
 
-//---------------------------------------------------------------------------------------------------------------------//
-VOID VmwriteEmulate(GuestContext* guest_context)
-{
+//------------------------------------------------------------------------------------------------//
+VOID VmxVmwriteEmulate(
+	_In_	GuestContext* guest_context
+)
+/*++
+Desscription:
 
+	Emulating VMWrite instruction , we are passing through the contents of paremeter, to the 
+	VMCS1-2, L1's VMM doesn't realize the effect is not making on the VMCS0-2, however, that is 
+	not really loaded into physical processor. But it is used to be a material for producing
+	the VMCS0-2.
+
+Paremeters:
+
+	Guest Context
+
+Return Value:
+
+	NO
+
+--*/
+{
 	do
 	{
 		VmcsField			field;
@@ -1508,7 +1924,7 @@ VOID VmwriteEmulate(GuestContext* guest_context)
 			break;
 		}
 		// if VCPU not run in VMX mode 
-		if (GetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
+		if (VmxGetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
 		{
 			// Inject ...'
 			HYPERPLATFORM_LOG_DEBUG(" Vmwrite: Unimplemented third level virualization VMX: %I64x  VMCS12: %I64x \r\n", GetVcpuVmx(guest_context), vmcs12_pa);
@@ -1565,8 +1981,25 @@ VOID VmwriteEmulate(GuestContext* guest_context)
 }
 
 
-//---------------------------------------------------------------------------------------------------------------------//
-VOID VmlaunchEmulate(GuestContext* guest_context)
+//------------------------------------------------------------------------------------------------//
+VOID 
+VmxVmlaunchEmulate(
+	_In_	GuestContext* guest_context
+)
+/*++
+Desscription:
+
+	Emulating VMLaunch instruction , start the emulation of the VMEntry
+
+Paremeters:
+
+	Guest Context
+
+Return Value:
+
+	NO
+
+--*/
 {
 
 	PROCESSOR_NUMBER  procnumber = { 0 };
@@ -1591,7 +2024,7 @@ VOID VmlaunchEmulate(GuestContext* guest_context)
 		}
 
 		// if VCPU not run in VMX mode 
-		if (GetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
+		if (VmxGetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
 		{
 			// Inject ...'
 			HYPERPLATFORM_LOG_DEBUG(" Vmlaunch: Unimplemented third level virualization VMX: %I64x  VMCS12: %I64x \r\n", GetVcpuVmx(guest_context), NestedvCPU->vmcs12_pa);
@@ -1606,8 +2039,25 @@ VOID VmlaunchEmulate(GuestContext* guest_context)
 	} while (FALSE);
 
 }
-//----------------------------------------------------------------------------------------------------------------//
-VOID VmresumeEmulate(GuestContext* guest_context)
+//------------------------------------------------------------------------------------------------//
+VOID 
+VmxVmresumeEmulate(
+	_In_	GuestContext* guest_context
+)
+/*++
+Desscription:
+
+	Emulating VMLaunch instruction , start the emulation of the VMEntry
+
+Paremeters:
+
+	Guest Context
+
+Return Value:
+
+	NO
+
+--*/
 {
 	do
 	{
@@ -1631,7 +2081,7 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 		}
 
 		// if VCPU not run in VMX mode 
-		if (GetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
+		if (VmxGetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
 		{
 			// Inject ...'
 			HYPERPLATFORM_LOG_DEBUG(" Vmresume: Unimplemented third level virualization VMX: %I64x  VMCS12: %I64x \r\n",
@@ -1650,8 +2100,25 @@ VOID VmresumeEmulate(GuestContext* guest_context)
 	} while (FALSE);
 }
 
-//----------------------------------------------------------------------------------------------------------------//
-VOID VmptrstEmulate(GuestContext* guest_context)
+//------------------------------------------------------------------------------------------------//
+VOID 
+VmxVmptrstEmulate(
+	GuestContext* guest_context
+)
+/*++
+Desscription:
+
+	Emulating VMPtrst instruction , simple emulation , may not be consistent with Intel's behavior
+
+Paremeters:
+
+	Guest Context
+
+Return Value:
+
+	NO
+
+--*/
 {
 	do
 	{
@@ -1677,7 +2144,7 @@ VOID VmptrstEmulate(GuestContext* guest_context)
 		}
 
 		// if VCPU not run in VMX mode 
-		if (GetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
+		if (VmxGetVmxMode(GetVcpuVmx(guest_context)) != RootMode)
 		{
 			// Inject ...'
 			HYPERPLATFORM_LOG_DEBUG_SAFE("Vmptrst: Unimplemented third level virualization  %I64x \r\n", GetVcpuVmx(guest_context));
@@ -1690,5 +2157,6 @@ VOID VmptrstEmulate(GuestContext* guest_context)
 		VMSucceed(GetFlagReg(guest_context));
 	} while (FALSE);
 }
+//------------------------------------------------------------------------------------------------//
 }
  

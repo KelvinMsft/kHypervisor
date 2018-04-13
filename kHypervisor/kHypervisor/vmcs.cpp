@@ -50,7 +50,7 @@ unsigned	g_vmcs_map[16][1 + VMX_HIGHEST_VMCS_ENCODING];
 //// Implementation
 ////
 
-extern 	BOOLEAN IsGuestPaePaging();
+extern 	BOOLEAN VmxIsGuestPaePaging();
 //---------------------------------------------------------------------------------------------------------------------------// 
 VOID	 PrintReadOnlyFieldForVmcs12(ULONG64 vmcs12_va) 
 {
@@ -1323,7 +1323,7 @@ VOID PrepareGuestStateField(ULONG_PTR guest_vmcs_va)
 	UtilVmWrite(VmcsField::kGuestRflags, vmcs12_kGuestRlags);
 	
 	//HYPERPLATFORM_COMMON_DBG_BREAK();
-	if (IsGuestPaePaging())
+	if (VmxIsGuestPaePaging())
 	{
 		VmxSecondaryProcessorBasedControls vm_second_ctrl = { UtilVmRead(VmcsField::kSecondaryVmExecControl) };
 		if (vm_second_ctrl.fields.enable_ept)

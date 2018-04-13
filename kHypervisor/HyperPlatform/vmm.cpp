@@ -528,7 +528,7 @@ extern "C" {
 		{
 			//HYPERPLATFORM_COMMON_DBG_BREAK(); 
 			HYPERPLATFORM_LOG_DEBUG("Exception vector: %x Rip: %p ", exception.fields.vector, UtilVmRead64(VmcsField::kGuestRip));
-			status =  VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+			status =  VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context);
 		}
 		return status;
 	}
@@ -539,7 +539,7 @@ extern "C" {
 	)
 	{
 		UNREFERENCED_PARAMETER(exit_reason);
-		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context); 
+		return VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context); 
 	}
 	//-----------------------------------------------------------------------------------------------------------------------//
 	_Use_decl_annotations_ static NTSTATUS VmmpHandleRdmsrForL2(
@@ -568,7 +568,7 @@ extern "C" {
 			return STATUS_UNSUCCESSFUL;
 		}
 
-		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+		return VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context);
 	}
 	//-----------------------------------------------------------------------------------------------------------------------//
 	_Use_decl_annotations_ static NTSTATUS VmmpHandleWrmsrForL2(
@@ -599,14 +599,14 @@ extern "C" {
 			return STATUS_UNSUCCESSFUL;
 		}
 
-		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+		return VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context);
 	}
 	//-----------------------------------------------------------------------------------------------------------------------//
 	_Use_decl_annotations_ static NTSTATUS VmmpHandleCpuidForL2(
 		_In_ GuestContext *guest_context
 	)
 	{  
-		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+		return VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context);
 	}
 	//-----------------------------------------------------------------------------------------------------------------------//
 	_Use_decl_annotations_ static NTSTATUS VmmpHandlerRdtscForL2(
@@ -620,7 +620,7 @@ extern "C" {
 		}
 
 		HYPERPLATFORM_LOG_DEBUG_SAFE("Rdtsc VMExit to L1");
-		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+		return VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context);
 	} 
 	//-----------------------------------------------------------------------------------------------------------------------//
 	_Use_decl_annotations_ static NTSTATUS VmmpHandlerCrAccessForL2(
@@ -702,7 +702,7 @@ extern "C" {
 			return STATUS_UNSUCCESSFUL;
 		}
 
-		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+		return VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context);
 	}
 
 	//-----------------------------------------------------------------------------------------------------------------------//
@@ -716,7 +716,7 @@ extern "C" {
 			return STATUS_UNSUCCESSFUL;
 		} 
 		HYPERPLATFORM_LOG_DEBUG_SAFE("DrAccess VMExit to L1");
-		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+		return VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context);
 	}
 
 	//-----------------------------------------------------------------------------------------------------------------------//
@@ -729,7 +729,7 @@ extern "C" {
 		{
 			return STATUS_UNSUCCESSFUL;
 		}
-		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+		return VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context);
 		//return STATUS_UNSUCCESSFUL;;
 	}
 	 
@@ -744,7 +744,7 @@ extern "C" {
 			return STATUS_UNSUCCESSFUL;
 		}
 		HYPERPLATFORM_LOG_DEBUG_SAFE("DescriptorTableAccess VMExit to L1"); 
-		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+		return VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context);
 	}
 	//-----------------------------------------------------------------------------------------------------------------------//
 	_Use_decl_annotations_ static NTSTATUS VmmpHandleEptViolationForL2(
@@ -783,7 +783,7 @@ extern "C" {
 			{
 				HYPERPLATFORM_LOG_DEBUG_SAFE("Nested Guest Translate GPA: %p to by EPTPTE Error (pte: %p)", UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept12Pte);
 				HYPERPLATFORM_COMMON_DBG_BREAK();
-				status = VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+				status = VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context);
 				break;
 			}
 
@@ -833,7 +833,7 @@ extern "C" {
 				break;
 			}
  
-			status =  VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+			status =  VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context);
 		} while (0);
 		return status;
 	}
@@ -844,7 +844,7 @@ extern "C" {
 	{
 		HYPERPLATFORM_COMMON_DBG_BREAK();
 		HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 2, 3, 5);
-		return VMExitEmulate(GetVcpuVmx(guest_context), guest_context);
+		return VmxVMExitEmulate(GetVcpuVmx(guest_context), guest_context);
 	}
 	//-----------------------------------------------------------------------------------------------------------------------//
 	_Use_decl_annotations_ static NTSTATUS VmmpHandleVmExitForL2(
@@ -968,9 +968,9 @@ extern "C" {
 
 			__vmx_vmptrst(&vmcs_pa);
 
-			if (GetVmxMode(vCPU) != GuestMode)	 //L2 - OS
+			if (VmxGetVmxMode(vCPU) != GuestMode)	 //L2 - OS
 			{
-				//HYPERPLATFORM_LOG_DEBUG("#1 Almost impossible come here Mode: %x vmcs02_pa: %I64x vmcs_pa: %I64x ", GetVmxMode(vCPU), vCPU->vmcs02_pa, vmcs_pa);
+				//HYPERPLATFORM_LOG_DEBUG("#1 Almost impossible come here Mode: %x vmcs02_pa: %I64x vmcs_pa: %I64x ", VmxGetVmxMode(vCPU), vCPU->vmcs02_pa, vmcs_pa);
 				VmmpHandleVmExitForL1(guest_context);
 				break;
 			}
@@ -2232,7 +2232,7 @@ extern "C" {
 		{
 		case VmxExitReason::kVmon:
 		{
-			VmxonEmulate(guest_context);
+			VmxVmxonEmulate(guest_context);
 		}
 		break;
 
@@ -2241,7 +2241,7 @@ extern "C" {
 		*/
 		case VmxExitReason::kVmclear:
 		{
-			VmclearEmulate(guest_context);
+			VmxVmclearEmulate(guest_context);
 		}
 		break;
 
@@ -2250,19 +2250,19 @@ extern "C" {
 		*/
 		case VmxExitReason::kVmptrld:
 		{
-			VmptrldEmulate(guest_context);
+			VmxVmptrldEmulate(guest_context);
 		}
 		break;
 
 		case VmxExitReason::kVmptrst:
 		{
-			VmptrstEmulate(guest_context);
+			VmxVmptrstEmulate(guest_context);
 		}
 		break;
 		/// TODO:
 		case VmxExitReason::kVmoff:
 		{ 
-			VmxoffEmulate(guest_context);
+			VmxVmxoffEmulate(guest_context);
 		}
 		break;
 		/*
@@ -2270,7 +2270,7 @@ extern "C" {
 		*/
 		case VmxExitReason::kVmwrite:
 		{
-			VmwriteEmulate(guest_context);
+			VmxVmwriteEmulate(guest_context);
 		}
 		break;
 		/*
@@ -2278,19 +2278,19 @@ extern "C" {
 		*/
 		case VmxExitReason::kVmread:
 		{
-			VmreadEmulate(guest_context);
+			VmxVmreadEmulate(guest_context);
 		}
 		break;
 
 		case VmxExitReason::kVmlaunch:
 		{
-			VmlaunchEmulate(guest_context);
+			VmxVmlaunchEmulate(guest_context);
 		}
 		break;
 
 		case VmxExitReason::kVmresume:
 		{
-			//In VmresumeEmulate will modify Guest Rip so no need to execute anymore after it returns.
+			//In VmxVmresumeEmulate will modify Guest Rip so no need to execute anymore after it returns.
 			//And should not execute anymore.
 
 			//Vmresume Emulation :
@@ -2299,7 +2299,7 @@ extern "C" {
 			//- So we need to help L1 to resume to L2
 			//- We saved the vmcs02 GuestRip into VMCS12 our VMExit Handler, 
 			//- because when L1 is executing VMRESUME, it is running on VMCS01
-			VmresumeEmulate(guest_context);
+			VmxVmresumeEmulate(guest_context);
 			return;
 		}
 		break;

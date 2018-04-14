@@ -257,7 +257,7 @@ extern "C" {
 		return guest_context->stack->processor_data->EptDat02;
 	}
 	//----------------------------------------------------------------------------------------------------------------//
-	_Use_decl_annotations_ void VmmSaveCurrentEpt02Pointer(GuestContext* guest_context, EptData* Ept02)
+	_Use_decl_annotations_ VOID VmmSaveCurrentEpt02Pointer(GuestContext* guest_context, EptData* Ept02)
 	{
 		guest_context->stack->processor_data->EptDat02 = Ept02;
 	}

@@ -29,27 +29,7 @@ Environment:
 #include "..\HyperPlatform\asm.h"
 #include "..\HyperPlatform\log.h"   
 #include "..\HyperPlatform\ept.h"
-//-------------------------------------------------------------------------------------------------------------------------------------//
-VOID VmcsPrintAllFieldForVmcs12(const char* func, ULONG64 vmcs12)
-{
-	HYPERPLATFORM_LOG_DEBUG("------------------------- Start Print VMCS12 by %s -----------------------------", func);
-	VmcsPrintReadOnlyFieldForVmcs12(vmcs12);
-	HYPERPLATFORM_LOG_DEBUG_SAFE("------------------------- End Printed VMCS12 by %s -----------------------------", func);
-
-}
-//-------------------------------------------------------------------------------------------------------------------------------------//
-VOID VmcsPrintAllField(const char* func)
-{
-	HYPERPLATFORM_LOG_DEBUG_SAFE("------------------------- Start Printe Current VMCS by %s -----------------------------", func);
-	VmcsPrintControlField();
-	VmcsPrintHostStateField();
-	VmcsPrintGuestStateField();
-	VmcsPrintReadOnlyField();
-	HYPERPLATFORM_LOG_DEBUG_SAFE("kIa32GsBase: %I64X kIa32KernelGsBase: %I64X \r\n", UtilReadMsr(Msr::kIa32GsBase), UtilReadMsr(Msr::kIa32KernelGsBase));
-	HYPERPLATFORM_LOG_DEBUG_SAFE("------------------------- End Printed Current VMCS by %s -----------------------------", func);
-}
-//-------------------------------------------------------------------------------------------------------------------------------------//
-
+ 
 
 extern "C" 
 {
@@ -58,6 +38,12 @@ extern "C"
 //// Variable
 ////
 unsigned	g_vmcs_map[16][1 + VMX_HIGHEST_VMCS_ENCODING];
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////
+//// Prototype
+////
+extern 	BOOLEAN VmxIsGuestPaePaging();
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////
@@ -68,10 +54,37 @@ unsigned	g_vmcs_map[16][1 + VMX_HIGHEST_VMCS_ENCODING];
 ////
 //// Implementation
 ////
+//----------------------------------------------------------------------------------------------------------------//
+VOID 
+VmcsPrintAllFieldForVmcs12(
+	_In_ const char* func,
+	_In_ ULONG64 vmcs12
+)
+{
+	HYPERPLATFORM_LOG_DEBUG("------------------------- Start Print VMCS12 by %s -----------------------------", func);
+	VmcsPrintReadOnlyFieldForVmcs12(vmcs12);
+	HYPERPLATFORM_LOG_DEBUG_SAFE("------------------------- End Printed VMCS12 by %s -----------------------------", func);
 
-extern 	BOOLEAN VmxIsGuestPaePaging();
-//---------------------------------------------------------------------------------------------------------------------------// 
-VOID	 VmcsPrintReadOnlyFieldForVmcs12(ULONG64 vmcs12_va) 
+}
+//----------------------------------------------------------------------------------------------------------------//
+VOID
+VmcsPrintAllField(
+	_In_ const char* func
+)
+{
+	HYPERPLATFORM_LOG_DEBUG_SAFE("------------------------- Start Printe Current VMCS by %s -----------------------------", func);
+	VmcsPrintControlField();
+	VmcsPrintHostStateField();
+	VmcsPrintGuestStateField();
+	VmcsPrintReadOnlyField();
+	HYPERPLATFORM_LOG_DEBUG_SAFE("kIa32GsBase: %I64X kIa32KernelGsBase: %I64X \r\n", UtilReadMsr(Msr::kIa32GsBase), UtilReadMsr(Msr::kIa32KernelGsBase));
+	HYPERPLATFORM_LOG_DEBUG_SAFE("------------------------- End Printed Current VMCS by %s -----------------------------", func);
+}
+//----------------------------------------------------------------------------------------------------------------// 
+VOID	 
+VmcsPrintReadOnlyFieldForVmcs12(
+	_In_ ULONG64 vmcs12_va
+)
 {
 	ULONG64 kVmInstructionError = 0;
 	ULONG64 kVmExitReason = 0; 
@@ -101,7 +114,8 @@ VOID	 VmcsPrintReadOnlyFieldForVmcs12(ULONG64 vmcs12_va)
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//
-VOID VmcsPrintHostStateField()
+VOID 
+VmcsPrintHostStateField()
 {
 
 	HYPERPLATFORM_LOG_DEBUG("###################### 16bit Host State #############################");
@@ -139,7 +153,8 @@ VOID VmcsPrintHostStateField()
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//
-VOID VmcsPrintControlField()
+VOID
+VmcsPrintControlField()
 {
 
 	HYPERPLATFORM_LOG_DEBUG("###################### 16bit Control State #############################");
@@ -212,7 +227,8 @@ VOID VmcsPrintControlField()
 
 
 //---------------------------------------------------------------------------------------------------------------------------//
-VOID VmcsPrintGuestStateField()
+VOID 
+VmcsPrintGuestStateField()
 {
 
 	HYPERPLATFORM_LOG_DEBUG("###################### 16bit Guest State #############################");
@@ -282,7 +298,8 @@ VOID VmcsPrintGuestStateField()
 }
 
 //---------------------------------------------------------------------------------------------------------------------------//
-VOID VmcsPrintReadOnlyField()
+VOID 
+VmcsPrintReadOnlyField()
 {
 
 	HYPERPLATFORM_LOG_DEBUG_SAFE("###################### Natural Read-only data field #############################");
@@ -330,7 +347,10 @@ ULONG_PTR* SelectRegister(ULONG index, GpRegisters *gp_regs)
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------//
-ULONG GetVMCSOffset(ULONG_PTR encoded)
+ULONG 
+GetVMCSOffset(
+	_In_ ULONG_PTR encoded
+)
 {
 	if (encoded)
 	{
@@ -353,8 +373,15 @@ ULONG GetVMCSOffset(ULONG_PTR encoded)
 	return 0;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------//
-
-VmcsField VmcsDecodeVmwriteOrVmRead(GpRegisters* guest_context, ULONG_PTR* Offset, ULONG_PTR* Value, BOOLEAN* RorM, ULONG_PTR* RegIndex, ULONG_PTR* MemAddr)
+VmcsField 
+VmcsDecodeVmwriteOrVmRead(
+	_In_ GpRegisters* guest_context, 
+	_In_ ULONG_PTR* Offset, 
+	_In_ ULONG_PTR* Value,
+	_In_ BOOLEAN* RorM, 
+	_In_ ULONG_PTR* RegIndex, 
+	_In_ ULONG_PTR* MemAddr
+)
 {
 	const VMInstructionQualificationForVmreadOrVmwrite exit_qualification = {
 		static_cast<ULONG32>(UtilVmRead(VmcsField::kVmxInstructionInfo))
@@ -450,48 +477,81 @@ VmcsField VmcsDecodeVmwriteOrVmRead(GpRegisters* guest_context, ULONG_PTR* Offse
 
 //-------------------------------------------------------------------------------------------------------------------------------------//
 
-VOID VmcsVmRead64(VmcsField Field, ULONG_PTR base, PULONG64 destination)
+VOID 
+VmcsVmRead64(
+	_In_ VmcsField Field, 
+	_In_ ULONG_PTR base, 
+	_In_ PULONG64 destination
+)
 {
 	ULONG_PTR offset = GetVMCSOffset((ULONG64)Field);
 	*destination = *(PULONG64)(base + offset);
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------------//
-VOID VmcsVmRead32(VmcsField Field, ULONG_PTR base, PULONG32 destination)
+VOID 
+VmcsVmRead32(
+	_In_ VmcsField Field, 
+	_In_ ULONG_PTR base, 
+	_In_ PULONG32 destination
+)
 {
 	ULONG_PTR offset = GetVMCSOffset((ULONG64)Field);
 	*destination = *(PULONG32)(base + offset);
 }
 //-------------------------------------------------------------------------------------------------------------------------------------//
-VOID VmcsVmRead16(VmcsField Field, ULONG_PTR base, PUSHORT destination)
+VOID 
+VmcsVmRead16(
+	_In_ VmcsField Field, 
+	_In_ ULONG_PTR base, 
+	_In_ PUSHORT destination
+)
 {
 	ULONG_PTR offset = GetVMCSOffset((ULONG64)Field);
 	*destination = *(PUSHORT)(base + offset);
 }
 //-------------------------------------------------------------------------------------------------------------------------------------//
 
-VOID VmcsVmWrite64(VmcsField Field, ULONG_PTR base, ULONG_PTR value)
+VOID 
+VmcsVmWrite64(
+	_In_ VmcsField Field, 
+	_In_ ULONG_PTR base, 
+	_In_ ULONG_PTR value
+)
 {
 	ULONG_PTR offset = GetVMCSOffset((ULONG64)Field);
 	*(PULONG64)(base + offset) = (ULONG64)value;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------//
 
-VOID VmcsVmWrite32(VmcsField Field, ULONG_PTR base, ULONG_PTR value)
+VOID
+VmcsVmWrite32(
+	_In_ VmcsField Field,
+	_In_ ULONG_PTR base, 
+	_In_ ULONG_PTR value
+)
 {
 	ULONG_PTR offset = GetVMCSOffset((ULONG64)Field);
 	*(PULONG32)(base + offset) = (ULONG32)value;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------//
 
-VOID VmcsVmWrite16(VmcsField Field, ULONG_PTR base, ULONG_PTR value)
+VOID 
+VmcsVmWrite16(
+	_In_ VmcsField Field, 
+	_In_ ULONG_PTR base, 
+	_In_ ULONG_PTR value
+)
 {
 	ULONG_PTR offset = GetVMCSOffset((ULONG64)Field);
 	*(PUSHORT)(base + offset) = (USHORT)value;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------//
 
-BOOLEAN is_vmcs_field_supported(VmcsField encoding)
+BOOLEAN
+is_vmcs_field_supported(
+	VmcsField encoding
+)
 {
 	switch (encoding)
 	{
@@ -741,7 +801,8 @@ BOOLEAN is_vmcs_field_supported(VmcsField encoding)
 }
 //-------------------------------------------------------------------------------------------------------------------------------------//
 
-VOID BuildGernericVMCSMap()
+VOID 
+BuildGernericVMCSMap()
 {
 	static bool vmcs_map_ready = 0;
 	unsigned type, index;
@@ -798,8 +859,13 @@ VOID BuildGernericVMCSMap()
 //-------------------------------------------------------------------------------------------------------------------------------------//
 
 // Returns a base address of segment_descriptor
-_Use_decl_annotations_ static ULONG_PTR GetSegmentBaseByDescriptor(
-	const SegmentDescriptor *segment_descriptor) {
+_Use_decl_annotations_ 
+static 
+ULONG_PTR 
+GetSegmentBaseByDescriptor(
+	_In_ const SegmentDescriptor *segment_descriptor
+)
+{
 	// Caluculate a 32bit base address
 	const auto base_high = segment_descriptor->fields.base_high << (6 * 4);
 	const auto base_middle = segment_descriptor->fields.base_mid << (4 * 4);
@@ -817,16 +883,28 @@ _Use_decl_annotations_ static ULONG_PTR GetSegmentBaseByDescriptor(
 //-------------------------------------------------------------------------------------------------------------------------------------//
 
 // Returns the segment descriptor corresponds to the SegmentSelector
-_Use_decl_annotations_ static SegmentDescriptor *GetSegmentDescriptor(
-	ULONG_PTR descriptor_table_base, USHORT segment_selector) {
+_Use_decl_annotations_ 
+static 
+SegmentDescriptor*
+GetSegmentDescriptor(
+	_In_ ULONG_PTR descriptor_table_base,
+	_In_ USHORT segment_selector
+)
+{
 	const SegmentSelector ss = { segment_selector };
 	return reinterpret_cast<SegmentDescriptor *>(descriptor_table_base + ss.fields.index * sizeof(SegmentDescriptor));
 }
 //-------------------------------------------------------------------------------------------------------------------------------------//
 
 // Returns a base address of the segment specified by SegmentSelector
-_Use_decl_annotations_ static ULONG_PTR GetSegmentBase(
-	ULONG_PTR gdt_base, USHORT segment_selector) {
+_Use_decl_annotations_
+static 
+ULONG_PTR 
+GetSegmentBase(
+	_In_ ULONG_PTR gdt_base, 
+	_In_ USHORT segment_selector
+) 
+{
 	const SegmentSelector ss = { segment_selector };
 	if (!ss.all) {
 		return 0;
@@ -864,7 +942,12 @@ if CS.D = 1
 if CS.D = 0
 64bit mode
 */
-ULONG64 GetControlValue(Msr msr, ULONG32* highpart, ULONG32* lowpart)
+ULONG64
+GetControlValue(
+	_In_ Msr msr, 
+	_In_ ULONG32* highpart,
+	_In_ ULONG32* lowpart
+)
 {
 	LARGE_INTEGER msr_value = {};
 
@@ -877,7 +960,12 @@ ULONG64 GetControlValue(Msr msr, ULONG32* highpart, ULONG32* lowpart)
 }
 
 //---------------------------------------------------------------------------------------------------------------------// 
-VOID VmcsPrepareHostAndControlField(ULONG_PTR vmcs12_va, ULONG_PTR vmcs02_pa, BOOLEAN isLaunch)
+VOID 
+VmcsPrepareHostAndControlField(
+	_In_ ULONG_PTR vmcs12_va,
+	_In_ ULONG_PTR vmcs02_pa,
+	_In_ BOOLEAN isLaunch
+)
 {
 
 	VmxStatus status;
@@ -1026,7 +1114,7 @@ VOID VmcsPrepareHostAndControlField(ULONG_PTR vmcs12_va, ULONG_PTR vmcs02_pa, BO
 	UtilVmWrite64(VmcsField::kHostRsp, kHostRsp);
 	UtilVmWrite64(VmcsField::kHostRip, kHostRip);
 
-	//-----------------------------------------------------------------------------------------------------------//	
+	 	
 	//  Start Mixing Control field with VMCS01 and VMCS12 into VMCS02
 	/*
 	16 bit Control Field
@@ -1134,9 +1222,11 @@ VOID VmcsPrepareHostAndControlField(ULONG_PTR vmcs12_va, ULONG_PTR vmcs02_pa, BO
 }
 //-------------------------------------------------------------------------------------------------------------------------------------//
 
-VOID VmcsPrepareGuestStateField(ULONG_PTR guest_vmcs_va)
+VOID 
+VmcsPrepareGuestStateField(
+	_In_ ULONG_PTR guest_vmcs_va
+)
 {
-	//--------------------------------------------------------------------------------------------------------//
 	// Guest state field
 	USHORT vmcs12_es_selector;
 	USHORT vmcs12_cs_selector;
@@ -1351,9 +1441,7 @@ VOID VmcsPrepareGuestStateField(ULONG_PTR guest_vmcs_va)
 		}
 	}
 
-	/*
-	Guest stated field END
-	*--------------------------------------------------------------------------------------------------------------*/
+	// Guest stated field END
 }
 //-------------------------------------------------------------------------------------------------------------------------------------//
 

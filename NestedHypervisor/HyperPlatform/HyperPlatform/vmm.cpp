@@ -373,7 +373,18 @@ _Use_decl_annotations_ static void VmmpHandleException(GuestContext *guest_conte
       UtilVmWrite(VmcsField::kVmEntryExceptionErrorCode, error_code);
       UtilVmWrite(VmcsField::kVmEntryIntrInfoField, inject.all); 
  
-    } 
+    }
+	else if (static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kTrapFlags)
+	{
+		VmEntryInterruptionInformationField inject = {};
+		inject.fields.interruption_type = exception.fields.interruption_type;
+		inject.fields.vector = exception.fields.vector;
+		inject.fields.deliver_error_code = false;
+		inject.fields.valid = true;
+		UtilVmWrite(VmcsField::kVmEntryIntrInfoField, inject.all);
+		HYPERPLATFORM_LOG_DEBUG("L1 GuestIp= %p, #TF ", guest_context->ip);
+
+	}
 	else
 	{
 		HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnspecified, 1, 0,  0);
@@ -391,6 +402,7 @@ _Use_decl_annotations_ static void VmmpHandleException(GuestContext *guest_conte
 		inject.fields.valid = true;
 		UtilVmWrite(VmcsField::kVmEntryIntrInfoField, inject.all);
 		UtilVmWrite(VmcsField::kVmEntryInstructionLen, 1);
+		HYPERPLATFORM_LOG_DEBUG("L1 GuestIp= %p, #BP ", guest_context->ip);
      }
 	else if (static_cast<InterruptionVector>(exception.fields.vector) == InterruptionVector::kTrapFlags)
 	{
@@ -400,7 +412,7 @@ _Use_decl_annotations_ static void VmmpHandleException(GuestContext *guest_conte
 		inject.fields.deliver_error_code = false;
 		inject.fields.valid = true;
 		UtilVmWrite(VmcsField::kVmEntryIntrInfoField, inject.all);
-		HYPERPLATFORM_LOG_DEBUG_SAFE("L1 GuestIp= %p, #TF ", guest_context->ip);
+		HYPERPLATFORM_LOG_DEBUG("L1 GuestIp= %p, #TF ", guest_context->ip);
 
 	}
 	else 

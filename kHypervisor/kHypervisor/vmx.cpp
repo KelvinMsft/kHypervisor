@@ -1262,6 +1262,7 @@ Return Value:
 	if (IsVmLaunch)
 	{
 		VmxStatus status;
+#ifdef _NEST_EPT_ENBLE 
 		VmxSecondaryProcessorBasedControls ProcCtrl = { UtilVmRead64(VmcsField::kSecondaryVmExecControl) };
 	 	if (ProcCtrl.fields.enable_ept)
 		{
@@ -1287,7 +1288,7 @@ Return Value:
 				UtilInveptGlobal();
 			}
 		}
-	
+#endif
 		// We must be careful of this, since we jmp back to the Guest soon. 
 		// It is a exceptional case  
 		if (VmmpGetGuestIrql(guest_context) < DISPATCH_LEVEL)
@@ -1304,6 +1305,7 @@ Return Value:
 	}
 	else
 	{
+#ifdef _NEST_EPT_ENBLE
 		VmxSecondaryProcessorBasedControls ProcCtrl = { UtilVmRead64(VmcsField::kSecondaryVmExecControl) };
 		if (ProcCtrl.fields.enable_ept)
 		{
@@ -1313,6 +1315,7 @@ Return Value:
 				UtilVmWrite64(VmcsField::kEptPointer, ept_data02->ept_pointer->all);
 			}
 		}
+#endif
 		RestoreGuestCr8(vCPU);
 		LoadGuestKernelGsBase(VmmpGetProcessorData(guest_context));
 	}

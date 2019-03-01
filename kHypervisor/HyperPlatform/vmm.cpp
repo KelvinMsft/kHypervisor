@@ -786,7 +786,7 @@ extern "C" {
 				break;
 			}
 
-			HYPERPLATFORM_LOG_DEBUG_SAFE("Translating L2  GuestRip: %p Qualification: %I64x nGVA: %p nGPA: %p to GPA: %p", UtilVmRead64(VmcsField::kGuestRip), exit_qualification.all, UtilVmRead64(VmcsField::kGuestLinearAddress), UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept12Pte->fields.physial_address);
+			HYPERPLATFORM_LOG_DEBUG("Translating L2  GuestRip: %p Qualification: %I64x nGVA: %p nGPA: %p to GPA: %p", UtilVmRead64(VmcsField::kGuestRip), exit_qualification.all, UtilVmRead64(VmcsField::kGuestLinearAddress), UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept12Pte->fields.physial_address);
 
 			//Translate L1 GPA to HPA 
 			EptCommonEntry *Ept01Entry = EptGetEptPtEntry(guest_context->stack->processor_data->ept_data, UtilPaFromPfn(Ept12Pte->fields.physial_address));
@@ -804,7 +804,7 @@ extern "C" {
 				break;
 			}
 
-			HYPERPLATFORM_LOG_DEBUG_SAFE("Translting L1 GPA: %p to HPA: %p", UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept01Entry->fields.physial_address);
+			HYPERPLATFORM_LOG_DEBUG("Translting L1 GPA: %p to HPA: %p", UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept01Entry->fields.physial_address);
 
 			EptCommonEntry* Ept02Pte = EptGetEptPtEntry(guest_context->stack->processor_data->EptDat02, UtilVmRead64(VmcsField::kGuestPhysicalAddress));
 			if (!exit_qualification.fields.ept_readable &&
@@ -826,7 +826,7 @@ extern "C" {
 
 					//TODO: switch guest cr3. 
 					UtilInveptGlobal();
-					HYPERPLATFORM_LOG_DEBUG_SAFE("We are using EPT0-2 Currently !!!");
+					HYPERPLATFORM_LOG_DEBUG("We are using EPT0-2 Currently !!!");
 				}
 				status = STATUS_SUCCESS;
 				break;
@@ -891,10 +891,13 @@ extern "C" {
 			//IsHandled = VmmpHandleDescriptorTableAccessForL2(guest_context);
 			break; 
 		case VmxExitReason::kEptViolation:
+#ifdef __NEST_EPT_ENBLE
 			IsHandled = VmmpHandleEptViolationForL2(guest_context);
 			break;
 		case VmxExitReason::kEptMisconfig:
 			IsHandled = VmmpHandleEptMisconfigForL2(guest_context);
+			break;
+#endif
 			break;
 		case VmxExitReason::kVmcall:
 		{	
@@ -1112,7 +1115,7 @@ extern "C" {
 			if (vector == InterruptionVector::kBreakpointException) {
 				// #BP
 				VmmpInjectInterruption(interruption_type, vector, false, 0);
-				//HYPERPLATFORM_LOG_INFO_SAFE("L0 GuestIp= %p, #BP ", guest_context->ip);
+				HYPERPLATFORM_LOG_INFO_SAFE("L0 GuestIp= %p, #BP ", guest_context->ip);
 				UtilVmWrite(VmcsField::kVmEntryInstructionLen, 1);
 
 			}
@@ -1859,22 +1862,28 @@ extern "C" {
 		GuestContext *guest_context) {
 		HYPERPLATFORM_PERFORMANCE_MEASURE_THIS_SCOPE(); 
 		auto processor_data = guest_context->stack->processor_data;
+
+#ifdef _NEST_EPT_ENBLE	
 		bool is_ranges_of_ept12 = false;
-		
+
 		if (guest_context->stack->processor_data->EptDat12 && (ULONG64)guest_context->stack->processor_data->EptDat12!= 0xFFFFFFFFFFFFFFFF)
 		{
-			is_ranges_of_ept12 = EptpIsInRangesOfEpt(UtilVmRead64(VmcsField::kGuestPhysicalAddress),
+ 			is_ranges_of_ept12 = EptpIsInRangesOfEpt(UtilVmRead64(VmcsField::kGuestPhysicalAddress),
 				guest_context->stack->processor_data->ept_data,
 				guest_context->stack->processor_data->EptDat12->ept_pml4);
 		}
-
 		EptHandleEptViolation(processor_data->ept_data, processor_data->EptDat02, is_ranges_of_ept12);
+#else
+		EptHandleEptViolation(processor_data->ept_data, processor_data->EptDat02, false);
+#endif
 
+#ifdef _NEST_EPT_ENBLE
 		if (is_ranges_of_ept12)
 		{
 			ShpSetMonitorTrapFlag(true);
 			guest_context->stack->processor_data->LastEptFaultAddr = UtilVmRead64(VmcsField::kGuestPhysicalAddress);
 		}
+#endif
 	}
 
 	// EXIT_REASON_EPT_MISCONFIG

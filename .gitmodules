@@ -1,1 +1,4 @@
 
+[submodule "NestedHypervisor"]
+	path = NestedHypervisor
+	url = https://github.com/Kelvinhack/NestedHypervisor

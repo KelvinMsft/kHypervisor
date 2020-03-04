@@ -1262,7 +1262,7 @@ Return Value:
 	if (IsVmLaunch)
 	{
 		VmxStatus status;
-#ifdef _NEST_EPT_ENBLE 
+#ifdef __NEST_EPT_ENBLE 
 		VmxSecondaryProcessorBasedControls ProcCtrl = { UtilVmRead64(VmcsField::kSecondaryVmExecControl) };
 	 	if (ProcCtrl.fields.enable_ept)
 		{
@@ -1305,7 +1305,7 @@ Return Value:
 	}
 	else
 	{
-#ifdef _NEST_EPT_ENBLE
+#ifdef __NEST_EPT_ENBLE
 		VmxSecondaryProcessorBasedControls ProcCtrl = { UtilVmRead64(VmcsField::kSecondaryVmExecControl) };
 		if (ProcCtrl.fields.enable_ept)
 		{

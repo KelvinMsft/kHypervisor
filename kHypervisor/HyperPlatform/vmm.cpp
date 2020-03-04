@@ -71,7 +71,6 @@ extern "C" {
 
 
 
-
 	// Context at the moment of vmexit
 	struct VmExitHistory {
 		GpRegisters gp_regs;
@@ -1863,7 +1862,7 @@ extern "C" {
 		HYPERPLATFORM_PERFORMANCE_MEASURE_THIS_SCOPE(); 
 		auto processor_data = guest_context->stack->processor_data;
 
-#ifdef _NEST_EPT_ENBLE	
+#ifdef __NEST_EPT_ENBLE	
 		bool is_ranges_of_ept12 = false;
 
 		if (guest_context->stack->processor_data->EptDat12 && (ULONG64)guest_context->stack->processor_data->EptDat12!= 0xFFFFFFFFFFFFFFFF)
@@ -1877,7 +1876,7 @@ extern "C" {
 		EptHandleEptViolation(processor_data->ept_data, processor_data->EptDat02, false);
 #endif
 
-#ifdef _NEST_EPT_ENBLE
+#ifdef __NEST_EPT_ENBLE
 		if (is_ranges_of_ept12)
 		{
 			ShpSetMonitorTrapFlag(true);

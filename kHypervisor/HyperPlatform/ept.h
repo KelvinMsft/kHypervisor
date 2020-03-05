@@ -123,6 +123,14 @@ NTSTATUS  EptpBuildNestedEpt(
 	EptData* ept_data12,
 	EptData* ept_data02);
 
+void 
+EptpRefreshEpt02(
+	EptData* EptData02, 
+	EptData* EptData12, 
+	EptData* EptData01
+);
+
+
 /// Reads and stores all MTRRs to set a correct memory type for EPT
 _IRQL_requires_max_(PASSIVE_LEVEL) void EptInitializeMtrrEntries();
 ////////////////////////////////////////////////////////////////////////////////

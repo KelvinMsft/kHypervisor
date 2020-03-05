@@ -2156,6 +2156,22 @@ Return Value:
 		VMSucceed(VmmpGetFlagReg(guest_context));
 	} while (FALSE);
 }
-//------------------------------------------------------------------------------------------------//
+//------------------------------------------------------------------------------------------------//VOID 
+void VmxInveptEmulate(
+	_In_	GuestContext* guest_context
+) {
+	do{
+		
+		/*EptpRefreshEpt02(
+			VmmGetCurrentEpt02Pointer(guest_context), 
+			VmmGetCurrentEpt12Pointer(guest_context), 
+			VmmGetCurrentEpt01Pointer(guest_context)
+		);*/
+		
+		HYPERPLATFORM_LOG_DEBUG("INVEPT Emulating... \r\n");
+		VMSucceed(VmmpGetFlagReg(guest_context));
+	} while (FALSE);
+}
+
 }
  

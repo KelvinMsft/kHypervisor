@@ -84,6 +84,9 @@ VmxVmptrstEmulate(
 	_In_ GuestContext* guest_context
 );
 
+VOID VmxInveptEmulate(
+	_In_ GuestContext* guest_context
+);
 VOID 
 LEAVE_GUEST_MODE(
 	_In_ VCPUVMX* vcpu

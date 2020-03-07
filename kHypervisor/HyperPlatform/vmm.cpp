@@ -172,6 +172,9 @@ extern "C" {
 		_In_ bool deliver_error_code,
 		_In_ ULONG32 error_code);
 
+	
+	void ShpSetMonitorTrapFlag(bool enable);
+
 	////////////////////////////////////////////////////////////////////////////////
 	//
 	// variables
@@ -775,23 +778,41 @@ extern "C" {
 			{
 				break;
 			}
+
+			if (exit_qualification.fields.caused_by_translation)
+			{
+				// Tell EPT violation when it is caused due to read or write violation.
+				const auto read_failure = exit_qualification.fields.read_access &&
+					!exit_qualification.fields.ept_readable;
+				const auto write_failure = exit_qualification.fields.write_access &&
+					!exit_qualification.fields.ept_writeable;
+				const auto execute_failure = exit_qualification.fields.execute_access &&
+					!exit_qualification.fields.ept_executable;
+				
+				if (read_failure || write_failure || execute_failure) 
+				{
+					status = VmxVMExitEmulate(VmmpGetVcpuVmx(guest_context), guest_context);
+					break;
+				}
+			}
+
 			//Translate L2 nGPA to L1 GPA
 			EptCommonEntry *Ept12Pte = EptGetEptPtEntry(guest_context->stack->processor_data->EptDat12, UtilVmRead64(VmcsField::kGuestPhysicalAddress));
 			if (!Ept12Pte || !Ept12Pte->all)
 			{
-				HYPERPLATFORM_LOG_DEBUG("Nested Guest Translate GPA: %p to by EPTPTE Error (pte: %p)", UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept12Pte);
+				HYPERPLATFORM_LOG_DEBUG_SAFE("Nested Guest Translate GPA: %p to by EPTPTE Error (pte: %p)", UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept12Pte);
 				HYPERPLATFORM_COMMON_DBG_BREAK();
 				status = VmxVMExitEmulate(VmmpGetVcpuVmx(guest_context), guest_context);
 				break;
 			}
 
-			HYPERPLATFORM_LOG_DEBUG("Translating L2  GuestRip: %p Qualification: %I64x nGVA: %p nGPA: %p to GPA: %p", UtilVmRead64(VmcsField::kGuestRip), exit_qualification.all, UtilVmRead64(VmcsField::kGuestLinearAddress), UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept12Pte->fields.physial_address);
+			HYPERPLATFORM_LOG_DEBUG_SAFE("Translating L2  GuestRip: %p Qualification: %I64x nGVA: %p nGPA: %p to GPA: %p", UtilVmRead64(VmcsField::kGuestRip), exit_qualification.all, UtilVmRead64(VmcsField::kGuestLinearAddress), UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept12Pte->fields.physial_address);
 
 			//Translate L1 GPA to HPA 
 			EptCommonEntry *Ept01Entry = EptGetEptPtEntry(guest_context->stack->processor_data->ept_data, UtilPaFromPfn(Ept12Pte->fields.physial_address));
 			if (!Ept01Entry || !Ept01Entry->all)
 			{
-				EptHandleEptViolation(guest_context->stack->processor_data->ept_data, nullptr, false);
+				EptHandleEptViolation(guest_context->stack->processor_data->ept_data, false);
 				HYPERPLATFORM_LOG_DEBUG_SAFE("case 4 l1 GPA: %p to entry2: %p", UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept01Entry);
 				HYPERPLATFORM_COMMON_DBG_BREAK();
 			}
@@ -803,7 +824,7 @@ extern "C" {
 				break;
 			}
 
-			HYPERPLATFORM_LOG_DEBUG("Translting L1 GPA: %p to HPA: %p", UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept01Entry->fields.physial_address);
+			HYPERPLATFORM_LOG_DEBUG_SAFE("Translting L1 GPA: %p to HPA: %p", UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept01Entry->fields.physial_address);
 
 			EptCommonEntry* Ept02Pte = EptGetEptPtEntry(guest_context->stack->processor_data->EptDat02, 
 				UtilVmRead64(VmcsField::kGuestPhysicalAddress));
@@ -819,7 +840,7 @@ extern "C" {
 						   );
 
 				Ept02Pte->all = Ept01Entry->all; 
-				HYPERPLATFORM_LOG_DEBUG("We are using EPT0-2 Currently !!!");
+				HYPERPLATFORM_LOG_DEBUG_SAFE("We are using EPT0-2 Currently !!!");
 				status = STATUS_SUCCESS;
 				break;
 			}  
@@ -999,42 +1020,29 @@ extern "C" {
 			UtilVmRead(VmcsField::kVmInstructionError));
 	}
 
-	_Use_decl_annotations_  void ShpSetMonitorTrapFlag(bool enable);
 	// MTF VM-exit
 	_Use_decl_annotations_ static void VmmpHandleMonitorTrap(GuestContext *guest_context)
 	{ 
-		do {
+		do 
+		{
 			if (!guest_context->stack->processor_data->LastEptFaultAddr)
 			{
 				break;
 			}
-		
-			//before MTF , L1 change its EPT (EPT1-2) , we need to know the content now, find it by fault GPA
-			EptCommonEntry* entry12 = (EptCommonEntry*)UtilVaFromPa(guest_context->stack->processor_data->LastEptFaultAddr);
-			if (!entry12 || !entry12->fields.physial_address)
-			{
-				break;
-			}
-
-			HYPERPLATFORM_LOG_DEBUG("EPT1-2 Entry is being accessed Entry= %p Value= %p ", 
-						guest_context->stack->processor_data->LastEptFaultAddr, entry12->all);
+		 
+ 
+			EptpRefreshEpt02(
+				guest_context->stack->processor_data->EptDat02,
+				guest_context->stack->processor_data->EptDat12,
+				guest_context->stack->processor_data->ept_data,
+				(void*)guest_context->stack->processor_data->LastEptFaultAddr
+			);
 
 			//we need to know the corresponding HPA to the latest modified value  
 			EptCommonEntry* entry01 = EptGetEptPtEntry(guest_context->stack->processor_data->ept_data, 
-													   guest_context->stack->processor_data->LastEptFaultAddr);
-
-			if (!entry01 || !entry01->fields.physial_address)
-			{
-				break;
-			}
-
-			//TODO: we need to get back the EPTPTE source operand AND get the PTE of EPT02, and update it access right and pages.
-			HYPERPLATFORM_LOG_DEBUG("L0 Re-enabling EPT1-2 moniotred  \r\n");
-
-			//Turn back the address to be non-writable 
+													   guest_context->stack->processor_data->LastEptFaultAddr); 
 			entry01->fields.write_access = false;  
 			guest_context->stack->processor_data->LastEptFaultAddr = 0;
-
 			UtilInveptGlobal(); 
 		} while (FALSE);
 		ShpSetMonitorTrapFlag(false);
@@ -1850,34 +1858,35 @@ extern "C" {
 	}
 
 	// EXIT_REASON_EPT_VIOLATION
-	_Use_decl_annotations_ static void VmmpHandleEptViolation(
-		GuestContext *guest_context) {
-		HYPERPLATFORM_PERFORMANCE_MEASURE_THIS_SCOPE(); 
+	_Use_decl_annotations_ static void VmmpHandleEptViolation(GuestContext *guest_context)
+	{
+		//HYPERPLATFORM_PERFORMANCE_MEASURE_THIS_SCOPE(); 
 		auto processor_data = guest_context->stack->processor_data;
 
 #ifdef __NEST_EPT_ENBLE	
 		bool is_ranges_of_ept12 = false;
-
+		
 		if (guest_context->stack->processor_data->EptDat12 && 
 			(ULONG64)guest_context->stack->processor_data->EptDat12!= 0xFFFFFFFFFFFFFFFF)
 		{
- 			is_ranges_of_ept12 = EptpIsInRangesOfEpt(UtilVmRead64(VmcsField::kGuestPhysicalAddress),
-				guest_context->stack->processor_data->ept_data,
-				guest_context->stack->processor_data->EptDat12->ept_pml4);
+ 			is_ranges_of_ept12 = EptpIsInRangesOfEpt(
+									UtilVmRead64(VmcsField::kGuestPhysicalAddress),
+									guest_context->stack->processor_data->EptDat12->ept_pml4
+								);
 		}
-		EptHandleEptViolation(processor_data->ept_data, processor_data->EptDat02, is_ranges_of_ept12);
-#else
-		EptHandleEptViolation(processor_data->ept_data, processor_data->EptDat02, false);
-#endif
+		
+		EptHandleEptViolation(processor_data->ept_data, is_ranges_of_ept12);
 
-#ifdef __NEST_EPT_ENBLE
 		if (is_ranges_of_ept12)
 		{
 			EptCommonEntry* entry12 = (EptCommonEntry*) UtilVaFromPa(UtilVmRead64(VmcsField::kGuestPhysicalAddress));
-			HYPERPLATFORM_LOG_DEBUG(0, 0, "EPT1-2 is accesed = %p value= %p ", UtilVmRead64(VmcsField::kGuestPhysicalAddress), entry12->all);
-			ShpSetMonitorTrapFlag(true);
+			HYPERPLATFORM_LOG_DEBUG_SAFE(0, 0, "EPT1-2 is accesed = %p value= %p ", UtilVmRead64(VmcsField::kGuestPhysicalAddress), entry12->all);
+			
 			guest_context->stack->processor_data->LastEptFaultAddr = UtilVmRead64(VmcsField::kGuestPhysicalAddress);
-		}
+			ShpSetMonitorTrapFlag(true);
+ 		}
+#else
+		EptHandleEptViolation(processor_data->ept_data,  false);
 #endif
 	}
 

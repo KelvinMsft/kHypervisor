@@ -143,7 +143,9 @@ static void EptpFreeUnusedPreAllocatedEntries(
     _Pre_notnull_ __drv_freesMem(Mem) EptCommonEntry **preallocated_entries,
     _In_ long used_count);
 
-_Use_decl_annotations_ void EptHandleEptViolationEx(EptData *ept_data, EptData *ept_data02, ULONG_PTR guest_pa, bool is_range_of_ept12);
+_Use_decl_annotations_ void EptHandleEptViolationEx(
+	_In_ EptData *ept_data, 
+	_In_ bool is_range_of_ept12);
 
 
 #if defined(ALLOC_PRAGMA)
@@ -702,20 +704,13 @@ _Use_decl_annotations_ static ULONG64 EptpAddressToPteIndex(
 
 
 // Deal with L2 EPT violation VM-exit.
-_Use_decl_annotations_ void EptHandleEptViolationEx(EptData *ept_data, EptData *ept_data02, ULONG_PTR guest_pa, bool is_range_of_ept12) {
+_Use_decl_annotations_ void EptHandleEptViolationEx(EptData *ept_data,  bool is_range_of_ept12) {
 	
 	const EptViolationQualification exit_qualification = {
 		UtilVmRead(VmcsField::kExitQualification) };
 	ULONG_PTR fault_pa = 0;
 
-	if (!guest_pa)
-	{
-		 fault_pa = UtilVmRead64(VmcsField::kGuestPhysicalAddress);
-	}
-	else
-	{
-		fault_pa = guest_pa;
-	}
+	fault_pa = UtilVmRead64(VmcsField::kGuestPhysicalAddress);
 	
 	const auto fault_va = reinterpret_cast<void *>(
 		exit_qualification.fields.valid_guest_linear_address
@@ -724,6 +719,17 @@ _Use_decl_annotations_ void EptHandleEptViolationEx(EptData *ept_data, EptData *
 
 
 	//GuestPhysicalAddress will be the guest physical adderss of EPT1-2 Entry , we disable it write in L2 first initial
+
+	if (!exit_qualification.fields.ept_writeable && is_range_of_ept12)
+	{
+		EptCommonEntry* Ept01Pte = EptGetEptPtEntry(ept_data, UtilVmRead64(VmcsField::kGuestPhysicalAddress));
+		if (Ept01Pte)
+		{
+			Ept01Pte->fields.write_access = true;
+			UtilInveptGlobal();
+		}
+		return;
+	}
 
 	if (!exit_qualification.fields.ept_readable &&
 		!exit_qualification.fields.ept_writeable &&
@@ -742,21 +748,11 @@ _Use_decl_annotations_ void EptHandleEptViolationEx(EptData *ept_data, EptData *
 			return;
 		}
 	}
-	
-	if (!exit_qualification.fields.ept_writeable && is_range_of_ept12)
-	{
-		EptCommonEntry* Ept01Pte = EptGetEptPtEntry(ept_data, UtilVmRead64(VmcsField::kGuestPhysicalAddress));
-		if (Ept01Pte)
-		{  
- 			Ept01Pte->fields.write_access = true;
- 			UtilInveptGlobal();
-		}
-	}
 	 
 }
 // Deal with EPT violation VM-exit.
-_Use_decl_annotations_ void EptHandleEptViolation(EptData* ept_data, EptData* ept_data02, bool is_range_of_ept12) {
-	EptHandleEptViolationEx(ept_data, ept_data02,0, is_range_of_ept12);
+_Use_decl_annotations_ void EptHandleEptViolation(EptData* ept_data, bool is_range_of_ept12) {
+	EptHandleEptViolationEx(ept_data, is_range_of_ept12);
 }
 
 // Returns if the physical_address is device memory (which could not have a
@@ -864,7 +860,7 @@ _Use_decl_annotations_ static void EptpFreeUnusedPreAllocatedEntries(
   ExFreePoolWithTag(preallocated_entries, kHyperPlatformCommonPoolTag);
 }
 
-_Use_decl_annotations_ EptCommonEntry*  EptpGetNextLevelTableBase(EptData* EptData01, EptCommonEntry *table)
+_Use_decl_annotations_ EptCommonEntry*  EptpGetNextLevelTableBase(EptCommonEntry *table)
 {
 	const auto entry = table;
 	if (entry && entry->fields.physial_address)
@@ -876,7 +872,7 @@ _Use_decl_annotations_ EptCommonEntry*  EptpGetNextLevelTableBase(EptData* EptDa
 } 
 
 
-_Use_decl_annotations_ ULONG64  EptpGetNextLevelTablePhysicalBase(EptData* EptData01, EptCommonEntry *table)
+_Use_decl_annotations_ ULONG64  EptpGetNextLevelTablePhysicalBase(EptCommonEntry *table)
 {
 	const auto entry = table;
 	if (entry && entry->fields.physial_address)
@@ -886,7 +882,7 @@ _Use_decl_annotations_ ULONG64  EptpGetNextLevelTablePhysicalBase(EptData* EptDa
 	}
 	return 0;
 }
-_Use_decl_annotations_ void EptpRefreshEpt02(EptData* EptData02, EptData* EptData12, EptData* EptData01)
+_Use_decl_annotations_ void EptpRefreshEpt02(EptData* EptData02, EptData* EptData12, EptData* EptData01, void* LookupEntryPa)
 {
 	if (!EptData01 || !EptData02 || !EptData12) {
 		return;
@@ -901,26 +897,26 @@ _Use_decl_annotations_ void EptpRefreshEpt02(EptData* EptData02, EptData* EptDat
 	EptCommonEntry* pt_table2 = NULL;
 	for (int i = 0; i < 512 && pml4_table && pml4_table2; i++, pml4_table++, pml4_table2++)			//PML4
 	{
-		ULONG_PTR pdptr_entry_pa02 = EptpGetNextLevelTablePhysicalBase(EptData02, pml4_table);
-		ULONG_PTR pdptr_entry_pa12 = EptpGetNextLevelTablePhysicalBase(EptData12, pml4_table2);
+		ULONG_PTR pdptr_entry_pa02 = EptpGetNextLevelTablePhysicalBase(pml4_table);
+		ULONG_PTR pdptr_entry_pa12 = EptpGetNextLevelTablePhysicalBase(pml4_table2);
 		if (!pdptr_entry_pa02 || !pdptr_entry_pa12) {
 			continue; 
 		}
 		pdptr_table = (EptCommonEntry*)UtilVaFromPa(pdptr_entry_pa02);
 		pdptr_table2 = (EptCommonEntry*)UtilVaFromPa(pdptr_entry_pa12);
-		for (int j = 0; j < 512 && pdptr_table && pdptr_table2; j++, pdptr_table++, pdptr_table2++)		//PDPTR
+		for (int j = 0; j < 512 && pdptr_table && pdptr_table2; j++, pdptr_table++, pdptr_table2++)	//PDPTR
 		{
-			ULONG_PTR pdt_entry_pa02 = EptpGetNextLevelTablePhysicalBase(EptData02, pdptr_table);
-			ULONG_PTR pdt_entry_pa12 = EptpGetNextLevelTablePhysicalBase(EptData12, pdptr_table2);
+			ULONG_PTR pdt_entry_pa02 = EptpGetNextLevelTablePhysicalBase(pdptr_table);
+			ULONG_PTR pdt_entry_pa12 = EptpGetNextLevelTablePhysicalBase(pdptr_table2);
 			if (!pdt_entry_pa02 || !pdt_entry_pa12) {
 				continue;
 			}
 			pdt_table = (EptCommonEntry*)UtilVaFromPa(pdt_entry_pa02);
 			pdt_table2 = (EptCommonEntry*)UtilVaFromPa(pdt_entry_pa12);
-			for (int k = 0; k < 512 && pdt_table && pdt_table2; k++, pdt_table++, pdt_table2++)				// PDT
+			for (int k = 0; k < 512 && pdt_table && pdt_table2; k++, pdt_table++, pdt_table2++)		// PDT
 			{
-				ULONG_PTR pt_table_pa02 = EptpGetNextLevelTablePhysicalBase(EptData02, pdt_table);
-				ULONG_PTR pt_table_pa12 = EptpGetNextLevelTablePhysicalBase(EptData12, pdt_table2);
+				ULONG_PTR pt_table_pa02 = EptpGetNextLevelTablePhysicalBase(pdt_table);
+				ULONG_PTR pt_table_pa12 = EptpGetNextLevelTablePhysicalBase(pdt_table2);
 				if (!pt_table_pa02 || !pt_table_pa12) {
 					continue;
 				}
@@ -928,15 +924,18 @@ _Use_decl_annotations_ void EptpRefreshEpt02(EptData* EptData02, EptData* EptDat
 				pt_table2 = (EptCommonEntry*)UtilVaFromPa(pt_table_pa12);
 				for (int p = 0; p < 512 && pt_table && pt_table2; p++, pt_table++, pt_table2++)		// PT
 				{
-					//EptCommonEntry* Ept01Entry = EptGetEptPtEntry(EptData01, pt_table2->fields.physial_address);
-					pt_table->all = pt_table2->all;
+					if(LookupEntryPa == (void*)UtilPaFromVa(pt_table2))
+					{
+						pt_table->all = pt_table2->all; 
+						return;
+					} 
 				}
 			}
 		}
 	}
 }
 
-_Use_decl_annotations_ bool EptpIsInRangesOfEpt(ULONG_PTR PhysicalAddres, EptData* EptData01, EptCommonEntry *pml4_table)
+_Use_decl_annotations_ bool EptpIsInRangesOfEpt(ULONG_PTR PhysicalAddres, EptCommonEntry *pml4_table)
 {
 	EptCommonEntry* pdptr_table = NULL;
 	EptCommonEntry* pdt_table = NULL;
@@ -951,7 +950,7 @@ _Use_decl_annotations_ bool EptpIsInRangesOfEpt(ULONG_PTR PhysicalAddres, EptDat
 			return IsMatch;
 		}
 
-		ULONG_PTR pdptr_entry_pa = EptpGetNextLevelTablePhysicalBase(EptData01, pml4_table);
+		ULONG_PTR pdptr_entry_pa = EptpGetNextLevelTablePhysicalBase(pml4_table);
 		pdptr_table = (EptCommonEntry*)UtilVaFromPa(pdptr_entry_pa);
 		for (int j = 0; j < 512 && pdptr_table; j++, pdptr_table++)		//PDPTR
 		{
@@ -961,7 +960,7 @@ _Use_decl_annotations_ bool EptpIsInRangesOfEpt(ULONG_PTR PhysicalAddres, EptDat
 				return IsMatch;
 			}
 
-			ULONG_PTR pdt_entry_pa = EptpGetNextLevelTablePhysicalBase(EptData01, pdptr_table); 
+			ULONG_PTR pdt_entry_pa = EptpGetNextLevelTablePhysicalBase(pdptr_table); 
 			pdt_table = (EptCommonEntry*)UtilVaFromPa(pdt_entry_pa);
 			for (int k = 0; k < 512 && pdt_table; k++, pdt_table++)		// PDT
 			{
@@ -970,7 +969,7 @@ _Use_decl_annotations_ bool EptpIsInRangesOfEpt(ULONG_PTR PhysicalAddres, EptDat
 					IsMatch = true;
 					return IsMatch;
 				}
-				ULONG_PTR pt_table_pa = EptpGetNextLevelTablePhysicalBase(EptData01, pdt_table);
+				ULONG_PTR pt_table_pa = EptpGetNextLevelTablePhysicalBase(pdt_table);
 				//Last Level, we dun need get each of them.
 				if (PAGE_ALIGN(PhysicalAddres) == (void*)pt_table_pa)
 				{
@@ -982,6 +981,7 @@ _Use_decl_annotations_ bool EptpIsInRangesOfEpt(ULONG_PTR PhysicalAddres, EptDat
 	}
 	return IsMatch;
 } 
+
 _Use_decl_annotations_ void  EptpSetEntryAccess(
 	EptData* ept_data, ULONG_PTR physical_address, bool readable, bool writable, bool executable)
 {
@@ -989,9 +989,10 @@ _Use_decl_annotations_ void  EptpSetEntryAccess(
 	if (!entry  || !entry ->fields.physial_address)
 	{
 		return;
-	}
-
-	entry->fields.write_access		= writable; 
+	} 
+	entry->fields.read_access    = readable;
+	entry->fields.execute_access = executable;
+	entry->fields.write_access	 = writable;
 }
 
 _Use_decl_annotations_ void  EptpEnumerateEpt(EptData* EptData01, EptCommonEntry *pml4_table, bool writable)
@@ -1011,7 +1012,7 @@ _Use_decl_annotations_ void  EptpEnumerateEpt(EptData* EptData01, EptCommonEntry
 	EptpSetEntryAccess(EptData01, (ULONG64)UtilPaFromVa(pml4_table), true, writable, true);
 	for (int i = 0; i < 512 && pml4_table; i++, pml4_table++, level4++)			//PML4
 	{
-		ULONG64 pdptr_entry_pa = (ULONG64)EptpGetNextLevelTablePhysicalBase(EptData01, pml4_table);
+		ULONG64 pdptr_entry_pa = (ULONG64)EptpGetNextLevelTablePhysicalBase(pml4_table);
 		if (!pdptr_entry_pa)
 		{
 			continue;
@@ -1020,7 +1021,7 @@ _Use_decl_annotations_ void  EptpEnumerateEpt(EptData* EptData01, EptCommonEntry
 		EptpSetEntryAccess(EptData01, (ULONG64)pdptr_entry_pa, true, writable, true);
 		for (int j = 0; j < 512 && pdptr_table; j++, pdptr_table++, level3++)	//PDPTR
 		{
-			ULONG64 pdt_entry_pa = (ULONG64)EptpGetNextLevelTablePhysicalBase(EptData01, pdptr_table);
+			ULONG64 pdt_entry_pa = (ULONG64)EptpGetNextLevelTablePhysicalBase(pdptr_table);
 			if (!pdt_entry_pa)
 			{
 				continue;
@@ -1029,7 +1030,7 @@ _Use_decl_annotations_ void  EptpEnumerateEpt(EptData* EptData01, EptCommonEntry
 			EptpSetEntryAccess(EptData01, (ULONG64)pdt_entry_pa, true, writable, true);
 			for (int k = 0; k < 512 && pdt_table; k++, pdt_table++, level2++)		// PDT
 			{
-				ULONG64 pt_entry_pa = (ULONG64)EptpGetNextLevelTablePhysicalBase(EptData01, pdt_table);
+				ULONG64 pt_entry_pa = (ULONG64)EptpGetNextLevelTablePhysicalBase(pdt_table);
 				if (!pt_entry_pa)
 				{
 					continue;

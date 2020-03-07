@@ -162,7 +162,7 @@ Return Value:
 --*/
 {
 	vm->inRoot = RootMode; 
-	HYPERPLATFORM_LOG_DEBUG("VMM: %I64x Enter Root mode Reason: %d", vm, UtilVmRead(VmcsField::kVmExitReason));
+	HYPERPLATFORM_LOG_DEBUG_SAFE("VMM: %I64x RIP= %p Enter Root mode Reason: %d", vm, UtilVmRead(VmcsField::kGuestRip), UtilVmRead(VmcsField::kVmExitReason));
 }
 
 
@@ -188,7 +188,7 @@ Return Value:
 --*/
 {
 	vm->inRoot = GuestMode; 
-	HYPERPLATFORM_LOG_DEBUG("VMM: %I64x Enter Guest mode", vm);
+	HYPERPLATFORM_LOG_DEBUG_SAFE("VMM: %I64x Enter Guest mode", vm);
 } 
 
 
@@ -2167,8 +2167,6 @@ void VmxInveptEmulate(
 			VmmGetCurrentEpt12Pointer(guest_context), 
 			VmmGetCurrentEpt01Pointer(guest_context)
 		);*/
-		
-		HYPERPLATFORM_LOG_DEBUG("INVEPT Emulating... \r\n");
 		VMSucceed(VmmpGetFlagReg(guest_context));
 	} while (FALSE);
 }

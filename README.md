@@ -76,8 +76,9 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
  # Nesting with Hypervisor EPT Based Rootkit - DdiMon 
 
    <img src="https://user-images.githubusercontent.com/22551808/76154782-49a37a00-6097-11ea-8f54-e0b537cefb4f.png" width="70%" height="70%"> </img> 
-   
-   <iframe width="544" height="360" src="https://www.youtube.com/embed/wRCDeucwfiM" frameborder="0" allow="accelerometer; autoplay;encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
+  [![Alt text](https://img.youtube.com/vi/wRCDeucwfiM/0.jpg)](https://www.youtube.com/watch?v=wRCDeucwfiM)
+
   
  # Windows 10 x64 build 16299 RS3 Test Demo (with Nested EPT) :
 

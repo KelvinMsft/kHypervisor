@@ -768,64 +768,64 @@ extern "C" {
 		  		-------------------	
 		*/
 		NTSTATUS status = STATUS_UNSUCCESSFUL;
-
 		do {
 			const EptViolationQualification exit_qualification = {
 				UtilVmRead(VmcsField::kExitQualification) };
+			const ULONG64 fault_pa = UtilVmRead64(VmcsField::kGuestPhysicalAddress);
+			const ULONG64 fault_rip = UtilVmRead64(VmcsField::kGuestRip);
 
 			if (!exit_qualification.fields.ept_readable &&
 				!exit_qualification.fields.ept_writeable &&
 				!exit_qualification.fields.ept_executable)
 			{
-
+				
 				//Translate L2 nGPA to L1 GPA
-				EptCommonEntry *Ept12Pte = EptGetEptPtEntry(guest_context->stack->processor_data->EptDat12, UtilVmRead64(VmcsField::kGuestPhysicalAddress));
+				EptCommonEntry *Ept12Pte = EptGetEptPtEntry(guest_context->stack->processor_data->EptDat12, fault_pa);
 				if (!Ept12Pte || !Ept12Pte->all)
 				{
-					HYPERPLATFORM_LOG_DEBUG_SAFE("Nested Guest Translate GPA: %p to by EPTPTE Error (pte: %p)", UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept12Pte);
 					HYPERPLATFORM_COMMON_DBG_BREAK();
 					status = VmxVMExitEmulate(VmmpGetVcpuVmx(guest_context), guest_context);
 					break;
 				}
 
-				HYPERPLATFORM_LOG_DEBUG_SAFE("Translating L2  GuestRip: %p Qualification: %I64x nGVA: %p nGPA: %p to GPA: %p", UtilVmRead64(VmcsField::kGuestRip), exit_qualification.all, UtilVmRead64(VmcsField::kGuestLinearAddress), UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept12Pte->fields.physial_address);
+				NT_ASSERT((VOID*)UtilPaFromPfn(Ept12Pte->fields.physial_address) == PAGE_ALIGN(fault_pa));
 
 				//Translate L1 GPA to HPA 
-				EptCommonEntry *Ept01Entry = EptGetEptPtEntry(guest_context->stack->processor_data->ept_data, UtilPaFromPfn(Ept12Pte->fields.physial_address));
+				EptCommonEntry *Ept01Entry = EptGetEptPtEntry(guest_context->stack->processor_data->ept_data, 
+																UtilPaFromPfn(Ept12Pte->fields.physial_address));
 				if (!Ept01Entry || !Ept01Entry->all)
 				{
-					EptHandleEptViolation(guest_context->stack->processor_data->ept_data, false);
-					HYPERPLATFORM_LOG_DEBUG_SAFE("case 4 l1 GPA: %p to entry2: %p", UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept01Entry);
+
+					EptHandleEptViolation(guest_context->stack->processor_data->ept_data,
+										  UtilPaFromPfn(Ept12Pte->fields.physial_address),
+										  false);
+
+					Ept01Entry = EptGetEptPtEntry(guest_context->stack->processor_data->ept_data, 
+													UtilPaFromPfn(Ept12Pte->fields.physial_address));
+
 					HYPERPLATFORM_COMMON_DBG_BREAK();
 				}
 
-				Ept01Entry = EptGetEptPtEntry(guest_context->stack->processor_data->ept_data, UtilPaFromPfn(Ept12Pte->fields.physial_address));
-				if (!Ept01Entry || !Ept01Entry->all)
-				{
-					status = STATUS_UNSUCCESSFUL;
-					break;
-				}
-
-				HYPERPLATFORM_LOG_DEBUG_SAFE("Translting L1 GPA: %p to HPA: %p", UtilVmRead64(VmcsField::kGuestPhysicalAddress), Ept01Entry->fields.physial_address);
-
-				EptCommonEntry* Ept02Pte = EptGetEptPtEntry(guest_context->stack->processor_data->EptDat02,
-					UtilVmRead64(VmcsField::kGuestPhysicalAddress));
+				NT_ASSERT(Ept01Entry && Ept01Entry->all);
+				 
+				EptCommonEntry* Ept02Pte = EptGetEptPtEntry(guest_context->stack->processor_data->EptDat02, fault_pa);
 				if (!Ept02Pte || !Ept02Pte->all)
 				{
 					//Constructing by nGPA to HPA , EPT0-2 we used it for normal run.
 					Ept02Pte = EptpConstructTablesEx(
-						guest_context->stack->processor_data->EptDat02->ept_pml4,
-						4,
-						UtilVmRead64(VmcsField::kGuestPhysicalAddress),
-						nullptr,
-						guest_context->stack->processor_data->ept_data->ept_pml4
-					);
+								guest_context->stack->processor_data->EptDat02->ept_pml4,
+								4,
+								fault_pa,
+								nullptr,
+								nullptr
+							  );
 
+					NT_ASSERT(Ept02Pte);
 					Ept02Pte->all = Ept01Entry->all;
-					HYPERPLATFORM_LOG_DEBUG_SAFE("We are using EPT0-2 Currently !!!");
-					status = STATUS_SUCCESS;
-					break;
-				}
+				} 
+				
+				NT_ASSERT(Ept02Pte->fields.physial_address == Ept01Entry->fields.physial_address);
+ 				status = STATUS_SUCCESS;
 			}
 			else if (exit_qualification.fields.caused_by_translation)
 			{
@@ -842,8 +842,17 @@ extern "C" {
 					status = VmxVMExitEmulate(VmmpGetVcpuVmx(guest_context), guest_context);
 					break;
 				}
+				else {
+					HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnexpectedVmEptExit2, exit_qualification.all, fault_pa, 0);
+				}
+			}
+			else {
+				HYPERPLATFORM_COMMON_BUG_CHECK(HyperPlatformBugCheck::kUnexpectedVmEptExit, exit_qualification.all, fault_pa, 0);
 			}
 		} while (0);
+
+		UtilInveptGlobal();
+
 		return status;
 	}
 	//-----------------------------------------------------------------------------------------------------------------------//
@@ -1029,7 +1038,7 @@ extern "C" {
 				break;
 			}
 		 
- 
+			
 			EptpRefreshEpt02(
 				guest_context->stack->processor_data->EptDat02,
 				guest_context->stack->processor_data->EptDat12,
@@ -1874,7 +1883,7 @@ extern "C" {
 								);
 		}
 		
-		EptHandleEptViolation(processor_data->ept_data, is_ranges_of_ept12);
+		EptHandleEptViolation(processor_data->ept_data, 0, is_ranges_of_ept12);
 
 		if (is_ranges_of_ept12)
 		{
@@ -1885,7 +1894,7 @@ extern "C" {
 			ShpSetMonitorTrapFlag(true);
  		}
 #else
-		EptHandleEptViolation(processor_data->ept_data,  false);
+		EptHandleEptViolation(processor_data->ept_data, 0,  false);
 #endif
 	}
 

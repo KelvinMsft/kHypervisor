@@ -1282,7 +1282,7 @@ Return Value:
 				VmmSaveCurrentEpt02Pointer(guest_context, Ept02Data);
 				VmmSaveCurrentEpt12Pointer(guest_context, Ept12Data);
 
-				EptpInvalidateEpt(Ept01Data, Ept12Data->ept_pml4);
+				EptpInvalidateEpt(Ept12Data, Ept01Data);
 
 				UtilVmWrite64(VmcsField::kEptPointer, Ept02Data->ept_pointer->all);
 				UtilInveptGlobal();
@@ -1490,7 +1490,7 @@ Return Value:
 
 		if (ept_data01 && ept_data12)
 		{
-			EptpValidateEpt(ept_data01, ept_data12->ept_pml4);  
+			EptpValidateEpt(ept_data12, ept_data01);
 			ExFreePool(ept_data12); 
 			ept_data12 = nullptr;
 		} 

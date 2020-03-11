@@ -104,6 +104,9 @@ enum class HyperPlatformBugCheck : ULONG {
   kCriticalVmxInstructionFailure,  //!< VMRESUME or VMXOFF has failed
   kEptMisconfigVmExit,             //!< EPT misconfiguration VM-exit occurred
   kCritialPoolAllocationFailure,   //!< Critical pool allocation failed
+  kUnexpectedVmEptExit,            //!<
+  kUnexpectedVmEptExit2,           //!<
+  kUnexpectedVmEptExit3,           //!<
 };
 
 ////////////////////////////////////////////////////////////////////////////////

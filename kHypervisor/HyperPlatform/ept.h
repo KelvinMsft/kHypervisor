@@ -82,6 +82,7 @@ void EptTermination(_In_ EptData* ept_data);
 /// @param ept_data   EptData to get an EPT pointer
 _IRQL_requires_min_(DISPATCH_LEVEL) void EptHandleEptViolation(
     _In_ EptData* ept_data,
+	_In_ ULONG64  PhysAddr,
 	_In_ bool is_range_of_ept12);
 
 /// Returns an EPT entry corresponds to \a physical_address
@@ -101,13 +102,13 @@ EptCommonEntry *EptpConstructTablesEx(
 
 
 void  EptpInvalidateEpt(
-		EptData* EptData01, 
-		EptCommonEntry *pml4_table
+	EptData* EptData12,
+	EptData* EptData01
 );
 
 void  EptpValidateEpt(
-		EptData* EptData01, 
-		EptCommonEntry *pml4_table
+	EptData* EptData12,
+	EptData* EptData01
 );
 
 bool  EptpIsInRangesOfEpt(

@@ -655,7 +655,7 @@ extern "C" {
 		vm_procctl_requested.fields.use_io_bitmaps = true;
 		vm_procctl_requested.fields.use_msr_bitmaps = true;
 		vm_procctl_requested.fields.activate_secondary_control = true;
-		vm_procctl_requested.fields.hlt_exiting = true;
+		vm_procctl_requested.fields.hlt_exiting = false;
 
 		VmxProcessorBasedControls vm_procctl = {
 			VmpAdjustControlValue((use_true_msrs) ? Msr::kIa32VmxTrueProcBasedCtls

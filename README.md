@@ -1,9 +1,9 @@
 # kHypervisor
 # Introduction
-kHypervisor is an Open Source light-weighted Nested-Virtual Machine Monitor in Windows x64 platform. Supported multi-core , and which is extending from Hyper-platform :-)
+kHypervisor is an Open Source light-weighted Hypervisor that's capable for nested virtualization in Windows x64 platform, as an extended work of HyperPlatform
 
 # Advantages
-kHypervisor provide an light-weighted virtulized environment for debugging protected mode Guest
+kHypervisor provide an light-weighted virtulized environment for nesting Guest Hypervisor
 - VM Entry Emulation , with VMCS state check which is a good solution for debugging VMEntry fail, and locate the actual failure location.
 - VM Exit  Emulation 
 - Nested VM Exit Event
@@ -19,14 +19,14 @@ kHypervisor provide an light-weighted virtulized environment for debugging prote
   * It onlys support restricted guest (protected - paging mode) for the present
 
 # Description
-The kHypervisor is not yet completed, and it will be rapidly update on progress, please using a windbg+vmware 12 for debugging kHypervisor.  
+The kHypervisor is completed in lab machines, please test kHypervisor in your VMWare or newly installed machine for best experience. 
 
 # Progress
 `2016-10-19`  First commit, Supporting nested itself only, and nested software breakpoint exception from Level 2. And the nested-Vmm is able to dispatch this exception to L1 and help L1 to resume to L2.
 
 `2016-10-21`  Fixed Ring-3 vm-exit emulation error. 
 
-`2017-01-03`  Reconstruct project, and Finding VMCS12 through VMCS02 by executing vmptrst 
+`2017-01-03`  Refactor project, and Finding VMCS12 through VMCS02 by executing vmptrst 
 
 `2017-01-22`  GS Kernel base MSR bug fixed when Emulation VMRESUME/VMLAUNCH 
 
@@ -50,11 +50,11 @@ The kHypervisor is not yet completed, and it will be rapidly update on progress,
 
 `2018-03-29`  Added Nested EPT monitoring , when the PTE entry OF guest EPT is modified, L0 knows.
 
-`2020-03-07`  Testing on DdiMon
+`2020-03-07`  Refactored and testing on DdiMon
 
 # Installation
 
- * kHypervisor extended HyperPlatform which is created by Tandasat, it is a Nested-Virtual Machine Monitor, and DdiMon is one of Tandasat's product of HyperPlatform for test demo in kHypervisor.
+ * kHypervisor extended HyperPlatform which is created by Satoshi Tanda, it is a Nested-Virtual Machine Monitor, and DdiMon is one of instance of HyperPlatform for test demo in kHypervisor.
 
    *  Compiled kHypervisor.sys and DdiMon.sys by kHypervisor and NestedHypervisor respectively
 

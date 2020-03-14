@@ -1,13 +1,7 @@
 # kHypervisor
+
 # Introduction
 kHypervisor is an Open Source light-weighted Hypervisor that's capable for nested virtualization in Windows x64 platform, as an extended work of HyperPlatform
-
-# Advantages
-kHypervisor provide an light-weighted virtulized environment for nesting Guest Hypervisor
-- VM Entry Emulation , with VMCS state check which is a good solution for debugging VMEntry fail, and locate the actual failure location.
-- VM Exit  Emulation 
-- Nested VM Exit Event
-- The code is simple and minimize as a nested vmm.
 
 # Environment
   * Visual Studio 2015 update 3 
@@ -30,7 +24,14 @@ The kHypervisor is completed in lab machines, please test kHypervisor in your VM
 * VMCALL  Redirection
 * Processor Exception / Interrupt Injection
  
- # Progress
+# Advantages
+kHypervisor provide an light-weighted virtulized environment for nesting Guest Hypervisor
+- VM Entry Emulation with VMCS state check which is a good solution for debugging VMEntry fail, and locate the actual failure location.
+- VM Exit  Emulation 
+- Nested VM Exit Event
+- The code is simple and minimize as a nested vmm.
+
+# Progress
 `2016-10-19`  First commit, Supporting nested itself only, and nested software breakpoint exception from Level 2. And the nested-Vmm is able to dispatch this exception to L1 and help L1 to resume to L2.
 
 `2016-10-21`  Fixed Ring-3 vm-exit emulation error. 
@@ -81,14 +82,13 @@ The kHypervisor is completed in lab machines, please test kHypervisor in your VM
          
    * start a service as following screen capture with its expected output
    
-    
- # Nesting with Hypervisor EPT Based Rootkit - DdiMon 
-
-   <img src="https://user-images.githubusercontent.com/22551808/76154782-49a37a00-6097-11ea-8f54-e0b537cefb4f.png" width="70%" height="70%"> </img> 
-
+ 
 # Live Demo with kernel rootkit
   [![Alt text](https://img.youtube.com/vi/wRCDeucwfiM/0.jpg)](https://www.youtube.com/watch?v=wRCDeucwfiM)
+   
+# Nesting VT-x EPT for EPT Based Rootkit - DdiMon 
 
+   <img src="https://user-images.githubusercontent.com/22551808/76154782-49a37a00-6097-11ea-8f54-e0b537cefb4f.png" width="70%" height="70%"> </img> 
   
  # Windows 10 x64 build 16299 RS3 Test Demo (with Nested EPT) :
 
@@ -96,7 +96,7 @@ The kHypervisor is completed in lab machines, please test kHypervisor in your VM
 
    <img src="https://user-images.githubusercontent.com/22551808/35140835-a7b8d186-fd33-11e7-8c3d-583eba6bd9a0.png" width="70%" height="70%"> </img>   
         
-# Kenrel mode Test (nested breakpoint INT3 exception)
+# Kenrel mode Test (Nested breakpoint INT3 exception)
  
  #### 1. During the installion we could be able to see a result, since we set a breakpoint as soon as the DdiMon's virtualization. </br>
  <img src="https://cloud.githubusercontent.com/assets/22551808/21608786/796ca796-d1f9-11e6-98c7-853933c7447b.png" width="50%" height="50%"> </img>
@@ -106,7 +106,7 @@ The kHypervisor is completed in lab machines, please test kHypervisor in your VM
   <img src="https://cloud.githubusercontent.com/assets/22551808/21608895/50274d54-d1fa-11e6-84a2-fddd41b5d2b5.png" width="50%" height="50%"> </img>
  #### 4. After the DdiMon catch up the control flow, it will normally execute a <b>VMRESUME</b>, since he didn't know anythings, and feel it is normal trap only :) </br>
 
-# User Mode Test  (
+# User Mode Test  (Nested breakpoint INT3 Exception)
   
  #### A INT 3 breakpoint in the system will be work as follow:
 
@@ -122,10 +122,10 @@ The kHypervisor is completed in lab machines, please test kHypervisor in your VM
  <img src="https://cloud.githubusercontent.com/assets/22551808/21672420/6d7935e8-d35d-11e6-989c-4afb97f65047.png" width="50%" height="50%"/>
 </img></br>
  
- # Turning off L1 VMM By VMCALL
+ # Nested VMCALL Emulation and redirection (Turning off L1 VMM By VMCALL)
   <img src="https://user-images.githubusercontent.com/22551808/33070774-1c3ffde0-cef4-11e7-93cc-2316ef1f9aff.jpg" width="50%" height="50%"> </img>
   
-  # EPT Modification monitoring
+ # Nested EPT Modification monitoring 
    <img src="https://user-images.githubusercontent.com/22551808/38097002-d4d521fc-33a6-11e8-95ad-67b22f92c558.png" width="70%" height="70%"/>
 </img></br>
 

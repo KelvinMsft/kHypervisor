@@ -22,13 +22,13 @@ kHypervisor provide an light-weighted virtulized environment for nesting Guest H
 The kHypervisor is completed in lab machines, please test kHypervisor in your VMWare or newly installed machine for best experience. 
 
 # Supported Event
-` Virtualized VMX environment
-` Virtualized Guest EPT 
-` VMCS Emulation
-` VMExit  Emulation
-` VMEntry Emulation, including VMEntry parameter check same as hardware spec.
-` VMCALL  Redirection
-` Processor Exception / Interrupt Injection
+* Virtualized VMX environment
+* Virtualized Guest EPT 
+* VMCS Emulation
+* VMExit  Emulation
+* VMEntry Emulation, including VMEntry parameter check same as hardware spec.
+* VMCALL  Redirection
+* Processor Exception / Interrupt Injection
  
  # Progress
 `2016-10-19`  First commit, Supporting nested itself only, and nested software breakpoint exception from Level 2. And the nested-Vmm is able to dispatch this exception to L1 and help L1 to resume to L2.
@@ -96,7 +96,7 @@ The kHypervisor is completed in lab machines, please test kHypervisor in your VM
 
    <img src="https://user-images.githubusercontent.com/22551808/35140835-a7b8d186-fd33-11e7-8c3d-583eba6bd9a0.png" width="70%" height="70%"> </img>   
         
-# Kenrel mode Test
+# Kenrel mode Test (nested breakpoint INT3 exception)
  
  #### 1. During the installion we could be able to see a result, since we set a breakpoint as soon as the DdiMon's virtualization. </br>
  <img src="https://cloud.githubusercontent.com/assets/22551808/21608786/796ca796-d1f9-11e6-98c7-853933c7447b.png" width="50%" height="50%"> </img>
@@ -106,7 +106,7 @@ The kHypervisor is completed in lab machines, please test kHypervisor in your VM
   <img src="https://cloud.githubusercontent.com/assets/22551808/21608895/50274d54-d1fa-11e6-84a2-fddd41b5d2b5.png" width="50%" height="50%"> </img>
  #### 4. After the DdiMon catch up the control flow, it will normally execute a <b>VMRESUME</b>, since he didn't know anythings, and feel it is normal trap only :) </br>
 
-# User Mode Test 
+# User Mode Test  (
   
  #### A INT 3 breakpoint in the system will be work as follow:
 

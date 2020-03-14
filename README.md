@@ -24,8 +24,9 @@ The kHypervisor is completed in lab machines, please test kHypervisor in your VM
 # Supported Event
 ` Virtualized VMX environment
 ` Virtualized Guest EPT 
+` VMCS Emulation
 ` VMExit  Emulation
-` VMEntry Emulation
+` VMEntry Emulation, including VMEntry parameter check same as hardware spec.
 ` VMCALL  Redirection
 ` Processor Exception / Interrupt Injection
  

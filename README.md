@@ -21,7 +21,15 @@ kHypervisor provide an light-weighted virtulized environment for nesting Guest H
 # Description
 The kHypervisor is completed in lab machines, please test kHypervisor in your VMWare or newly installed machine for best experience. 
 
-# Progress
+# Supported Event
+` Virtualized VMX environment
+` Virtualized Guest EPT 
+` VMExit  Emulation
+` VMEntry Emulation
+` VMCALL  Redirection
+` Processor Exception / Interrupt Injection
+ 
+ # Progress
 `2016-10-19`  First commit, Supporting nested itself only, and nested software breakpoint exception from Level 2. And the nested-Vmm is able to dispatch this exception to L1 and help L1 to resume to L2.
 
 `2016-10-21`  Fixed Ring-3 vm-exit emulation error. 
@@ -86,13 +94,10 @@ The kHypervisor is completed in lab machines, please test kHypervisor in your VM
    <img src="https://user-images.githubusercontent.com/22551808/35140833-a7896dec-fd33-11e7-9c96-179e7cbd73fd.png" width="70%" height="70%"> </img>
 
    <img src="https://user-images.githubusercontent.com/22551808/35140835-a7b8d186-fd33-11e7-8c3d-583eba6bd9a0.png" width="70%" height="70%"> </img>   
-       
-# Expected Output
- kHypervisor can be tested by kernel/user mode with Multi-Core Processor Configuration 
- 
+        
 # Kenrel mode Test
  
- #### 1. During the installion we could able to see a result, since we set a breakpoint as soon as the DdiMon's virtualization. </br>
+ #### 1. During the installion we could be able to see a result, since we set a breakpoint as soon as the DdiMon's virtualization. </br>
  <img src="https://cloud.githubusercontent.com/assets/22551808/21608786/796ca796-d1f9-11e6-98c7-853933c7447b.png" width="50%" height="50%"> </img>
  #### 2. We can see the windbg as following result, after the DdiMon execute a breakpoint, kHypervisor will first capture the breakpoint : </br>
   <img src="https://cloud.githubusercontent.com/assets/22551808/21608841/ce0d11aa-d1f9-11e6-8014-db882836c751.png" width="50%" height="50%"> </img>

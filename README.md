@@ -122,7 +122,7 @@ kHypervisor provide an light-weighted virtulized environment for nesting Guest H
  <img src="https://cloud.githubusercontent.com/assets/22551808/21672420/6d7935e8-d35d-11e6-989c-4afb97f65047.png" width="50%" height="50%"/>
 </img></br>
  
- # Nested VMCALL Emulation and redirection (Turning off L1 VMM By VMCALL)
+ # Nested VMCALL Emulation (Turning off L1 VMM By VMCALL)
   <img src="https://user-images.githubusercontent.com/22551808/33070774-1c3ffde0-cef4-11e7-93cc-2316ef1f9aff.jpg" width="50%" height="50%"> </img>
   
  # Nested EPT Modification monitoring 

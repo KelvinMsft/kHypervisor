@@ -564,7 +564,7 @@ extern "C" {
 		
 		ULONG TestIndex	   = Index / 8;
 		ULONG TestIndexBit = Index % 8;
-		if (!(msr_bitmap[TestIndex] & (1 << TestIndexBit)))
+		if (TestIndex >= 1024 || !(msr_bitmap[TestIndex] & (1 << TestIndexBit)))
 		{
 			return STATUS_UNSUCCESSFUL;
 		}
@@ -595,7 +595,7 @@ extern "C" {
 
 		ULONG TestIndex = Index / 8;
 		ULONG TestIndexBit = Index % 8;
-		if (!(msr_bitmap[TestIndex] & (1 << TestIndexBit)))
+		if (TestIndex >= 1024 || !(msr_bitmap[TestIndex] & (1 << TestIndexBit)))
 		{
 			return STATUS_UNSUCCESSFUL;
 		}

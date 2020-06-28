@@ -62,6 +62,7 @@ kHypervisor provide an light-weighted virtulized environment for nesting Guest H
 
 `2020-03-07`  Refactored and testing on DdiMon
 
+`2020-06-27`  Fixed MSR out of index for reserved MSR (0x40000000 ~ 0x400000FF)
 # Installation
 
  * kHypervisor extended HyperPlatform which is created by Satoshi Tanda, it is a Nested-Virtual Machine Monitor, and DdiMon is one of instance of HyperPlatform for test demo in kHypervisor.

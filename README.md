@@ -1,7 +1,5 @@
 # kHypervisor
 
-<a href="https://tracking.gitads.io/?repo=kHypervisor"> <img src="https://images.gitads.io/kHypervisor" alt="GitAds"/> 
- 
 # Introduction
 kHypervisor is an Open Source light-weighted Hypervisor that's capable for nested virtualization in Windows x64 platform, as an extended work of HyperPlatform
 

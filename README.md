@@ -1,5 +1,6 @@
-# kHypervisor 
-
+# kHypervisor [![Codacy Badge](https://api.codacy.com/project/badge/Grade/faf22bb82efd421bae68c0601b8b0ea2)](https://app.codacy.com/gh/Kelvinhack/kHypervisor?utm_source=github.com&utm_medium=referral&utm_content=Kelvinhack/kHypervisor&utm_campaign=Badge_Grade)
+  [![Alt text](https://img.youtube.com/vi/wRCDeucwfiM/0.jpg)](https://www.youtube.com/watch?v=wRCDeucwfiM)
+   
 # Introduction
 kHypervisor is an Open Source light-weighted Hypervisor that's capable for nested virtualization in Windows x64 platform, as an extended work of HyperPlatform
 
@@ -85,9 +86,7 @@ kHypervisor provide an light-weighted virtulized environment for nesting Guest H
    
  
 # Live Demo with kernel rootkit
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/faf22bb82efd421bae68c0601b8b0ea2)](https://app.codacy.com/gh/Kelvinhack/kHypervisor?utm_source=github.com&utm_medium=referral&utm_content=Kelvinhack/kHypervisor&utm_campaign=Badge_Grade)
-  [![Alt text](https://img.youtube.com/vi/wRCDeucwfiM/0.jpg)](https://www.youtube.com/watch?v=wRCDeucwfiM)
-   
+
 # Nesting VT-x EPT for EPT Based Rootkit - DdiMon 
 
    <img src="https://user-images.githubusercontent.com/22551808/76154782-49a37a00-6097-11ea-8f54-e0b537cefb4f.png" width="70%" height="70%"> </img> 

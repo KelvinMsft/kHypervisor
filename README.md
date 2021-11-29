@@ -1,4 +1,4 @@
-# kHypervisor [![Codacy Badge](https://api.codacy.com/project/badge/Grade/faf22bb82efd421bae68c0601b8b0ea2)](https://app.codacy.com/gh/Kelvinhack/kHypervisor?utm_source=github.com&utm_medium=referral&utm_content=Kelvinhack/kHypervisor&utm_campaign=Badge_Grade)
+# kHypervisor 
   [![Alt text](https://img.youtube.com/vi/wRCDeucwfiM/0.jpg)](https://www.youtube.com/watch?v=wRCDeucwfiM)
    
 # Introduction
